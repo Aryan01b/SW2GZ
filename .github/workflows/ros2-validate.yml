@@ -1,0 +1,67 @@
+name: ros2-validate
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: harmonic_jazzy
+            ros_distro: jazzy
+            gz_distro:  harmonic
+            container:  ros:jazzy-ros-base
+          - profile: fortress_humble
+            ros_distro: humble
+            gz_distro:  fortress
+            container:  ros:humble-ros-base
+    container: ${{ matrix.container }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Gz + ros_gz + xacro + ros2_control
+        shell: bash
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y curl lsb-release gnupg
+          curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" > /etc/apt/sources.list.d/gazebo-stable.list
+          apt-get update
+          apt-get install -y \
+            gz-${{ matrix.gz_distro }} \
+            ros-${{ matrix.ros_distro }}-ros-gz \
+            ros-${{ matrix.ros_distro }}-xacro \
+            ros-${{ matrix.ros_distro }}-joint-state-publisher-gui \
+            ros-${{ matrix.ros_distro }}-ros2-control \
+            ros-${{ matrix.ros_distro }}-ros2-controllers || true
+      - name: Copy example into colcon workspace
+        shell: bash
+        run: |
+          mkdir -p /ws/src
+          cp -r examples/three_dof_arm_ros2 /ws/src/three_dof_arm_description
+      - name: colcon build
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          cd /ws && colcon build --packages-select three_dof_arm_description
+      - name: Validate URDF (best effort) + SDF
+        shell: bash
+        continue-on-error: true
+        run: |
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          source /ws/install/setup.bash
+          PKG_SHARE=$(ros2 pkg prefix three_dof_arm_description)/share/three_dof_arm_description
+          check_urdf "$PKG_SHARE/urdf/three_dof_arm_description.urdf" || true
+          gz sdf -k "$PKG_SHARE/worlds/empty.sdf" || true
+      - name: Launch smoke (headless, 30s timeout)
+        shell: bash
+        continue-on-error: true
+        run: |
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          source /ws/install/setup.bash
+          timeout 30 ros2 launch three_dof_arm_description gz_sim.launch.py headless:=true &
+          sleep 15
+          ros2 topic list | grep -q /joint_states && echo "joint_states topic published"

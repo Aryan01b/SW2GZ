@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<robot name="three_dof_arm_description" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:arg name="prefix" default=""/>
+  <xacro:arg name="use_sim" default="false"/>
+  <xacro:arg name="use_ros2_control" default="true"/>
+  <xacro:include filename="inc/materials.xacro"/>
+  <xacro:include filename="inc/ros2_control.xacro"/>
+  <xacro:include filename="inc/gz.xacro"/>
+<link name="base_link"/>
+</robot>

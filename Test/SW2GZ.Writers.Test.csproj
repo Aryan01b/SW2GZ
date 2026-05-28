@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>SW2GZ.Test</RootNamespace>
+    <AssemblyName>SW2GZ.Writers.Test</AssemblyName>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <NoWarn>$(NoWarn);CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8625</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
+    <PackageReference Include="xunit" Version="2.9.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <!--
+    Pull pure-C# writer source files directly via Link to avoid depending
+    on the SW addin csproj (which needs SolidWorks COM interop DLLs not
+    available outside a SolidWorks workstation).
+
+    As Phase 2 / Phase 3 / Phase 4 add new writers, add more <Compile Include="..." Link="..."/> entries here.
+  -->
+  <ItemGroup>
+    <Compile Include="..\SW2GZ\Ros2\TargetProfile.cs"        Link="Sources\Ros2\TargetProfile.cs" />
+    <Compile Include="..\SW2GZ\Ros2\PackageXmlV3Writer.cs"   Link="Sources\Ros2\PackageXmlV3Writer.cs" />
+    <Compile Include="..\SW2GZ\Ros2\AmentCMakeWriter.cs"     Link="Sources\Ros2\AmentCMakeWriter.cs" />
+    <Compile Include="..\SW2GZ\Ros2\LaunchPyWriter.cs"       Link="Sources\Ros2\LaunchPyWriter.cs" />
+    <Compile Include="..\SW2GZ\Ros2\XacroWriter.cs"          Link="Sources\Ros2\XacroWriter.cs" />
+    <Compile Include="..\SW2GZ\Ros2\Ros2ControlWriter.cs"    Link="Sources\Ros2\Ros2ControlWriter.cs" />
+    <Compile Include="..\SW2GZ\Ros2\RvizConfigWriter.cs"     Link="Sources\Ros2\RvizConfigWriter.cs" />
+    <Compile Include="..\SW2GZ\Ros2\ReadmeWriter.cs"         Link="Sources\Ros2\ReadmeWriter.cs" />
+    <Compile Include="..\SW2GZ\Gz\SdfModelInput.cs"          Link="Sources\Gz\SdfModelInput.cs" />
+    <Compile Include="..\SW2GZ\Gz\ModelConfigWriter.cs"      Link="Sources\Gz\ModelConfigWriter.cs" />
+    <Compile Include="..\SW2GZ\Gz\GzPluginTags.cs"           Link="Sources\Gz\GzPluginTags.cs" />
+    <Compile Include="..\SW2GZ\Gz\SdfPhysicsBlock.cs"        Link="Sources\Gz\SdfPhysicsBlock.cs" />
+    <Compile Include="..\SW2GZ\Gz\SdfWorldWriter.cs"         Link="Sources\Gz\SdfWorldWriter.cs" />
+    <Compile Include="..\SW2GZ\Gz\SdfModelWriter.cs"         Link="Sources\Gz\SdfModelWriter.cs" />
+    <Compile Include="..\SW2GZ\Gz\RosGzBridgeYaml.cs"        Link="Sources\Gz\RosGzBridgeYaml.cs" />
+    <Compile Include="..\SW2GZ\URDFExport\Ros2Package.cs"    Link="Sources\URDFExport\Ros2Package.cs" />
+    <Compile Include="..\SW2GZ\URDFExport\OutputValidator.cs" Link="Sources\URDFExport\OutputValidator.cs" />
+    <Compile Include="..\SW2GZ\URDFExport\PreExportReport.cs" Link="Sources\URDFExport\PreExportReport.cs" />
+  </ItemGroup>
+
+  <!-- Test/Writers/*.cs and Test/Golden/*.cs are auto-included by the SDK
+       (no explicit <Compile Include> needed since they live under the
+       project directory). -->
+
+
+</Project>

@@ -1,0 +1,37 @@
+name: build-test
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore + build SW addin (best-effort — requires SolidWorks API DLLs on runner)
+        continue-on-error: true
+        run: msbuild SW2GZ.sln /t:Restore;Build /p:Configuration=Release /v:minimal
+      - name: Restore + build standalone writer test csproj
+        run: dotnet build Test/SW2GZ.Writers.Test.csproj --configuration Release
+      - name: Run unit + golden tests
+        run: dotnet test Test/SW2GZ.Writers.Test.csproj --no-build --configuration Release --filter "Category=Unit" --logger "trx;LogFileName=test-results.trx"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: Test/TestResults/*.trx
+
+  ubuntu-writer-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run unit + golden tests on Linux
+        run: dotnet test Test/SW2GZ.Writers.Test.csproj --filter "Category=Unit" --logger "console;verbosity=normal"

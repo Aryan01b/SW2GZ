@@ -1,0 +1,24 @@
+name: release
+on:
+  push:
+    tags: ['v*.*.*']
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - name: Build Release (best-effort — needs SolidWorks API on runner)
+        continue-on-error: true
+        run: msbuild SW2GZ.sln /t:Restore;Build /p:Configuration=Release /v:minimal
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+      - name: Build installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\SW2GZ.iss
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: installer/Output/SW2GZ-Setup-*.exe
+          generate_release_notes: true
