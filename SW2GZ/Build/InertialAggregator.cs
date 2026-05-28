@@ -14,6 +14,7 @@ namespace SW2GZ.Build
         // returns inertia in assembly frame already).
         public static MassProps Combine(IReadOnlyList<(MassProps Props, Pose Frame)> parts)
         {
+            if (parts == null) return new MassProps(0, Vector3.Zero, Matrix3.Identity);
             if (parts.Count == 0)
                 return new MassProps(0, Vector3.Zero, Matrix3.Identity);
 
