@@ -423,6 +423,10 @@
     <Compile Include="Build\InertialAggregator.cs" />
     <Compile Include="Build\MeshData.cs" />
     <Compile Include="Build\ConvexHullCollider.cs" />
+    <Compile Include="Build\Urdf\UrdfLink.cs" />
+    <Compile Include="Build\Urdf\UrdfJoint.cs" />
+    <Compile Include="Build\Urdf\UrdfRobot.cs" />
+    <Compile Include="Build\LinkBuilder.cs" />
     <Compile Include="Gz\SdfModelInput.cs" />
     <Compile Include="Gz\ModelConfigWriter.cs" />
     <Compile Include="Gz\GzPluginTags.cs" />
