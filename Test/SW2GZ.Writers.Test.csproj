@@ -36,6 +36,7 @@
     <Compile Include="..\SW2GZ\Exceptions\Sw2gzExportException.cs" Link="Sources\Exceptions\Sw2gzExportException.cs" />
     <Compile Include="..\SW2GZ\Math\Matrix3.cs"               Link="Sources\Math\Matrix3.cs" />
     <Compile Include="..\SW2GZ\Math\Pose.cs"                  Link="Sources\Math\Pose.cs" />
+    <Compile Include="..\SW2GZ\Build\PackageNameSanitizer.cs" Link="Sources\Build\PackageNameSanitizer.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfModelInput.cs"          Link="Sources\Gz\SdfModelInput.cs" />
     <Compile Include="..\SW2GZ\Gz\ModelConfigWriter.cs"      Link="Sources\Gz\ModelConfigWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\GzPluginTags.cs"           Link="Sources\Gz\GzPluginTags.cs" />

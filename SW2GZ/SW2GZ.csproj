@@ -418,6 +418,7 @@
     <Compile Include="Exceptions\Sw2gzExportException.cs" />
     <Compile Include="Math\Matrix3.cs" />
     <Compile Include="Math\Pose.cs" />
+    <Compile Include="Build\PackageNameSanitizer.cs" />
     <Compile Include="Gz\SdfModelInput.cs" />
     <Compile Include="Gz\ModelConfigWriter.cs" />
     <Compile Include="Gz\GzPluginTags.cs" />
