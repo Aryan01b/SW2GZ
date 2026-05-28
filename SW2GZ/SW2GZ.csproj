@@ -419,6 +419,8 @@
     <Compile Include="Math\Matrix3.cs" />
     <Compile Include="Math\Pose.cs" />
     <Compile Include="Build\PackageNameSanitizer.cs" />
+    <Compile Include="Build\MassProps.cs" />
+    <Compile Include="Build\InertialAggregator.cs" />
     <Compile Include="Gz\SdfModelInput.cs" />
     <Compile Include="Gz\ModelConfigWriter.cs" />
     <Compile Include="Gz\GzPluginTags.cs" />
