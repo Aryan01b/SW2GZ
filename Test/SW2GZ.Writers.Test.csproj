@@ -39,6 +39,8 @@
     <Compile Include="..\SW2GZ\Build\PackageNameSanitizer.cs" Link="Sources\Build\PackageNameSanitizer.cs" />
     <Compile Include="..\SW2GZ\Build\MassProps.cs"            Link="Sources\Build\MassProps.cs" />
     <Compile Include="..\SW2GZ\Build\InertialAggregator.cs"   Link="Sources\Build\InertialAggregator.cs" />
+    <Compile Include="..\SW2GZ\Build\MeshData.cs"            Link="Sources\Build\MeshData.cs" />
+    <Compile Include="..\SW2GZ\Build\ConvexHullCollider.cs"  Link="Sources\Build\ConvexHullCollider.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfModelInput.cs"          Link="Sources\Gz\SdfModelInput.cs" />
     <Compile Include="..\SW2GZ\Gz\ModelConfigWriter.cs"      Link="Sources\Gz\ModelConfigWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\GzPluginTags.cs"           Link="Sources\Gz\GzPluginTags.cs" />

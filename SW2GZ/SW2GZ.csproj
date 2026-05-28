@@ -421,6 +421,8 @@
     <Compile Include="Build\PackageNameSanitizer.cs" />
     <Compile Include="Build\MassProps.cs" />
     <Compile Include="Build\InertialAggregator.cs" />
+    <Compile Include="Build\MeshData.cs" />
+    <Compile Include="Build\ConvexHullCollider.cs" />
     <Compile Include="Gz\SdfModelInput.cs" />
     <Compile Include="Gz\ModelConfigWriter.cs" />
     <Compile Include="Gz\GzPluginTags.cs" />
