@@ -23,6 +23,9 @@ namespace SW2GZ.Build
 
         private static MeshData BoxMesh(Vector3 lo, Vector3 hi)
         {
+            // 8 corners of the AABB box:
+            //   0: (lo,lo,lo)   1: (hi,lo,lo)   2: (hi,hi,lo)   3: (lo,hi,lo)
+            //   4: (lo,lo,hi)   5: (hi,lo,hi)   6: (hi,hi,hi)   7: (lo,hi,hi)
             var v = new Vector3[]
             {
                 new(lo.X, lo.Y, lo.Z), new(hi.X, lo.Y, lo.Z),
@@ -30,14 +33,15 @@ namespace SW2GZ.Build
                 new(lo.X, lo.Y, hi.Z), new(hi.X, lo.Y, hi.Z),
                 new(hi.X, hi.Y, hi.Z), new(lo.X, hi.Y, hi.Z),
             };
+            // CCW winding seen from outside; normals point AWAY from box center.
             var t = new int[]
             {
-                0,1,2, 0,2,3,  // bottom
-                4,6,5, 4,7,6,  // top
-                0,4,5, 0,5,1,  // front
-                2,6,7, 2,7,3,  // back
-                0,3,7, 0,7,4,  // left
-                1,5,6, 1,6,2,  // right
+                0,3,2, 0,2,1,   // bottom face (-Z)
+                4,5,6, 4,6,7,   // top    face (+Z)
+                0,1,5, 0,5,4,   // front  face (-Y)
+                2,3,7, 2,7,6,   // back   face (+Y)
+                0,4,7, 0,7,3,   // left   face (-X)
+                1,2,6, 1,6,5,   // right  face (+X)
             };
             return new MeshData(v, t, null);
         }
