@@ -415,6 +415,7 @@
     <Compile Include="Ros2\Ros2ControlWriter.cs" />
     <Compile Include="Ros2\RvizConfigWriter.cs" />
     <Compile Include="Ros2\ReadmeWriter.cs" />
+    <Compile Include="Exceptions\Sw2gzExportException.cs" />
     <Compile Include="Math\Matrix3.cs" />
     <Compile Include="Math\Pose.cs" />
     <Compile Include="Gz\SdfModelInput.cs" />

@@ -33,6 +33,7 @@
     <Compile Include="..\SW2GZ\Ros2\Ros2ControlWriter.cs"    Link="Sources\Ros2\Ros2ControlWriter.cs" />
     <Compile Include="..\SW2GZ\Ros2\RvizConfigWriter.cs"     Link="Sources\Ros2\RvizConfigWriter.cs" />
     <Compile Include="..\SW2GZ\Ros2\ReadmeWriter.cs"         Link="Sources\Ros2\ReadmeWriter.cs" />
+    <Compile Include="..\SW2GZ\Exceptions\Sw2gzExportException.cs" Link="Sources\Exceptions\Sw2gzExportException.cs" />
     <Compile Include="..\SW2GZ\Math\Matrix3.cs"               Link="Sources\Math\Matrix3.cs" />
     <Compile Include="..\SW2GZ\Math\Pose.cs"                  Link="Sources\Math\Pose.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfModelInput.cs"          Link="Sources\Gz\SdfModelInput.cs" />
