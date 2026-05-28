@@ -22,17 +22,29 @@ namespace SW2GZ.Build.Exceptions.Tests
         }
 
         [Fact]
-        public void Sw2gzGeometryException_Constructs()
+        public void Sw2gzGeometryException_RoundTripsMessageAndInner()
         {
-            var ex = new Sw2gzGeometryException("degenerate hull");
-            Assert.IsAssignableFrom<Sw2gzExportException>(ex);
+            var ex1 = new Sw2gzGeometryException("degenerate hull");
+            Assert.IsAssignableFrom<Sw2gzExportException>(ex1);
+            Assert.Equal("degenerate hull", ex1.Message);
+
+            var inner = new System.InvalidOperationException("bad input");
+            var ex2 = new Sw2gzGeometryException("hull wrap", inner);
+            Assert.Same(inner, ex2.InnerException);
+            Assert.Equal("hull wrap", ex2.Message);
         }
 
         [Fact]
-        public void Sw2gzValidationException_Constructs()
+        public void Sw2gzValidationException_RoundTripsMessageAndInner()
         {
-            var ex = new Sw2gzValidationException("urdf invalid");
-            Assert.IsAssignableFrom<Sw2gzExportException>(ex);
+            var ex1 = new Sw2gzValidationException("urdf invalid");
+            Assert.IsAssignableFrom<Sw2gzExportException>(ex1);
+            Assert.Equal("urdf invalid", ex1.Message);
+
+            var inner = new System.Xml.XmlException("bad xml");
+            var ex2 = new Sw2gzValidationException("validation wrap", inner);
+            Assert.Same(inner, ex2.InnerException);
+            Assert.Equal("validation wrap", ex2.Message);
         }
     }
 }

@@ -25,10 +25,12 @@ namespace SW2GZ.Exceptions
     public sealed class Sw2gzGeometryException : Sw2gzExportException
     {
         public Sw2gzGeometryException(string message) : base(message) { }
+        public Sw2gzGeometryException(string message, Exception inner) : base(message, inner) { }
     }
 
     public sealed class Sw2gzValidationException : Sw2gzExportException
     {
         public Sw2gzValidationException(string message) : base(message) { }
+        public Sw2gzValidationException(string message, Exception inner) : base(message, inner) { }
     }
 }
