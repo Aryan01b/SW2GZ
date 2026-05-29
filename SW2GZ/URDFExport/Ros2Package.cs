@@ -79,7 +79,9 @@ namespace SW2GZ.URDFExport
             File.WriteAllText(Path.Combine(outputDir, "config", "controllers.yaml"), yaml.ToString());
 
             new RvizConfigWriter().Write(Path.Combine(outputDir, "config"), "rviz.rviz");
-            new RosGzBridgeYaml().Write(Path.Combine(outputDir, "config"), "ros_gz_bridge.yaml");
+            string bridgeYaml = RosGzBridgeYaml.Write(_opt.PackageName);
+            Directory.CreateDirectory(Path.Combine(outputDir, "config"));
+            File.WriteAllText(Path.Combine(outputDir, "config", "ros_gz_bridge.yaml"), bridgeYaml);
 
             string launchDir = Path.Combine(outputDir, "launch");
             File.WriteAllText(Path.Combine(launchDir, "display.launch.py"),      LaunchPyWriter.Display(_opt.PackageName));
