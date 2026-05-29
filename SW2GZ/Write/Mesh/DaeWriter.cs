@@ -7,6 +7,7 @@ embedded in <library_effects> so RViz + gz sim pick up the SW part color.
 */
 using System;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Xml;
@@ -20,8 +21,12 @@ namespace SW2GZ.Write.Mesh
         {
             if (mesh == null)
                 throw new ArgumentNullException(nameof(mesh));
-            if (string.IsNullOrEmpty(path))
-                throw new ArgumentNullException(nameof(path));
+            if (string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("Path must not be null or whitespace.", nameof(path));
+            if (mesh.Vertices == null)
+                throw new ArgumentException("MeshData.Vertices must not be null.", nameof(mesh));
+            if (mesh.Triangles == null)
+                throw new ArgumentException("MeshData.Triangles must not be null.", nameof(mesh));
 
             const string ns = "http://www.collada.org/2005/11/COLLADASchema";
             var settings = new XmlWriterSettings { Indent = true, Encoding = Encoding.UTF8 };
@@ -50,7 +55,7 @@ namespace SW2GZ.Write.Mesh
             w.WriteStartElement("lambert", ns);
             w.WriteStartElement("diffuse", ns);
             w.WriteStartElement("color", ns);
-            w.WriteString($"{r:0.###} {g:0.###} {b:0.###} 1");
+            w.WriteString(string.Format(CultureInfo.InvariantCulture, "{0:0.###} {1:0.###} {2:0.###} 1", r, g, b));
             w.WriteEndElement(); w.WriteEndElement();
             w.WriteEndElement(); w.WriteEndElement(); w.WriteEndElement(); w.WriteEndElement();
             w.WriteEndElement();
@@ -69,7 +74,7 @@ namespace SW2GZ.Write.Mesh
 
             var posSb = new StringBuilder();
             foreach (var v in mesh.Vertices)
-                posSb.Append($"{v.X:0.######} {v.Y:0.######} {v.Z:0.######} ");
+                posSb.Append(string.Format(CultureInfo.InvariantCulture, "{0:0.######} {1:0.######} {2:0.######} ", v.X, v.Y, v.Z));
 
             w.WriteStartElement("source", ns);
             w.WriteAttributeString("id", "g0-pos");

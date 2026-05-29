@@ -42,13 +42,10 @@ namespace SW2GZ.Write.Mesh.Tests
         [Fact]
         public void Write_EmbedsMaterialColor_AsLambertDiffuse()
         {
-            // Color.FromArgb(255, 128, 64): R=255 → 1.0, G=128 → ~0.502, B=64 → ~0.251
-            var color = Color.FromArgb(255, 128, 64);
             var mesh = new MeshData(
                 Vertices: new[] { Vector3.Zero, Vector3.UnitX, Vector3.UnitY },
                 Triangles: new[] { 0, 1, 2 },
-                MaterialColor: color);
-
+                MaterialColor: System.Drawing.Color.FromArgb(255, 128, 64));   // 1.0 0.502 0.251 alpha=1
             var path = Path.Combine(Path.GetTempPath(), $"sw2gz_test_{Guid.NewGuid()}.dae");
             try
             {
@@ -57,19 +54,35 @@ namespace SW2GZ.Write.Mesh.Tests
                 doc.Load(path);
                 var ns = new XmlNamespaceManager(doc.NameTable);
                 ns.AddNamespace("c", "http://www.collada.org/2005/11/COLLADASchema");
-
-                var colorNode = doc.SelectSingleNode(
-                    "//c:library_effects/c:effect/c:profile_COMMON/c:technique/c:lambert/c:diffuse/c:color", ns);
-                Assert.NotNull(colorNode);
-
-                var parts = colorNode.InnerText.Trim().Split(' ');
-                Assert.Equal(4, parts.Length);
-                Assert.Equal(1.0, double.Parse(parts[0]), 3);
-                Assert.Equal(0.502, double.Parse(parts[1]), 2);
-                Assert.Equal(0.251, double.Parse(parts[2]), 2);
-                Assert.Equal(1.0, double.Parse(parts[3]), 3);
+                var color = doc.SelectSingleNode("//c:lambert/c:diffuse/c:color", ns);
+                Assert.NotNull(color);
+                // locale-stable: assert the invariant-formatted literal appears verbatim
+                Assert.Equal("1 0.502 0.251 1", color.InnerText);
             }
             finally { if (File.Exists(path)) File.Delete(path); }
+        }
+
+        [Fact]
+        public void Write_PathWhitespace_Throws()
+        {
+            var mesh = new MeshData(new[] { Vector3.Zero }, new int[0], null);
+            Assert.Throws<ArgumentException>(() => DaeWriter.Write(mesh, "   "));
+        }
+
+        [Fact]
+        public void Write_NullVertices_Throws()
+        {
+            var mesh = new MeshData(null, new int[0], null);
+            Assert.Throws<ArgumentException>(() =>
+                DaeWriter.Write(mesh, Path.Combine(Path.GetTempPath(), "x.dae")));
+        }
+
+        [Fact]
+        public void Write_NullTriangles_Throws()
+        {
+            var mesh = new MeshData(new[] { Vector3.Zero }, null, null);
+            Assert.Throws<ArgumentException>(() =>
+                DaeWriter.Write(mesh, Path.Combine(Path.GetTempPath(), "x.dae")));
         }
 
         [Fact]
@@ -111,14 +124,14 @@ namespace SW2GZ.Write.Mesh.Tests
         }
 
         [Fact]
-        public void Write_NullPath_ThrowsArgumentNullException()
+        public void Write_NullPath_ThrowsArgumentException()
         {
             var mesh = new MeshData(
                 Vertices: new[] { Vector3.Zero, Vector3.UnitX, Vector3.UnitY },
                 Triangles: new[] { 0, 1, 2 },
                 MaterialColor: null);
 
-            Assert.Throws<ArgumentNullException>(() => DaeWriter.Write(mesh, null!));
+            Assert.Throws<ArgumentException>(() => DaeWriter.Write(mesh, null!));
         }
     }
 }
