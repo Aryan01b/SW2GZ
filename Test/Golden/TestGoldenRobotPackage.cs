@@ -22,7 +22,7 @@ namespace SW2GZ.Test.Golden
 
         [Fact]
         [Trait("Category", "Unit")]
-        public void GoldenRoundTrip_HarmonicJazzy()
+        public void GoldenRoundTrip_JazzyHarmonic()
         {
             // v2.0 lock: single distro/gz pairing (Jazzy + Harmonic). Fortress/Ionic combos removed.
             new Ros2Package(new Ros2Package.Options
@@ -36,7 +36,7 @@ namespace SW2GZ.Test.Golden
                 UrdfBodyXml = "<link name=\"base_link\"/>",
             }).Write(TempDir);
 
-            string expectedDir = Path.Combine(GoldenRoot, "harmonic_jazzy");
+            string expectedDir = Path.Combine(GoldenRoot, "jazzy_harmonic");
             if (UpdateMode)
             {
                 if (Directory.Exists(expectedDir)) Directory.Delete(expectedDir, recursive: true);
