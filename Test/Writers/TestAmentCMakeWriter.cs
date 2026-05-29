@@ -4,22 +4,72 @@ Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 using SW2GZ.Ros2;
 using Xunit;
 
-namespace SW2GZ.Test.Writers
+namespace SW2GZ.Writers.Tests
 {
-    public class TestAmentCMakeWriter : WriterTestBase
+    public class TestAmentCMakeWriter
     {
         [Fact]
-        [Trait("Category", "Unit")]
-        public void EmitsCMakeListsWithAmentCmakeAndInstallDirs()
+        public void Write_IncludesMeshesInstall_WhenMeshesPresent()
         {
-            new AmentCMakeWriter("my_robot_description").Write(TempDir);
-            Assert.True(Exists("CMakeLists.txt"));
-            var txt = ReadAllText("CMakeLists.txt");
-            Assert.Contains("cmake_minimum_required(VERSION 3.8)", txt);
-            Assert.Contains("project(my_robot_description)", txt);
-            Assert.Contains("find_package(ament_cmake REQUIRED)", txt);
-            Assert.Contains("install(DIRECTORY urdf launch config worlds meshes", txt);
-            Assert.Contains("ament_package()", txt);
+            var cmake = AmentCMakeWriter.Write(new AmentCMakeInput("pkg", hasMeshes: true));
+            Assert.Contains("install(DIRECTORY", cmake);
+            Assert.Contains("meshes", cmake);
+        }
+
+        [Fact]
+        public void Write_OmitsMeshesFromInstall_WhenNoMeshes()
+        {
+            var cmake = AmentCMakeWriter.Write(new AmentCMakeInput("pkg", hasMeshes: false));
+            Assert.DoesNotContain("meshes", cmake);
+        }
+
+        [Fact]
+        public void Write_AlwaysInstallsCoreDirs()
+        {
+            var cmake = AmentCMakeWriter.Write(new AmentCMakeInput("pkg", hasMeshes: false));
+            Assert.Contains("urdf", cmake);
+            Assert.Contains("launch", cmake);
+            Assert.Contains("config", cmake);
+            Assert.Contains("worlds", cmake);
+        }
+
+        [Fact]
+        public void Write_EmitsProjectName()
+        {
+            var cmake = AmentCMakeWriter.Write(new AmentCMakeInput("arm_2dof_description", hasMeshes: true));
+            Assert.Contains("project(arm_2dof_description)", cmake);
+        }
+
+        [Fact]
+        public void Write_EmitsAmentCmakeFindPackage()
+        {
+            var cmake = AmentCMakeWriter.Write(new AmentCMakeInput("pkg", hasMeshes: true));
+            Assert.Contains("find_package(ament_cmake REQUIRED)", cmake);
+        }
+
+        [Fact]
+        public void Write_EmitsAmentPackageCall()
+        {
+            var cmake = AmentCMakeWriter.Write(new AmentCMakeInput("pkg", hasMeshes: true));
+            Assert.Contains("ament_package()", cmake);
+        }
+
+        [Fact]
+        public void Write_NullInput_Throws()
+        {
+            Assert.Throws<System.ArgumentNullException>(() => AmentCMakeWriter.Write(null));
+        }
+
+        [Fact]
+        public void Write_NullPackageName_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(() => AmentCMakeWriter.Write(new AmentCMakeInput(null, hasMeshes: true)));
+        }
+
+        [Fact]
+        public void Write_WhitespacePackageName_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(() => AmentCMakeWriter.Write(new AmentCMakeInput(" ", hasMeshes: true)));
         }
     }
 }

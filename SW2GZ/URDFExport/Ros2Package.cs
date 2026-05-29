@@ -39,7 +39,8 @@ namespace SW2GZ.URDFExport
                 Profile = _opt.Profile,
             }).Write(outputDir);
 
-            new AmentCMakeWriter(_opt.PackageName).Write(outputDir);
+            string cmake = AmentCMakeWriter.Write(new AmentCMakeInput(_opt.PackageName, hasMeshes: true));
+            File.WriteAllText(Path.Combine(outputDir, "CMakeLists.txt"), cmake);
 
             new XacroWriter(_opt.PackageName, _opt.UrdfBodyXml).Write(Path.Combine(outputDir, "urdf"));
 
