@@ -48,6 +48,7 @@
     <Compile Include="..\SW2GZ\Build\MateSpec.cs"             Link="Sources\Build\MateSpec.cs" />
     <Compile Include="..\SW2GZ\Build\JointBuilder.cs"         Link="Sources\Build\JointBuilder.cs" />
     <Compile Include="..\SW2GZ\Write\Mesh\StlWriter.cs"        Link="Sources\Write\Mesh\StlWriter.cs" />
+    <Compile Include="..\SW2GZ\Write\Mesh\DaeWriter.cs"        Link="Sources\Write\Mesh\DaeWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfModelInput.cs"          Link="Sources\Gz\SdfModelInput.cs" />
     <Compile Include="..\SW2GZ\Gz\ModelConfigWriter.cs"      Link="Sources\Gz\ModelConfigWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\GzPluginTags.cs"           Link="Sources\Gz\GzPluginTags.cs" />
