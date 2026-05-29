@@ -62,6 +62,7 @@
     <Compile Include="..\SW2GZ\URDFExport\PreExportReport.cs" Link="Sources\URDFExport\PreExportReport.cs" />
     <Compile Include="..\SW2GZ\Validate\ValidationIssue.cs"  Link="Sources\Validate\ValidationIssue.cs" />
     <Compile Include="..\SW2GZ\Validate\ValidationReport.cs" Link="Sources\Validate\ValidationReport.cs" />
+    <Compile Include="..\SW2GZ\Validate\PackageNameChecker.cs" Link="Sources\Validate\PackageNameChecker.cs" />
   </ItemGroup>
 
   <!-- Test/Writers/*.cs and Test/Golden/*.cs are auto-included by the SDK
