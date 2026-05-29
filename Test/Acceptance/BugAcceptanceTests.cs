@@ -3,6 +3,7 @@ Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
 Acceptance harness: one fact per known v1 export bug. Each fact runs
 Sw2gzPipeline with Moq SW Surface and asserts that the emitted files
+satisfy the fix.
 */
 using System;
 using System.IO;
