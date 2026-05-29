@@ -449,6 +449,7 @@
     <Compile Include="Validate\ValidationIssue.cs" />
     <Compile Include="Validate\ValidationReport.cs" />
     <Compile Include="Validate\PackageNameChecker.cs" />
+    <Compile Include="Validate\UrdfXmlValidator.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
