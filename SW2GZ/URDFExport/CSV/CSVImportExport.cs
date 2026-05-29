@@ -56,7 +56,7 @@ namespace SW2GZ.URDFExport.CSV
                     string[] fields = csvParser.ReadFields();
                     StringDictionary dictionary = new StringDictionary();
                     
-                    int minArrayLength = Math.Min(fields.Length, headers.Length);
+                    int minArrayLength = System.Math.Min(fields.Length, headers.Length);
                     if (fields.Length != headers.Length)
                     {
                         logger.Warn(string.Format(

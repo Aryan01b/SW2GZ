@@ -156,18 +156,18 @@ namespace SW2GZ.Utilities
         public static double[] GetRPY(Matrix<double> m)
         {
             double roll, pitch, yaw;
-            if (Math.Abs(m[2, 0]) >= 1.0)
+            if (System.Math.Abs(m[2, 0]) >= 1.0)
             {
                 // Gimbal Lock
-                pitch = -Math.Asin(Math.Sign(m[2, 0]) * 1.0);
-                roll = Math.Atan2(-m[1, 2], m[1, 1]);
+                pitch = -System.Math.Asin(System.Math.Sign(m[2, 0]) * 1.0);
+                roll = System.Math.Atan2(-m[1, 2], m[1, 1]);
                 yaw = 0;
             }
             else
             {
-                pitch = -Math.Asin(m[2, 0]);
-                roll = Math.Atan2(m[2, 1], m[2, 2]);
-                yaw = Math.Atan2(m[1, 0], m[0, 0]);
+                pitch = -System.Math.Asin(m[2, 0]);
+                roll = System.Math.Atan2(m[2, 1], m[2, 2]);
+                yaw = System.Math.Atan2(m[1, 0], m[0, 0]);
             }
 
             return new double[] { roll, pitch, yaw };
@@ -185,20 +185,20 @@ namespace SW2GZ.Utilities
             Matrix<double> RY = DenseMatrix.CreateIdentity(4);
             Matrix<double> RZ = DenseMatrix.CreateIdentity(4);
 
-            RX[1, 1] = Math.Cos(RPY[0]);
-            RX[1, 2] = -Math.Sin(RPY[0]);
-            RX[2, 1] = Math.Sin(RPY[0]);
-            RX[2, 2] = Math.Cos(RPY[0]);
+            RX[1, 1] = System.Math.Cos(RPY[0]);
+            RX[1, 2] = -System.Math.Sin(RPY[0]);
+            RX[2, 1] = System.Math.Sin(RPY[0]);
+            RX[2, 2] = System.Math.Cos(RPY[0]);
 
-            RY[0, 0] = Math.Cos(RPY[1]);
-            RY[0, 2] = Math.Sin(RPY[1]);
-            RY[2, 0] = -Math.Sin(RPY[1]);
-            RY[2, 2] = Math.Cos(RPY[1]);
+            RY[0, 0] = System.Math.Cos(RPY[1]);
+            RY[0, 2] = System.Math.Sin(RPY[1]);
+            RY[2, 0] = -System.Math.Sin(RPY[1]);
+            RY[2, 2] = System.Math.Cos(RPY[1]);
 
-            RZ[0, 0] = Math.Cos(RPY[2]);
-            RZ[0, 1] = -Math.Sin(RPY[2]);
-            RZ[1, 0] = Math.Sin(RPY[2]);
-            RZ[1, 1] = Math.Cos(RPY[2]);
+            RZ[0, 0] = System.Math.Cos(RPY[2]);
+            RZ[0, 1] = -System.Math.Sin(RPY[2]);
+            RZ[1, 0] = System.Math.Sin(RPY[2]);
+            RZ[1, 1] = System.Math.Cos(RPY[2]);
 
             return RZ * RY * RX;
         }
@@ -257,11 +257,11 @@ namespace SW2GZ.Utilities
             double magnitude = 0;
             for (int i = 0; i < array.Length; i++)
             {
-                magnitude += Math.Pow(array[i], power);
+                magnitude += System.Math.Pow(array[i], power);
             }
             if (magnitude != 0)
             {
-                magnitude = Math.Pow(magnitude, 1 / power);
+                magnitude = System.Math.Pow(magnitude, 1 / power);
                 for (int i = 0; i < array.Length; i++)
                 {
                     array[i] /= magnitude;
@@ -286,7 +286,7 @@ namespace SW2GZ.Utilities
             double[] result = (double[])array.Clone();
             for (int i = 0; i < array.Length; i++)
             {
-                result[i] = (Math.Abs(array[i]) >= minValue) ? array[i] : 0;
+                result[i] = (System.Math.Abs(array[i]) >= minValue) ? array[i] : 0;
             }
             return result;
         }

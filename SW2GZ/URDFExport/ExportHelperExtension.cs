@@ -569,7 +569,7 @@ namespace SW2GZ.URDFExport
                 Joint Joint = new Joint();
                 if (zIsUp)
                 {
-                    Joint.Origin.SetRPY(new double[] { -Math.PI / 2, 0, 0 });
+                    Joint.Origin.SetRPY(new double[] { -System.Math.PI / 2, 0, 0 });
                 }
                 else
                 {
@@ -785,13 +785,13 @@ namespace SW2GZ.URDFExport
                 return true;
             }
             // Else if x is 0 and y is negative, flip
-            else if (Math.Abs(transformedAxis[0]) < 0.00001 && transformedAxis[1] < 0)
+            else if (System.Math.Abs(transformedAxis[0]) < 0.00001 && transformedAxis[1] < 0)
             {
                 return true;
             }
             // Else if x and y are 0 and z is negative, flip
-            else if (Math.Abs(transformedAxis[0]) < 0.00001 &&
-                     Math.Abs(transformedAxis[1]) < 0.00001 &&
+            else if (System.Math.Abs(transformedAxis[0]) < 0.00001 &&
+                     System.Math.Abs(transformedAxis[1]) < 0.00001 &&
                      transformedAxis[2] < 0)
             {
                 return true;
