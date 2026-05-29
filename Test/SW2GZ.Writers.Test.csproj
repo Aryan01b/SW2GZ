@@ -31,6 +31,7 @@
     <Compile Include="..\SW2GZ\Ros2\LaunchPyWriter.cs"       Link="Sources\Ros2\LaunchPyWriter.cs" />
     <Compile Include="..\SW2GZ\Ros2\XacroWriter.cs"          Link="Sources\Ros2\XacroWriter.cs" />
     <Compile Include="..\SW2GZ\Ros2\Ros2ControlWriter.cs"    Link="Sources\Ros2\Ros2ControlWriter.cs" />
+    <Compile Include="..\SW2GZ\Ros2\ControllersYaml.cs"      Link="Sources\Ros2\ControllersYaml.cs" />
     <Compile Include="..\SW2GZ\Ros2\RvizConfigWriter.cs"     Link="Sources\Ros2\RvizConfigWriter.cs" />
     <Compile Include="..\SW2GZ\Ros2\ReadmeWriter.cs"         Link="Sources\Ros2\ReadmeWriter.cs" />
     <Compile Include="..\SW2GZ\Exceptions\Sw2gzExportException.cs" Link="Sources\Exceptions\Sw2gzExportException.cs" />

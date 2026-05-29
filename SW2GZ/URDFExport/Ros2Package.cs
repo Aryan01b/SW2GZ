@@ -56,27 +56,8 @@ namespace SW2GZ.URDFExport
             string gzXacro = GzPluginTags.WriteGzRos2ControlXacro(_opt.PackageName);
             File.WriteAllText(Path.Combine(outputDir, "urdf", "inc", "gz.xacro"), gzXacro);
 
-            // TODO(T18): replace with dedicated ControllersYaml writer.
-            // Inline placeholder so config/controllers.yaml exists for launch files.
-            var yaml = new System.Text.StringBuilder();
-            yaml.AppendLine("controller_manager:");
-            yaml.AppendLine("  ros__parameters:");
-            yaml.AppendLine("    update_rate: 100");
-            yaml.AppendLine("    joint_state_broadcaster:");
-            yaml.AppendLine("      type: joint_state_broadcaster/JointStateBroadcaster");
-            yaml.AppendLine("    joint_trajectory_controller:");
-            yaml.AppendLine("      type: joint_trajectory_controller/JointTrajectoryController");
-            yaml.AppendLine();
-            yaml.AppendLine("joint_trajectory_controller:");
-            yaml.AppendLine("  ros__parameters:");
-            yaml.AppendLine("    joints:");
-            foreach (var j in _opt.JointNames) yaml.AppendLine($"      - {j}");
-            yaml.AppendLine("    command_interfaces:");
-            yaml.AppendLine("      - position");
-            yaml.AppendLine("    state_interfaces:");
-            yaml.AppendLine("      - position");
-            yaml.AppendLine("      - velocity");
-            File.WriteAllText(Path.Combine(outputDir, "config", "controllers.yaml"), yaml.ToString());
+            string controllersYaml = ControllersYaml.Write(new ControllersInput(_opt.PackageName, _opt.JointNames));
+            File.WriteAllText(Path.Combine(outputDir, "config", "controllers.yaml"), controllersYaml);
 
             new RvizConfigWriter().Write(Path.Combine(outputDir, "config"), "rviz.rviz");
             string bridgeYaml = RosGzBridgeYaml.Write(_opt.PackageName);

@@ -414,6 +414,7 @@
     <Compile Include="Ros2\LaunchPyWriter.cs" />
     <Compile Include="Ros2\XacroWriter.cs" />
     <Compile Include="Ros2\Ros2ControlWriter.cs" />
+    <Compile Include="Ros2\ControllersYaml.cs" />
     <Compile Include="Ros2\RvizConfigWriter.cs" />
     <Compile Include="Ros2\ReadmeWriter.cs" />
     <Compile Include="Exceptions\Sw2gzExportException.cs" />
