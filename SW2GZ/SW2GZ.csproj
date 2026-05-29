@@ -11,6 +11,10 @@
     <SolidWorksDir Condition=" '$(SolidWorksDir)' == '' AND Exists('C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\') ">C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\</SolidWorksDir>
     <SolidWorksDir Condition=" '$(SolidWorksDir)' == '' AND Exists('C:\Program Files (x86)\SOLIDWORKS Corp\SOLIDWORKS\') ">C:\Program Files (x86)\SOLIDWORKS Corp\SOLIDWORKS\</SolidWorksDir>
   </PropertyGroup>
+  <!-- Always define SW_INTEROP for the main SW2GZ project (has the COM references). -->
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);SW_INTEROP</DefineConstants>
+  </PropertyGroup>
   <PropertyGroup>
     <ProjectType>Local</ProjectType>
     <ProductVersion>8.0.50727</ProductVersion>
