@@ -11,10 +11,6 @@
     <SolidWorksDir Condition=" '$(SolidWorksDir)' == '' AND Exists('C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\') ">C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\</SolidWorksDir>
     <SolidWorksDir Condition=" '$(SolidWorksDir)' == '' AND Exists('C:\Program Files (x86)\SOLIDWORKS Corp\SOLIDWORKS\') ">C:\Program Files (x86)\SOLIDWORKS Corp\SOLIDWORKS\</SolidWorksDir>
   </PropertyGroup>
-  <!-- Always define SW_INTEROP for the main SW2GZ project (has the COM references). -->
-  <PropertyGroup>
-    <DefineConstants>$(DefineConstants);SW_INTEROP</DefineConstants>
-  </PropertyGroup>
   <PropertyGroup>
     <ProjectType>Local</ProjectType>
     <ProductVersion>8.0.50727</ProductVersion>
@@ -234,6 +230,12 @@
     <CodeAnalysisRuleSet>SW2GZ.ruleset</CodeAnalysisRuleSet>
     <CodeAnalysisIgnoreBuiltInRuleSets>false</CodeAnalysisIgnoreBuiltInRuleSets>
     <CodeAnalysisIgnoreBuiltInRules>false</CodeAnalysisIgnoreBuiltInRules>
+  </PropertyGroup>
+  <!-- SW_INTEROP must be appended AFTER every per-config <DefineConstants>; otherwise
+       the config groups overwrite it and #if SW_INTEROP gets compiled out, killing
+       the Sw2gzPipeline branch in ExportHelper.ExportRobot. -->
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);SW_INTEROP</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Castle.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=407dd0808d44fbdc, processorArchitecture=MSIL">
