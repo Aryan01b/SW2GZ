@@ -365,6 +365,7 @@
     <Compile Include="URDFExport\CSV\CSVImportExport.cs" />
     <Compile Include="URDFExport\ConfigurationSerialization.cs" />
     <Compile Include="URDFExport\ExportHelper.cs" />
+    <Compile Include="URDFExport\Sw2gzPipeline.cs" />
     <Compile Include="URDFExport\ExportHelperExtension.cs" />
     <Compile Include="UI\AssemblyExportFormExtension.cs">
       <SubType>Form</SubType>

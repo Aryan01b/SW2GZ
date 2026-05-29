@@ -32,11 +32,13 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Xml;
 using System.Xml.Serialization;
+using SW2GZ.SwSurface;
 
 namespace SW2GZ.URDFExport
 {
@@ -163,10 +165,41 @@ namespace SW2GZ.URDFExport
             ExportErrorWhy = null;
             try
             {
-                if (URDFRobot == null)
-                    throw new InvalidOperationException("URDFRobot is null. Call CreateRobotFromActiveModel first.");
                 if (string.IsNullOrWhiteSpace(SavePath))
                     throw new InvalidOperationException("SavePath is not set.");
+
+#if SW_INTEROP
+                // Task 29: Sw2gzPipeline wiring — runs for RobotPackage mode via the new
+                // SwSurface → Build → Write → Validate pipeline. Other modes fall through to
+                // the legacy path below.
+                // TODO(T29-followup): remove the legacy RobotPackage branch once the pipeline
+                // is fully verified in SolidWorks smoke testing.
+                if (Profile.Mode == ExportMode.RobotPackage)
+                {
+                    var pipeline = new Sw2gzPipeline(
+                        new SolidWorksMassProperties((SldWorks)iSwApp, (AssemblyDoc)ActiveSWModel),
+                        new SolidWorksAssemblyWalker((AssemblyDoc)ActiveSWModel),
+                        new SolidWorksMeshTessellator((SldWorks)iSwApp, (AssemblyDoc)ActiveSWModel));
+
+                    string pkgName = PackageName ?? ActiveSWModel?.GetTitle() ?? "robot";
+                    var report = pipeline.Run(SavePath, pkgName,
+                                              Profile_Author, Profile_Email, Profile_License);
+
+                    if (report.HasErrors)
+                    {
+                        var msg = string.Join("\n", report.Errors.Select(e => $"{e.Code}: {e.Message} ({e.Location})"));
+                        System.Windows.Forms.MessageBox.Show("SW2GZ export validation failed:\n\n" + msg,
+                            "SW2GZ Export", System.Windows.Forms.MessageBoxButtons.OK,
+                            System.Windows.Forms.MessageBoxIcon.Warning);
+                    }
+
+                    logger.Info("SW2GZ pipeline export complete. Output: " + SavePath);
+                    return;
+                }
+#endif
+
+                if (URDFRobot == null)
+                    throw new InvalidOperationException("URDFRobot is null. Call CreateRobotFromActiveModel first.");
 
                 string outDir = SavePath;
                 Directory.CreateDirectory(outDir);

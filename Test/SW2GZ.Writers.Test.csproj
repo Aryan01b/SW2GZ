@@ -75,6 +75,7 @@
     <Compile Include="..\SW2GZ\SwSurface\SolidWorksAssemblyWalker.cs" Link="Sources\SwSurface\SolidWorksAssemblyWalker.cs" />
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\IMeshTessellator.cs" Link="Sources\SwSurface\Abstractions\IMeshTessellator.cs" />
     <Compile Include="..\SW2GZ\SwSurface\SolidWorksMeshTessellator.cs" Link="Sources\SwSurface\SolidWorksMeshTessellator.cs" />
+    <Compile Include="..\SW2GZ\URDFExport\Sw2gzPipeline.cs"            Link="Sources\URDFExport\Sw2gzPipeline.cs" />
   </ItemGroup>
 
   <!-- Test/Writers/*.cs and Test/Golden/*.cs are auto-included by the SDK
