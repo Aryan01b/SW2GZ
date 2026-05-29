@@ -2,7 +2,8 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   <ros2_control name="GzSystem" type="system">
     <hardware>
-      <plugin>ign_ros2_control/IgnitionSystem</plugin>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      <parameters>$(find three_dof_arm_description)/config/controllers.yaml</parameters>
     </hardware>
     <joint name="shoulder">
       <command_interface name="position"/>
@@ -23,9 +24,4 @@
       <state_interface name="effort"/>
     </joint>
   </ros2_control>
-  <gazebo>
-    <plugin filename="ign_ros2_control-system" name="ign_ros2_control::system">
-      <parameters>$(find-pkg-share $(arg pkg))/config/controllers.yaml</parameters>
-    </plugin>
-  </gazebo>
 </robot>

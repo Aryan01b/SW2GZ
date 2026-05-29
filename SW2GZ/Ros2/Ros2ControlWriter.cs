@@ -1,42 +1,43 @@
 /*
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
+
+Emits inc/ros2_control.xacro — the <ros2_control> declarations (hardware
+plugin + per-joint interfaces) plus the <parameters> reference to the
+controllers.yaml. The <gazebo><plugin gz_ros2_control-system> block lives
+in inc/gz.xacro and is owned by GzPluginTags.WriteGzRos2ControlXacro.
+
+Fixes v1.0 export bug 3 ($(arg pkg) was referenced but never declared,
+breaking xacro parsing). The package name is interpolated directly into
+$(find ...) at write time.
+
+Locked to Harmonic — uses gz_ros2_control/GazeboSimSystem.
 */
+using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Text;
 
 namespace SW2GZ.Ros2
 {
-    public class Ros2ControlWriter
+    public static class Ros2ControlWriter
     {
-        public class Input
+        public static string Write(string packageName, IReadOnlyList<string> jointNames)
         {
-            public IReadOnlyList<string> JointNames { get; set; }
-            public TargetProfile Profile { get; set; }
-            public string ControllersYamlFileName { get; set; } = "controllers.yaml";
-        }
+            if (string.IsNullOrWhiteSpace(packageName))
+                throw new ArgumentException("packageName must not be null or whitespace.", nameof(packageName));
+            if (jointNames == null)
+                throw new ArgumentNullException(nameof(jointNames));
 
-        private readonly Input _in;
-        public Ros2ControlWriter(Input input) { _in = input; }
-
-        public void Write(string outputDir)
-        {
-            Directory.CreateDirectory(outputDir);
-            Directory.CreateDirectory(Path.Combine(outputDir, "inc"));
-
-            string hwPlugin = _in.Profile.Gz == GzVersion.Fortress
-                ? "ign_ros2_control/IgnitionSystem"
-                : "gz_ros2_control/GazeboSimSystem";
-            string sysPluginLib = TargetProfile.Ros2ControlPlugin[_in.Profile.Gz];
+            const string HardwarePlugin = "gz_ros2_control/GazeboSimSystem";
 
             var sb = new StringBuilder();
             sb.AppendLine("<?xml version=\"1.0\"?>");
             sb.AppendLine("<robot xmlns:xacro=\"http://www.ros.org/wiki/xacro\">");
             sb.AppendLine("  <ros2_control name=\"GzSystem\" type=\"system\">");
             sb.AppendLine("    <hardware>");
-            sb.AppendLine($"      <plugin>{hwPlugin}</plugin>");
+            sb.AppendLine($"      <plugin>{HardwarePlugin}</plugin>");
+            sb.AppendLine($"      <parameters>$(find {packageName})/config/controllers.yaml</parameters>");
             sb.AppendLine("    </hardware>");
-            foreach (var j in _in.JointNames)
+            foreach (var j in jointNames)
             {
                 sb.AppendLine($"    <joint name=\"{j}\">");
                 sb.AppendLine("      <command_interface name=\"position\"/>");
@@ -46,33 +47,8 @@ namespace SW2GZ.Ros2
                 sb.AppendLine("    </joint>");
             }
             sb.AppendLine("  </ros2_control>");
-            sb.AppendLine("  <gazebo>");
-            sb.AppendLine($"    <plugin filename=\"{sysPluginLib}\" name=\"{sysPluginLib.Replace("-", "::")}\">");
-            sb.AppendLine($"      <parameters>$(find-pkg-share $(arg pkg))/config/{_in.ControllersYamlFileName}</parameters>");
-            sb.AppendLine("    </plugin>");
-            sb.AppendLine("  </gazebo>");
             sb.AppendLine("</robot>");
-            File.WriteAllText(Path.Combine(outputDir, "inc", "ros2_control.xacro"), sb.ToString());
-
-            var yaml = new StringBuilder();
-            yaml.AppendLine("controller_manager:");
-            yaml.AppendLine("  ros__parameters:");
-            yaml.AppendLine("    update_rate: 100");
-            yaml.AppendLine("    joint_state_broadcaster:");
-            yaml.AppendLine("      type: joint_state_broadcaster/JointStateBroadcaster");
-            yaml.AppendLine("    joint_trajectory_controller:");
-            yaml.AppendLine("      type: joint_trajectory_controller/JointTrajectoryController");
-            yaml.AppendLine();
-            yaml.AppendLine("joint_trajectory_controller:");
-            yaml.AppendLine("  ros__parameters:");
-            yaml.AppendLine("    joints:");
-            foreach (var j in _in.JointNames) yaml.AppendLine($"      - {j}");
-            yaml.AppendLine("    command_interfaces:");
-            yaml.AppendLine("      - position");
-            yaml.AppendLine("    state_interfaces:");
-            yaml.AppendLine("      - position");
-            yaml.AppendLine("      - velocity");
-            File.WriteAllText(Path.Combine(outputDir, _in.ControllersYamlFileName), yaml.ToString());
+            return sb.ToString();
         }
     }
 }

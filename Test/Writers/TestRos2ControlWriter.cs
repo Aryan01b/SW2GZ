@@ -5,72 +5,89 @@ using System.Collections.Generic;
 using SW2GZ.Ros2;
 using Xunit;
 
-namespace SW2GZ.Test.Writers
+namespace SW2GZ.Writers.Tests
 {
-    public class TestRos2ControlWriter : WriterTestBase
+    public class TestRos2ControlWriter
     {
-        private Ros2ControlWriter MakeWriter(GzVersion gz = GzVersion.Harmonic) =>
-            new Ros2ControlWriter(new Ros2ControlWriter.Input
-            {
-                JointNames = new List<string> { "joint1", "joint2", "joint3" },
-                Profile = new TargetProfile { Gz = gz },
-            });
+        private static readonly IReadOnlyList<string> Joints = new[] { "j1", "j2" };
 
         [Fact]
-        [Trait("Category", "Unit")]
-        public void WritesXacroIncludeAndControllersYaml()
+        public void Write_ParametersUseLiteralFindPkg_Bug3()
         {
-            MakeWriter().Write(TempDir);
-            Assert.True(Exists("inc/ros2_control.xacro"));
-            Assert.True(Exists("controllers.yaml"));
+            var xml = Ros2ControlWriter.Write("my_robot_description", Joints);
+            Assert.Contains("$(find my_robot_description)/config/controllers.yaml", xml);
+            Assert.DoesNotContain("$(arg pkg)", xml);
+            Assert.DoesNotContain("find-pkg-share", xml);
         }
 
         [Fact]
-        [Trait("Category", "Unit")]
-        public void XacroContainsRos2ControlTagWithGzHardwareForHarmonic()
+        public void Write_UsesHarmonicHardwarePluginClass()
         {
-            MakeWriter(GzVersion.Harmonic).Write(TempDir);
-            var txt = ReadAllText("inc/ros2_control.xacro");
-            Assert.Contains("<ros2_control name=\"GzSystem\" type=\"system\">", txt);
-            Assert.Contains("<plugin>gz_ros2_control/GazeboSimSystem</plugin>", txt);
-            Assert.Contains("<joint name=\"joint1\">", txt);
-            Assert.Contains("<joint name=\"joint3\">", txt);
-            Assert.Contains("<command_interface name=\"position\"/>", txt);
-            Assert.Contains("<state_interface name=\"position\"/>", txt);
-            Assert.Contains("<state_interface name=\"velocity\"/>", txt);
+            var xml = Ros2ControlWriter.Write("pkg", Joints);
+            // Harmonic gz_ros2_control hardware plugin
+            Assert.Contains("gz_ros2_control/GazeboSimSystem", xml);
         }
 
         [Fact]
-        [Trait("Category", "Unit")]
-        public void XacroContainsIgnHardwareForFortress()
+        public void Write_DoesNotEmitGazeboBlock()
         {
-            MakeWriter(GzVersion.Fortress).Write(TempDir);
-            var txt = ReadAllText("inc/ros2_control.xacro");
-            Assert.Contains("<plugin>ign_ros2_control/IgnitionSystem</plugin>", txt);
+            // The <gazebo><plugin gz_ros2_control-system> block lives in inc/gz.xacro
+            // (owned by GzPluginTags.WriteGzRos2ControlXacro). Avoid emitting twice.
+            var xml = Ros2ControlWriter.Write("pkg", Joints);
+            Assert.DoesNotContain("<gazebo>", xml);
+            Assert.DoesNotContain("gz_ros2_control-system", xml);
         }
 
         [Fact]
-        [Trait("Category", "Unit")]
-        public void XacroIncludesGzPluginLoadForControllerManager()
+        public void Write_EmitsRos2ControlElement()
         {
-            MakeWriter(GzVersion.Harmonic).Write(TempDir);
-            var txt = ReadAllText("inc/ros2_control.xacro");
-            Assert.Contains("<gazebo>", txt);
-            Assert.Contains("filename=\"gz_ros2_control-system\"", txt);
-            Assert.Contains("controllers.yaml", txt);
+            var xml = Ros2ControlWriter.Write("pkg", Joints);
+            Assert.Contains("<ros2_control name=\"GzSystem\" type=\"system\">", xml);
+            Assert.Contains("</ros2_control>", xml);
         }
 
         [Fact]
-        [Trait("Category", "Unit")]
-        public void ControllersYamlHasBroadcasterAndTrajectoryController()
+        public void Write_EmitsOneJointBlockPerName()
         {
-            MakeWriter().Write(TempDir);
-            var yaml = ReadAllText("controllers.yaml");
-            Assert.Contains("controller_manager:", yaml);
-            Assert.Contains("joint_state_broadcaster:", yaml);
-            Assert.Contains("joint_trajectory_controller:", yaml);
-            Assert.Contains("- joint1", yaml);
-            Assert.Contains("- joint3", yaml);
+            var xml = Ros2ControlWriter.Write("pkg", Joints);
+            Assert.Contains("<joint name=\"j1\">", xml);
+            Assert.Contains("<joint name=\"j2\">", xml);
+            Assert.Contains("<command_interface name=\"position\"/>", xml);
+            Assert.Contains("<state_interface name=\"position\"/>", xml);
+            Assert.Contains("<state_interface name=\"velocity\"/>", xml);
+        }
+
+        [Fact]
+        public void Write_NoJoints_StillProducesValidSkeleton()
+        {
+            var xml = Ros2ControlWriter.Write("pkg", new string[0]);
+            Assert.Contains("<ros2_control", xml);
+            Assert.DoesNotContain("<joint", xml);
+        }
+
+        [Fact]
+        public void Write_NullPackageName_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(() => Ros2ControlWriter.Write(null, Joints));
+        }
+
+        [Fact]
+        public void Write_WhitespacePackageName_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(() => Ros2ControlWriter.Write("  ", Joints));
+        }
+
+        [Fact]
+        public void Write_NullJointList_Throws()
+        {
+            Assert.Throws<System.ArgumentNullException>(() => Ros2ControlWriter.Write("pkg", null));
+        }
+
+        [Fact]
+        public void Write_StartsWithXmlProlog()
+        {
+            var xml = Ros2ControlWriter.Write("pkg", Joints);
+            Assert.StartsWith("<?xml version=\"1.0\"?>", xml.TrimStart());
         }
     }
 }
