@@ -29,7 +29,10 @@ RestartApplications=no
 [Files]
 Source: "..\SW2GZ\bin\x64\Release\SW2GZ.dll";        DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SW2GZ\bin\x64\Release\SW2GZ.dll.config"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "..\SW2GZ\bin\x64\Release\*.dll";            DestDir: "{app}"; Flags: ignoreversion
+; Ship runtime dependency DLLs, but NEVER redistribute:
+;   solidworkstools.dll  -> Dassault Systemes' property, already present on every machine that has SolidWorks.
+;   xunit* / Moq / Castle.Core / *TestPlatform*  -> test-only deps, not needed at runtime.
+Source: "..\SW2GZ\bin\x64\Release\*.dll";            DestDir: "{app}"; Flags: ignoreversion; Excludes: "solidworkstools.dll,xunit*.dll,Moq.dll,Castle.Core.dll,Microsoft.VisualStudio.TestPlatform*.dll"
 
 [InstallDelete]
 ; Wipe stale binaries from the install dir before laying down the new build.

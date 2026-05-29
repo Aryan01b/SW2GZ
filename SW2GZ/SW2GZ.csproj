@@ -278,6 +278,9 @@
     <Reference Include="solidworkstools, Version=2.0.0.0, Culture=neutral, PublicKeyToken=bd18593873b4686d, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>$(SolidWorksDir)solidworkstools.dll</HintPath>
+      <!-- Dassault Systemes' assembly. Do NOT copy to output / redistribute;
+           it is already present on every machine that has SolidWorks installed. -->
+      <Private>False</Private>
     </Reference>
     <Reference Include="System">
       <Name>System</Name>

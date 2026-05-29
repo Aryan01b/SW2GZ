@@ -86,6 +86,20 @@ and contribution flow.
 | 11 README + CHANGELOG | ✅ done |
 | 12 Acceptance: VM build + spawn into Gz | ⏳ manual — needs SolidWorks workstation |
 
+## Credits
+
+SW2GZ is a modernized derivative of the [`solidworks_urdf_exporter`](https://github.com/ros/solidworks_urdf_exporter)
+by **Stephen Brawner**, which made this project possible. The ROS 2 + Gz Sim
+port, new writers, installer, and tooling are by **Aryan Arlikar**.
+
 ## License
 
-MIT. Original Copyright (c) 2020 Stephen Brawner. SW2GZ modifications (c) 2026 Aryan Arlikar.
+MIT — see [LICENSE](LICENSE).
+
+- Original `solidworks_urdf_exporter`: Copyright (c) 2015-2020 Stephen Brawner
+- SW2GZ (ROS 2 + Gz Sim modifications): Copyright (c) 2026 Aryan Arlikar
+
+Bundled third-party components and their licenses are listed in
+[THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md). "SolidWorks" is a
+trademark of Dassault Systèmes; SW2GZ is independent and not affiliated with
+or endorsed by Dassault Systèmes.
