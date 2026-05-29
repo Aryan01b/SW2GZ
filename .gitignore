@@ -338,3 +338,4 @@ graphify-out/
 installer/Output/
 SW2GZ/Properties/Resources.Designer.cs
 .sw2gz-guids.txt
+SW2GZ/Versioning/VersionInfo.cs
