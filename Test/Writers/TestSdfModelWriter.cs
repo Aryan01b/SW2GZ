@@ -3,7 +3,6 @@ Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 */
 using System.Collections.Generic;
 using SW2GZ.Gz;
-using SW2GZ.Ros2;
 using Xunit;
 
 namespace SW2GZ.Test.Writers
@@ -20,7 +19,7 @@ namespace SW2GZ.Test.Writers
                 Links = new List<SdfLinkData> { new SdfLinkData { Name = "base_link" } },
                 Joints = new List<SdfJointData>(),
             };
-            new SdfModelWriter(input, new TargetProfile { Gz = GzVersion.Harmonic }).Write(TempDir);
+            new SdfModelWriter(input).Write(TempDir);
             Assert.True(Exists("model.sdf"));
             var doc = LoadXml("model.sdf");
             Assert.Equal("sdf", doc.Root.Name.LocalName);
@@ -48,7 +47,7 @@ namespace SW2GZ.Test.Writers
                     new SdfJointData { Name = "shoulder", Type = "revolute", Parent = "base_link", Child = "arm" },
                 },
             };
-            new SdfModelWriter(input, new TargetProfile { Gz = GzVersion.Harmonic }).Write(TempDir);
+            new SdfModelWriter(input).Write(TempDir);
             var doc = LoadXml("model.sdf");
             var joint = doc.Root.Element("model").Element("joint");
             Assert.Equal("shoulder", joint.Attribute("name").Value);

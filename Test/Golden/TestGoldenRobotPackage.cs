@@ -20,13 +20,11 @@ namespace SW2GZ.Test.Golden
         private static readonly bool UpdateMode =
             Environment.GetEnvironmentVariable("SW2GZ_UPDATE_GOLDENS") == "1";
 
-        [Theory]
-        [InlineData(GzVersion.Harmonic, Ros2Distro.Jazzy,   "harmonic_jazzy")]
-        [InlineData(GzVersion.Fortress, Ros2Distro.Humble,  "fortress_humble")]
-        [InlineData(GzVersion.Ionic,    Ros2Distro.Kilted,  "ionic_kilted")]
+        [Fact]
         [Trait("Category", "Unit")]
-        public void GoldenRoundTrip(GzVersion gz, Ros2Distro distro, string goldenDir)
+        public void GoldenRoundTrip_HarmonicJazzy()
         {
+            // v2.0 lock: single distro/gz pairing (Jazzy + Harmonic). Fortress/Ionic combos removed.
             new Ros2Package(new Ros2Package.Options
             {
                 PackageName = "three_dof_arm_description",
@@ -34,11 +32,11 @@ namespace SW2GZ.Test.Golden
                 MaintainerEmail = "aryan@example.com",
                 License = "Apache-2.0",
                 JointNames = new List<string> { "shoulder", "elbow", "wrist" },
-                Profile = new TargetProfile { Gz = gz, Ros2 = distro },
+                Profile = new TargetProfile { Mode = ExportMode.RobotPackage },
                 UrdfBodyXml = "<link name=\"base_link\"/>",
             }).Write(TempDir);
 
-            string expectedDir = Path.Combine(GoldenRoot, goldenDir);
+            string expectedDir = Path.Combine(GoldenRoot, "harmonic_jazzy");
             if (UpdateMode)
             {
                 if (Directory.Exists(expectedDir)) Directory.Delete(expectedDir, recursive: true);

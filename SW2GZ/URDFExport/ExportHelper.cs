@@ -224,7 +224,7 @@ namespace SW2GZ.URDFExport
                         new ModelConfigWriter(new ModelConfigWriter.Input
                         {
                             Name = URDFRobot.Name,
-                            SdfVersion = TargetProfile.SdfVersion[Profile.Gz],
+                            SdfVersion = "1.10", // Gz Sim Harmonic (v2.0 lock)
                             Author = Profile_Author,
                             Email = Profile_Email,
                         }).Write(outDir);

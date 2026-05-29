@@ -1,27 +1,28 @@
 /*
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
+
+Locked to Gz Sim Harmonic — SDF version 1.10. Profile parameter retained
+for ExportMode dispatch in callers; Gz-version lookup removed (v2.0 lock).
 */
 using System.IO;
 using System.Xml.Linq;
-using SW2GZ.Ros2;
 
 namespace SW2GZ.Gz
 {
     public class SdfModelWriter
     {
         private readonly SdfModelInput _input;
-        private readonly TargetProfile _profile;
 
-        public SdfModelWriter(SdfModelInput input, TargetProfile profile)
+        public SdfModelWriter(SdfModelInput input, object profile = null)
         {
             _input = input;
-            _profile = profile;
+            // profile parameter kept for call-site compatibility; unused (v2.0 Harmonic lock).
         }
 
         public void Write(string outputDir)
         {
             Directory.CreateDirectory(outputDir);
-            string sdfVer = TargetProfile.SdfVersion[_profile.Gz];
+            string sdfVer = "1.10"; // Gz Sim Harmonic (v2.0 lock)
 
             var model = new XElement("model", new XAttribute("name", _input.Name));
             foreach (var l in _input.Links)

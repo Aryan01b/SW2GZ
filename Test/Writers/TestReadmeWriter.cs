@@ -12,7 +12,7 @@ namespace SW2GZ.Test.Writers
         [Trait("Category", "Unit")]
         public void WritesReadmeWithBuildAndLaunchCommands()
         {
-            new ReadmeWriter("my_robot_description", new TargetProfile { Ros2 = Ros2Distro.Jazzy, Gz = GzVersion.Harmonic }).Write(TempDir);
+            new ReadmeWriter("my_robot_description", new TargetProfile()).Write(TempDir);
             Assert.True(Exists("README.md"));
             var txt = ReadAllText("README.md");
             Assert.Contains("# my_robot_description", txt);
