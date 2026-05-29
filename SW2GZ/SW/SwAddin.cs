@@ -137,32 +137,30 @@ namespace SW2GZ.SW
         [ComUnregisterFunction]
         public static void UnregisterFunction(Type t)
         {
+            // Idempotent — runs from regasm /u during uninstall (and possibly during reinstall
+            // when the previous install was partial). Missing subkeys are NOT an error condition,
+            // and we never want to pop a dialog at the user during silent uninstall. Any genuine
+            // error (e.g. ACL refusal) is logged but swallowed.
             try
             {
                 Microsoft.Win32.RegistryKey hklm = Microsoft.Win32.Registry.LocalMachine;
                 Microsoft.Win32.RegistryKey hkcu = Microsoft.Win32.Registry.CurrentUser;
 
-                string keyname = "SOFTWARE\\SolidWorks\\Addins\\{" + t.GUID.ToString() + "}";
-                logger.Info("Unregistering " + keyname);
-                hklm.DeleteSubKey(keyname);
+                string hklmKey = "SOFTWARE\\SolidWorks\\Addins\\{" + t.GUID.ToString() + "}";
+                logger.Info("Unregistering " + hklmKey);
+                // throwOnMissingSubKey: false — silent no-op if already gone.
+                hklm.DeleteSubKey(hklmKey, throwOnMissingSubKey: false);
 
-                keyname = "Software\\SolidWorks\\AddInsStartup\\{" + t.GUID.ToString() + "}";
-                logger.Info("Unregistering " + keyname);
-                hkcu.DeleteSubKey(keyname);
-            }
-            catch (NullReferenceException nl)
-            {
-                logger.Error("There was a problem unregistering this dll: " + nl.Message);
-                MessageBox.Show("There was a problem unregistering this dll: \n\"" +
-                    nl.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
+                string hkcuKey = "Software\\SolidWorks\\AddInsStartup\\{" + t.GUID.ToString() + "}";
+                logger.Info("Unregistering " + hkcuKey);
+                hkcu.DeleteSubKey(hkcuKey, throwOnMissingSubKey: false);
             }
             catch (Exception e)
             {
-                logger.Error("There was a problem unregistering this dll: " + e.Message);
-                MessageBox.Show("There was a problem unregistering this dll: \n\"" +
-                    e.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
+                // Log only — uninstall is best-effort. Showing a MessageBox during
+                // /SILENT uninstall breaks unattended workflows and confuses end users
+                // when the only "error" is an already-gone key.
+                logger.Error("Non-fatal unregister exception (swallowed): " + e.Message);
             }
         }
 

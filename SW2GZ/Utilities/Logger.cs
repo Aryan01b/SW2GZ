@@ -47,7 +47,7 @@ namespace SW2GZ.Utilities
             RollingFileAppender roller = new RollingFileAppender
             {
                 AppendToFile = false,
-                File = Path.Combine(homeDir, "sw2urdf_logs", "sw2urdf.log"),
+                File = Path.Combine(homeDir, "sw2gz_logs", "sw2gz.log"),
                 Layout = patternLayout,
                 MaxSizeRollBackups = 5,
                 MaximumFileSize = "10MB",
