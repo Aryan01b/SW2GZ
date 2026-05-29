@@ -451,6 +451,7 @@
     <Compile Include="Validate\PackageNameChecker.cs" />
     <Compile Include="Validate\UrdfXmlValidator.cs" />
     <Compile Include="Validate\PluginNameChecker.cs" />
+    <Compile Include="Validate\MeshFileChecker.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
