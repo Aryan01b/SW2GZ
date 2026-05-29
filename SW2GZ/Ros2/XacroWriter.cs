@@ -1,48 +1,49 @@
 /*
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
+
+Emits the top-level <package>.urdf.xacro string. Includes inc/materials.xacro,
+inc/ros2_control.xacro (owned by Ros2ControlWriter, T11), and inc/gz.xacro
+(owned by GzPluginTags.WriteGzRos2ControlXacro, T10). This writer no longer
+emits placeholder copies of those include files — the caller must invoke
+the dedicated writers and Ros2ControlWriter/GzPluginTags own their inc/* file.
+
+v1 also passed through empty-name <material name=""/> tags which produced
+xacro warnings. T15 strips any such tag from the urdfBodyXml before emission.
 */
-using System.IO;
+using System;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace SW2GZ.Ros2
 {
-    public class XacroWriter
+    public static class XacroWriter
     {
-        private readonly string _robotName;
-        private readonly string _urdfBodyXml;
+        // Matches <material name="" .../> and <material name="   " ...> (self-closing or open)
+        private static readonly Regex EmptyNameMaterial = new Regex(
+            @"<material\s+name=""\s*""\s*/>(\s*\r?\n)?",
+            RegexOptions.Compiled);
 
-        public XacroWriter(string robotName, string urdfBodyXml)
+        public static string Write(string robotName, string urdfBodyXml)
         {
-            _robotName = robotName;
-            _urdfBodyXml = urdfBodyXml;
-        }
+            if (string.IsNullOrWhiteSpace(robotName))
+                throw new ArgumentException("robotName must not be null or whitespace.", nameof(robotName));
+            if (urdfBodyXml == null)
+                throw new ArgumentNullException(nameof(urdfBodyXml));
 
-        public void Write(string outputDir)
-        {
-            Directory.CreateDirectory(outputDir);
-            Directory.CreateDirectory(Path.Combine(outputDir, "inc"));
+            string filteredBody = EmptyNameMaterial.Replace(urdfBodyXml, string.Empty);
 
             var sb = new StringBuilder();
             sb.AppendLine("<?xml version=\"1.0\"?>");
-            sb.AppendLine($"<robot name=\"{_robotName}\" xmlns:xacro=\"http://www.ros.org/wiki/xacro\">");
+            sb.AppendLine($"<robot name=\"{robotName}\" xmlns:xacro=\"http://www.ros.org/wiki/xacro\">");
             sb.AppendLine("  <xacro:arg name=\"prefix\" default=\"\"/>");
             sb.AppendLine("  <xacro:arg name=\"use_sim\" default=\"false\"/>");
             sb.AppendLine("  <xacro:arg name=\"use_ros2_control\" default=\"true\"/>");
             sb.AppendLine("  <xacro:include filename=\"inc/materials.xacro\"/>");
             sb.AppendLine("  <xacro:include filename=\"inc/ros2_control.xacro\"/>");
             sb.AppendLine("  <xacro:include filename=\"inc/gz.xacro\"/>");
-            sb.AppendLine(_urdfBodyXml);
+            sb.AppendLine(filteredBody);
             sb.AppendLine("</robot>");
-            File.WriteAllText(Path.Combine(outputDir, $"{_robotName}.urdf.xacro"), sb.ToString());
-
-            // Placeholder content for include files; Ros2ControlWriter and GzPluginTags
-            // overwrite ros2_control.xacro and gz.xacro respectively in Phase 4.
-            File.WriteAllText(Path.Combine(outputDir, "inc", "materials.xacro"),
-                "<?xml version=\"1.0\"?>\n<robot xmlns:xacro=\"http://www.ros.org/wiki/xacro\">\n  <!-- Named materials populated by SW2GZ. -->\n</robot>\n");
-            File.WriteAllText(Path.Combine(outputDir, "inc", "ros2_control.xacro"),
-                "<?xml version=\"1.0\"?>\n<robot xmlns:xacro=\"http://www.ros.org/wiki/xacro\">\n  <!-- ros2_control tags populated by Ros2ControlWriter. -->\n</robot>\n");
-            File.WriteAllText(Path.Combine(outputDir, "inc", "gz.xacro"),
-                "<?xml version=\"1.0\"?>\n<robot xmlns:xacro=\"http://www.ros.org/wiki/xacro\">\n  <!-- Gz plugin tags populated by GzPluginTags. -->\n</robot>\n");
+            return sb.ToString();
         }
     }
 }

@@ -42,10 +42,19 @@ namespace SW2GZ.URDFExport
             string cmake = AmentCMakeWriter.Write(new AmentCMakeInput(_opt.PackageName, hasMeshes: true));
             File.WriteAllText(Path.Combine(outputDir, "CMakeLists.txt"), cmake);
 
-            new XacroWriter(_opt.PackageName, _opt.UrdfBodyXml).Write(Path.Combine(outputDir, "urdf"));
+            File.WriteAllText(
+                Path.Combine(outputDir, "urdf", $"{_opt.PackageName}.urdf.xacro"),
+                XacroWriter.Write(_opt.PackageName, _opt.UrdfBodyXml));
+
+            // TODO(materials): introduce a MaterialsXacro writer in a later task.
+            File.WriteAllText(Path.Combine(outputDir, "urdf", "inc", "materials.xacro"),
+                "<?xml version=\"1.0\"?>\n<robot xmlns:xacro=\"http://www.ros.org/wiki/xacro\">\n  <!-- Named materials populated by SW2GZ. -->\n</robot>\n");
 
             string ros2CtrlXacro = Ros2ControlWriter.Write(_opt.PackageName, _opt.JointNames);
             File.WriteAllText(Path.Combine(outputDir, "urdf", "inc", "ros2_control.xacro"), ros2CtrlXacro);
+
+            string gzXacro = GzPluginTags.WriteGzRos2ControlXacro(_opt.PackageName);
+            File.WriteAllText(Path.Combine(outputDir, "urdf", "inc", "gz.xacro"), gzXacro);
 
             // TODO(T18): replace with dedicated ControllersYaml writer.
             // Inline placeholder so config/controllers.yaml exists for launch files.

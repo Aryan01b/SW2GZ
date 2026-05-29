@@ -1,4 +1,9 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <!-- Gz plugin tags populated by GzPluginTags. -->
+  <gazebo>
+    <plugin filename="gz_ros2_control-system"
+            name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(find three_dof_arm_description)/config/controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
 </robot>
