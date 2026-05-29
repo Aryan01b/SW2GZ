@@ -79,8 +79,8 @@ namespace SW2GZ.URDFExport
                 Profile = _opt.Profile,
             }).Write(Path.Combine(outputDir, "launch"));
 
-            new SdfWorldWriter(_opt.Profile, "empty")
-                .WriteEmptyWorld(Path.Combine(outputDir, "worlds"), "empty.sdf");
+            string worldSdf = SdfWorldWriter.Write(new SdfWorldInput("empty"));
+            File.WriteAllText(Path.Combine(outputDir, "worlds", "empty.sdf"), worldSdf);
 
             new ReadmeWriter(_opt.PackageName, _opt.Profile).Write(outputDir);
 

@@ -198,8 +198,9 @@ namespace SW2GZ.URDFExport
                         new SdfModelWriter(BuildSdfModelInput(), Profile).Write(outDir);
                         break;
                     case ExportMode.SdfWorld:
-                        new SdfWorldWriter(Profile, URDFRobot.Name)
-                            .WriteEmptyWorld(outDir, URDFRobot.Name + ".world");
+                        File.WriteAllText(
+                            Path.Combine(outDir, URDFRobot.Name + ".world"),
+                            SdfWorldWriter.Write(new SdfWorldInput(URDFRobot.Name)));
                         break;
                 }
 

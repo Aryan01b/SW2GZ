@@ -1,39 +1,43 @@
 /*
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
+
+Emits worlds/<name>.sdf for Gz Sim Harmonic. Fixes v1.0 export bug 4 —
+previous writer pulled plugin filenames from TargetProfile.SimPluginLib
+which for Garden returned `gz-sim8-*` (versioned). Harmonic loads ONLY
+the unversioned `gz-sim-*-system` plugins.
+
+Locked to Harmonic — no profile parameter. SDF version 1.10.
 */
-using System.IO;
+using System;
 using System.Text;
-using SW2GZ.Ros2;
 
 namespace SW2GZ.Gz
 {
-    public class SdfWorldWriter
+    public sealed record SdfWorldInput(string WorldName);
+
+    public static class SdfWorldWriter
     {
-        private readonly TargetProfile _profile;
-        private readonly string _worldName;
-
-        public SdfWorldWriter(TargetProfile profile, string worldName)
+        public static string Write(SdfWorldInput input)
         {
-            _profile = profile;
-            _worldName = worldName;
-        }
-
-        public void WriteEmptyWorld(string outputDir, string fileName)
-        {
-            Directory.CreateDirectory(outputDir);
-            string sdfVer = TargetProfile.SdfVersion[_profile.Gz];
+            if (input == null) throw new ArgumentNullException(nameof(input));
+            if (string.IsNullOrWhiteSpace(input.WorldName))
+                throw new ArgumentException("WorldName must not be null or whitespace.", nameof(input));
 
             var sb = new StringBuilder();
             sb.AppendLine("<?xml version=\"1.0\"?>");
-            sb.AppendLine($"<sdf version=\"{sdfVer}\">");
-            sb.AppendLine($"  <world name=\"{_worldName}\">");
-            sb.Append(GzPluginTags.WorldSystemBlock(_profile));
+            sb.AppendLine("<sdf version=\"1.10\">");
+            sb.AppendLine($"  <world name=\"{input.WorldName}\">");
+            sb.AppendLine("    <plugin filename=\"gz-sim-physics-system\"           name=\"gz::sim::systems::Physics\"/>");
+            sb.AppendLine("    <plugin filename=\"gz-sim-user-commands-system\"     name=\"gz::sim::systems::UserCommands\"/>");
+            sb.AppendLine("    <plugin filename=\"gz-sim-scene-broadcaster-system\" name=\"gz::sim::systems::SceneBroadcaster\"/>");
+            sb.AppendLine("    <plugin filename=\"gz-sim-sensors-system\"           name=\"gz::sim::systems::Sensors\"/>");
+            sb.AppendLine("    <plugin filename=\"gz-sim-imu-system\"               name=\"gz::sim::systems::Imu\"/>");
             sb.Append(SdfPhysicsBlock.Default());
             sb.Append(SdfPhysicsBlock.Sun());
             sb.Append(SdfPhysicsBlock.GroundPlane());
             sb.AppendLine("  </world>");
             sb.AppendLine("</sdf>");
-            File.WriteAllText(Path.Combine(outputDir, fileName), sb.ToString());
+            return sb.ToString();
         }
     }
 }
