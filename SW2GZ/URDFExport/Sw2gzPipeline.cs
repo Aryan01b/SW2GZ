@@ -95,7 +95,11 @@ namespace SW2GZ.URDFExport
             var joints = new List<UrdfJoint>();
 
             // ── Step 5: Write package tree ────────────────────────────────────
-            string root = Path.Combine(outputDir, pkg);
+            // v2.0 layout: <outputDir>/<pkg>_ws/src/<pkg>/...
+            // Ready for `cd <pkg>_ws && colcon build` without further restructuring.
+            string workspaceDir = Path.Combine(outputDir, $"{pkg}_ws");
+            string srcDir = Path.Combine(workspaceDir, "src");
+            string root = Path.Combine(srcDir, pkg);
             Directory.CreateDirectory(root);
 
             foreach (string subdir in new[] { "urdf", "urdf/inc", "worlds", "launch", "config", "meshes" })

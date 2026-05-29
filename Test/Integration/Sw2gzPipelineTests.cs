@@ -43,9 +43,13 @@ namespace SW2GZ.Integration.Tests
                 var report = new Sw2gzPipeline(mass.Object, walker.Object, tess.Object)
                     .Run(tmp, "test_pkg", "A", "a@b", "Apache-2.0");
 
-                string root = Path.Combine(tmp, "test_pkg");
+                // v2.0 layout: <tmp>/<pkg>_ws/src/<pkg>/...
+                string workspaceDir = Path.Combine(tmp, "test_pkg_ws");
+                string root = Path.Combine(workspaceDir, "src", "test_pkg");
                 Assert.False(report.HasErrors, string.Join("; ", System.Linq.Enumerable.Select(report.Errors, e => e.Code + " " + e.Message)));
 
+                Assert.True(Directory.Exists(workspaceDir), "workspace root <pkg>_ws missing");
+                Assert.True(Directory.Exists(Path.Combine(workspaceDir, "src")), "<pkg>_ws/src missing");
                 Assert.True(File.Exists(Path.Combine(root, "package.xml")));
                 Assert.True(File.Exists(Path.Combine(root, "CMakeLists.txt")));
                 Assert.True(File.Exists(Path.Combine(root, "urdf", "test_pkg.urdf.xacro")));
@@ -101,9 +105,9 @@ namespace SW2GZ.Integration.Tests
                 new Sw2gzPipeline(mass.Object, walker.Object, tess.Object)
                     .Run(tmp, "Bad-Name", "A", "a@b", "MIT");
 
-                // sanitized to "bad_name"
-                Assert.True(Directory.Exists(Path.Combine(tmp, "bad_name")));
-                Assert.False(Directory.Exists(Path.Combine(tmp, "Bad-Name")));
+                // sanitized to "bad_name"; v2.0 layout = <tmp>/bad_name_ws/src/bad_name/
+                Assert.True(Directory.Exists(Path.Combine(tmp, "bad_name_ws", "src", "bad_name")));
+                Assert.False(Directory.Exists(Path.Combine(tmp, "Bad-Name_ws")));
             }
             finally { if (Directory.Exists(tmp)) Directory.Delete(tmp, true); }
         }

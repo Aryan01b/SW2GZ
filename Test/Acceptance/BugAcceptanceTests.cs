@@ -53,9 +53,12 @@ namespace SW2GZ.Acceptance.Tests
             var report = new Sw2gzPipeline(mass.Object, walker.Object, tess.Object)
                 .Run(_tmp, rawName, "A", "a@b", "Apache-2.0");
 
-            // Pipeline sanitizes — figure out resulting dir name by listing _tmp.
-            string sanitizedDir = Directory.GetDirectories(_tmp)[0];
-            return (sanitizedDir, report, Path.GetFileName(sanitizedDir));
+            // v2.0 layout: <_tmp>/<pkg>_ws/src/<pkg>/. Sanitized name unknown until
+            // we look at the workspace dir (<pkg>_ws ends in "_ws").
+            string workspaceDir = Directory.GetDirectories(_tmp)[0];
+            string srcDir = Path.Combine(workspaceDir, "src");
+            string sanitizedPkgDir = Directory.GetDirectories(srcDir)[0];
+            return (sanitizedPkgDir, report, Path.GetFileName(sanitizedPkgDir));
         }
 
         // --- Bug 1 - gz.xacro must not be empty placeholder ---------------

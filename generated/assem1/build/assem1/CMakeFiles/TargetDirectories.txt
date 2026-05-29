@@ -1,0 +1,9 @@
+/mnt/d/aryan/projects/sw_ros/solidworks_urdf_exporter-master/generated/assem1/build/assem1/CMakeFiles/uninstall.dir
+/mnt/d/aryan/projects/sw_ros/solidworks_urdf_exporter-master/generated/assem1/build/assem1/CMakeFiles/assem1_uninstall.dir
+/mnt/d/aryan/projects/sw_ros/solidworks_urdf_exporter-master/generated/assem1/build/assem1/CMakeFiles/test.dir
+/mnt/d/aryan/projects/sw_ros/solidworks_urdf_exporter-master/generated/assem1/build/assem1/CMakeFiles/edit_cache.dir
+/mnt/d/aryan/projects/sw_ros/solidworks_urdf_exporter-master/generated/assem1/build/assem1/CMakeFiles/rebuild_cache.dir
+/mnt/d/aryan/projects/sw_ros/solidworks_urdf_exporter-master/generated/assem1/build/assem1/CMakeFiles/list_install_components.dir
+/mnt/d/aryan/projects/sw_ros/solidworks_urdf_exporter-master/generated/assem1/build/assem1/CMakeFiles/install.dir
+/mnt/d/aryan/projects/sw_ros/solidworks_urdf_exporter-master/generated/assem1/build/assem1/CMakeFiles/install/local.dir
+/mnt/d/aryan/projects/sw_ros/solidworks_urdf_exporter-master/generated/assem1/build/assem1/CMakeFiles/install/strip.dir
