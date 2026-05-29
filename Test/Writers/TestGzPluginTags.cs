@@ -2,39 +2,67 @@
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 */
 using SW2GZ.Gz;
-using SW2GZ.Ros2;
 using Xunit;
 
-namespace SW2GZ.Test.Writers
+namespace SW2GZ.Writers.Tests
 {
     public class TestGzPluginTags
     {
-        [Theory]
-        [InlineData(GzVersion.Fortress, "ignition-gazebo6")]
-        [InlineData(GzVersion.Harmonic, "gz-sim8")]
-        [InlineData(GzVersion.Ionic,    "gz-sim9")]
-        [Trait("Category", "Unit")]
-        public void WorldSystemBlockReferencesCorrectSimLib(GzVersion gz, string expectedLib)
+        [Fact]
+        public void Write_EmitsCorrectPluginClassName_Bug8()
         {
-            var profile = new TargetProfile { Gz = gz };
-            string xml = GzPluginTags.WorldSystemBlock(profile);
-            Assert.Contains($"filename=\"{expectedLib}-physics-system\"", xml);
-            Assert.Contains($"filename=\"{expectedLib}-sensors-system\"", xml);
-            Assert.Contains($"filename=\"{expectedLib}-scene-broadcaster-system\"", xml);
-            Assert.Contains($"filename=\"{expectedLib}-user-commands-system\"", xml);
+            var xml = GzPluginTags.WriteGzRos2ControlXacro("my_pkg");
+            Assert.Contains("gz_ros2_control-system", xml);
+            Assert.Contains("gz_ros2_control::GazeboSimROS2ControlPlugin", xml);
         }
 
-        [Theory]
-        [InlineData(GzVersion.Fortress, "ign_ros2_control-system")]
-        [InlineData(GzVersion.Harmonic, "gz_ros2_control-system")]
-        [InlineData(GzVersion.Ionic,    "gz_ros2_control-system")]
-        [Trait("Category", "Unit")]
-        public void ControlPluginBlockUsesCorrectLib(GzVersion gz, string expectedLib)
+        [Fact]
+        public void Write_EmitsParametersWithFindPackage_Bug1()
         {
-            var profile = new TargetProfile { Gz = gz };
-            string xml = GzPluginTags.Ros2ControlPluginBlock(profile, "controllers.yaml");
-            Assert.Contains($"filename=\"{expectedLib}\"", xml);
-            Assert.Contains("controllers.yaml", xml);
+            var xml = GzPluginTags.WriteGzRos2ControlXacro("my_pkg");
+            Assert.Contains("<parameters>$(find my_pkg)/config/controllers.yaml</parameters>", xml);
+        }
+
+        [Fact]
+        public void Write_IsNonEmpty_Bug1()
+        {
+            var xml = GzPluginTags.WriteGzRos2ControlXacro("my_pkg");
+            Assert.Contains("<gazebo>", xml);
+            Assert.Contains("</gazebo>", xml);
+        }
+
+        [Fact]
+        public void Write_RobotElementOpensXacroNamespace()
+        {
+            var xml = GzPluginTags.WriteGzRos2ControlXacro("my_pkg");
+            Assert.Contains("<robot xmlns:xacro=\"http://www.ros.org/wiki/xacro\">", xml);
+        }
+
+        [Fact]
+        public void Write_StartsWithXmlProlog()
+        {
+            var xml = GzPluginTags.WriteGzRos2ControlXacro("my_pkg");
+            Assert.StartsWith("<?xml version=\"1.0\"?>", xml.TrimStart());
+        }
+
+        [Fact]
+        public void Write_NullPackageName_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(() => GzPluginTags.WriteGzRos2ControlXacro(null));
+        }
+
+        [Fact]
+        public void Write_EmptyPackageName_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(() => GzPluginTags.WriteGzRos2ControlXacro("   "));
+        }
+
+        [Fact]
+        public void Write_DifferentPackageName_InterpolatesIntoFindCall()
+        {
+            var xml = GzPluginTags.WriteGzRos2ControlXacro("arm_2dof_description");
+            Assert.Contains("$(find arm_2dof_description)", xml);
+            Assert.DoesNotContain("$(find my_pkg)", xml);
         }
     }
 }
