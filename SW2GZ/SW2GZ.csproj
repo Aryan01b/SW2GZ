@@ -453,6 +453,8 @@
     <Compile Include="Validate\PluginNameChecker.cs" />
     <Compile Include="Validate\MeshFileChecker.cs" />
     <Compile Include="Validate\OutputValidator.cs" />
+    <Compile Include="SwSurface\Abstractions\IMassProperties.cs" />
+    <Compile Include="SwSurface\SolidWorksMassProperties.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
