@@ -71,13 +71,10 @@ namespace SW2GZ.URDFExport
             new RvizConfigWriter().Write(Path.Combine(outputDir, "config"), "rviz.rviz");
             new RosGzBridgeYaml().Write(Path.Combine(outputDir, "config"), "ros_gz_bridge.yaml");
 
-            new LaunchPyWriter(new LaunchPyWriter.Input
-            {
-                PackageName = _opt.PackageName,
-                XacroFileName = _opt.PackageName + ".urdf.xacro",
-                WorldFileName = "empty.sdf",
-                Profile = _opt.Profile,
-            }).Write(Path.Combine(outputDir, "launch"));
+            string launchDir = Path.Combine(outputDir, "launch");
+            File.WriteAllText(Path.Combine(launchDir, "display.launch.py"),      LaunchPyWriter.Display(_opt.PackageName));
+            File.WriteAllText(Path.Combine(launchDir, "gz_sim.launch.py"),       LaunchPyWriter.GzSim(_opt.PackageName));
+            File.WriteAllText(Path.Combine(launchDir, "ros2_control.launch.py"), LaunchPyWriter.Ros2Control(_opt.PackageName));
 
             string worldSdf = SdfWorldWriter.Write(new SdfWorldInput("empty"));
             File.WriteAllText(Path.Combine(outputDir, "worlds", "empty.sdf"), worldSdf);

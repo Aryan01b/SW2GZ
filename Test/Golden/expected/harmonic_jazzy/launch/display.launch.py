@@ -11,9 +11,10 @@ def generate_launch_description():
     robot_desc = xacro.process_file(xacro_path).toxml()
 
     rsp = Node(package='robot_state_publisher', executable='robot_state_publisher',
-               output='screen', parameters=[{'robot_description': robot_desc, 'use_sim_time': False}])
+               output='screen',
+               parameters=[{'robot_description': robot_desc, 'use_sim_time': False}])
     jsp = Node(package='joint_state_publisher_gui', executable='joint_state_publisher_gui')
-    rviz = Node(package='rviz2', executable='rviz2', arguments=[
-        '-d', os.path.join(pkg_share, 'config', 'rviz.rviz')])
+    rviz = Node(package='rviz2', executable='rviz2',
+                arguments=['-d', os.path.join(pkg_share, 'config', 'rviz.rviz')])
 
     return LaunchDescription([rsp, jsp, rviz])

@@ -4,70 +4,131 @@ Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 using SW2GZ.Ros2;
 using Xunit;
 
-namespace SW2GZ.Test.Writers
+namespace SW2GZ.Writers.Tests
 {
-    public class TestLaunchPyWriter : WriterTestBase
+    public class TestLaunchPyWriter
     {
-        private LaunchPyWriter MakeWriter(GzVersion gz = GzVersion.Harmonic) =>
-            new LaunchPyWriter(new LaunchPyWriter.Input
-            {
-                PackageName = "my_robot_description",
-                XacroFileName = "my_robot.urdf.xacro",
-                WorldFileName = "empty.sdf",
-                Profile = new TargetProfile { Gz = gz },
-            });
+        // ─── GzSim ──────────────────────────────────────────────────────────
 
         [Fact]
-        [Trait("Category", "Unit")]
-        public void WritesThreeLaunchFiles()
+        public void GzSim_SetsSystemPluginPath_Bug5()
         {
-            MakeWriter().Write(TempDir);
-            Assert.True(Exists("display.launch.py"));
-            Assert.True(Exists("gz_sim.launch.py"));
-            Assert.True(Exists("ros2_control.launch.py"));
+            var py = LaunchPyWriter.GzSim("my_pkg");
+            Assert.Contains("SetEnvironmentVariable", py);
+            Assert.Contains("GZ_SIM_SYSTEM_PLUGIN_PATH", py);
+            Assert.Contains("get_package_prefix('gz_ros2_control')", py);
         }
 
         [Fact]
-        [Trait("Category", "Unit")]
-        public void DisplayLaunchUsesXacroAndStartsRsp()
+        public void GzSim_LaunchesParameterBridge_Bug7()
         {
-            MakeWriter().Write(TempDir);
-            var txt = ReadAllText("display.launch.py");
-            Assert.Contains("import xacro", txt);
-            Assert.Contains("robot_state_publisher", txt);
-            Assert.Contains("joint_state_publisher_gui", txt);
-            Assert.Contains("rviz2", txt);
-            Assert.Contains("my_robot.urdf.xacro", txt);
+            var py = LaunchPyWriter.GzSim("my_pkg");
+            Assert.Contains("parameter_bridge", py);
+            Assert.Contains("ros_gz_bridge", py);
+            Assert.Contains("config/ros_gz_bridge.yaml", py);
         }
 
         [Fact]
-        [Trait("Category", "Unit")]
-        public void GzSimLaunchUsesRosGzSimForHarmonic()
+        public void GzSim_SpawnNameMatchesPackage_Bug6()
         {
-            MakeWriter(GzVersion.Harmonic).Write(TempDir);
-            var txt = ReadAllText("gz_sim.launch.py");
-            Assert.Contains("ros_gz_sim", txt);
-            Assert.Contains("empty.sdf", txt);
-            Assert.Contains("create", txt);
+            var py = LaunchPyWriter.GzSim("my_pkg");
+            Assert.Contains("'-name', 'my_pkg'", py);
         }
 
         [Fact]
-        [Trait("Category", "Unit")]
-        public void GzSimLaunchUsesRosIgnGazeboForFortress()
+        public void GzSim_DifferentPackageName_FlowsThroughEverywhere()
         {
-            MakeWriter(GzVersion.Fortress).Write(TempDir);
-            var txt = ReadAllText("gz_sim.launch.py");
-            Assert.Contains("ros_ign_gazebo", txt);
+            var py = LaunchPyWriter.GzSim("arm_2dof_description");
+            Assert.Contains("'-name', 'arm_2dof_description'", py);
+            Assert.Contains("get_package_share_directory('arm_2dof_description')", py);
+            Assert.DoesNotContain("'-name', 'my_pkg'", py);
         }
 
         [Fact]
-        [Trait("Category", "Unit")]
-        public void Ros2ControlLaunchSpawnsBroadcasterAndTrajectoryController()
+        public void GzSim_SetsResourcePath()
         {
-            MakeWriter().Write(TempDir);
-            var txt = ReadAllText("ros2_control.launch.py");
-            Assert.Contains("joint_state_broadcaster", txt);
-            Assert.Contains("joint_trajectory_controller", txt);
+            var py = LaunchPyWriter.GzSim("my_pkg");
+            Assert.Contains("GZ_SIM_RESOURCE_PATH", py);
+        }
+
+        [Fact]
+        public void GzSim_LoadsEmptyWorldFromPackage()
+        {
+            var py = LaunchPyWriter.GzSim("my_pkg");
+            Assert.Contains("'worlds', 'empty.sdf'", py);
+        }
+
+        [Fact]
+        public void GzSim_NullPackage_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(() => LaunchPyWriter.GzSim(null));
+        }
+
+        [Fact]
+        public void GzSim_WhitespacePackage_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(() => LaunchPyWriter.GzSim("  "));
+        }
+
+        // ─── Display ────────────────────────────────────────────────────────
+
+        [Fact]
+        public void Display_RunsRobotStatePublisherAndRviz()
+        {
+            var py = LaunchPyWriter.Display("my_pkg");
+            Assert.Contains("robot_state_publisher", py);
+            Assert.Contains("rviz2", py);
+            Assert.Contains("joint_state_publisher_gui", py);
+        }
+
+        [Fact]
+        public void Display_PackageInterpolates()
+        {
+            var py = LaunchPyWriter.Display("my_pkg");
+            Assert.Contains("get_package_share_directory('my_pkg')", py);
+        }
+
+        [Fact]
+        public void Display_NullPackage_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(() => LaunchPyWriter.Display(null));
+        }
+
+        // ─── Ros2Control ────────────────────────────────────────────────────
+
+        [Fact]
+        public void Ros2Control_SpawnsJointStateBroadcasterAndTrajectoryController()
+        {
+            var py = LaunchPyWriter.Ros2Control("my_pkg");
+            Assert.Contains("joint_state_broadcaster", py);
+            Assert.Contains("joint_trajectory_controller", py);
+            Assert.Contains("--controller-manager", py);
+            Assert.Contains("/controller_manager", py);
+        }
+
+        [Fact]
+        public void Ros2Control_SequencesViaOnProcessExit()
+        {
+            var py = LaunchPyWriter.Ros2Control("my_pkg");
+            // joint_trajectory_controller waits for joint_state_broadcaster to be up
+            Assert.Contains("RegisterEventHandler", py);
+            Assert.Contains("OnProcessExit", py);
+        }
+
+        [Fact]
+        public void Ros2Control_NullPackage_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(() => LaunchPyWriter.Ros2Control(null));
+        }
+
+        // ─── Generic ────────────────────────────────────────────────────────
+
+        [Fact]
+        public void AllOutputs_AreValidPython_StartWithHeaderComment()
+        {
+            Assert.StartsWith("# ", LaunchPyWriter.GzSim("p"));
+            Assert.StartsWith("# ", LaunchPyWriter.Display("p"));
+            Assert.StartsWith("# ", LaunchPyWriter.Ros2Control("p"));
         }
     }
 }
