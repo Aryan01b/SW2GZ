@@ -1,7 +1,14 @@
 name: release
+# NOTE: The SW2GZ add-in DLL requires the SolidWorks API assemblies to compile,
+# which are not available on GitHub-hosted runners. The installer is therefore
+# built locally on a workstation that has the SolidWorks API SDK, and the
+# resulting SW2GZ-Setup-*.exe is attached to the GitHub Release manually.
+#
+# This workflow is manual-only (workflow_dispatch) so it never auto-fails on a
+# tag push. It is kept as a scaffold for a future self-hosted runner that has
+# the SolidWorks API available.
 on:
-  push:
-    tags: ['v*.*.*']
+  workflow_dispatch:
 
 jobs:
   build-installer:
@@ -9,16 +16,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
-      - name: Build Release (best-effort — needs SolidWorks API on runner)
+      - name: Build Release (requires SolidWorks API — only succeeds on a runner that has it)
         continue-on-error: true
         run: msbuild SW2GZ.sln /t:Restore;Build /p:Configuration=Release /v:minimal
       - name: Install Inno Setup
         run: choco install innosetup -y
       - name: Build installer
+        continue-on-error: true
         shell: pwsh
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\SW2GZ.iss
       - uses: softprops/action-gh-release@v2
+        if: ${{ github.ref_type == 'tag' }}
         with:
           files: installer/Output/SW2GZ-Setup-*.exe
           generate_release_notes: true
