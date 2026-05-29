@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SW2GZ v2.0 — UI Walkthrough</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2129;
+    --panel-2: #232c36;
+    --border: #2c3742;
+    --text: #e6e6e6;
+    --muted: #8a9aa8;
+    --accent: #4fc3f7;
+    --accent-2: #81c784;
+    --warn: #ffb74d;
+    --err: #e57373;
+    --code-bg: #0a0e13;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  header {
+    background: linear-gradient(135deg, #1a2632 0%, #0f1419 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 48px 32px;
+    text-align: center;
+  }
+  header h1 { margin: 0 0 12px; font-size: 2.4em; }
+  header .sub { color: var(--muted); font-size: 1.1em; }
+  header .badges { margin-top: 20px; }
+  .badge {
+    display: inline-block;
+    padding: 4px 12px;
+    margin: 0 4px;
+    border-radius: 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    font-size: 0.85em;
+    color: var(--muted);
+  }
+  .badge.ok { color: var(--accent-2); border-color: rgba(129, 199, 132, 0.4); }
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 32px;
+  }
+  nav.toc {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 28px;
+    margin-bottom: 40px;
+  }
+  nav.toc h3 { margin: 0 0 12px; color: var(--accent); font-size: 0.95em; text-transform: uppercase; letter-spacing: 0.05em; }
+  nav.toc ol { margin: 0; padding-left: 24px; }
+  nav.toc li { margin: 4px 0; }
+  nav.toc a { color: var(--text); text-decoration: none; }
+  nav.toc a:hover { color: var(--accent); }
+  section {
+    margin-bottom: 56px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  section:last-child { border-bottom: none; }
+  section h2 {
+    color: var(--accent);
+    font-size: 1.6em;
+    margin: 0 0 16px;
+  }
+  section h3 {
+    color: var(--accent-2);
+    margin: 28px 0 10px;
+    font-size: 1.15em;
+  }
+  p { margin: 12px 0; }
+  code, pre {
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    background: var(--code-bg);
+    color: #e6f1ff;
+  }
+  code { padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre {
+    padding: 16px 20px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    overflow-x: auto;
+    font-size: 0.88em;
+    line-height: 1.5;
+  }
+  pre code { background: none; padding: 0; }
+  .note, .warn, .err {
+    padding: 14px 18px;
+    border-radius: 6px;
+    margin: 16px 0;
+    border-left: 4px solid;
+  }
+  .note { background: rgba(79, 195, 247, 0.08); border-left-color: var(--accent); }
+  .warn { background: rgba(255, 183, 77, 0.08); border-left-color: var(--warn); }
+  .err  { background: rgba(229, 115, 115, 0.08); border-left-color: var(--err); }
+  .note strong, .warn strong, .err strong { color: var(--accent); }
+  .warn strong { color: var(--warn); }
+  .err strong { color: var(--err); }
+  ul, ol { padding-left: 24px; }
+  li { margin: 6px 0; }
+  kbd {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-family: inherit;
+    font-size: 0.85em;
+    box-shadow: 0 1px 0 var(--border);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  th { color: var(--accent); font-weight: 600; }
+  /* Mockup containers */
+  .mockup {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 20px 0;
+    overflow: hidden;
+  }
+  .mockup-title {
+    background: var(--panel-2);
+    padding: 8px 16px;
+    color: var(--muted);
+    font-size: 0.85em;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mockup-title .dots span {
+    display: inline-block;
+    width: 10px; height: 10px; border-radius: 50%;
+    margin-right: 4px;
+  }
+  .mockup-title .dots span:nth-child(1) { background: #ff5f56; }
+  .mockup-title .dots span:nth-child(2) { background: #ffbd2e; }
+  .mockup-title .dots span:nth-child(3) { background: #27c93f; }
+  .mockup-body { padding: 24px; }
+  .file-tree {
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    font-size: 0.88em;
+    line-height: 1.7;
+    color: var(--text);
+    background: var(--code-bg);
+    padding: 18px 24px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  .file-tree .dir { color: var(--accent); }
+  .file-tree .new { color: var(--accent-2); }
+  .file-tree .comment { color: var(--muted); font-style: italic; }
+  /* SVG screenshot mockup */
+  svg.screenshot {
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+    background: #f0f0f0;
+  }
+  footer {
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    padding: 24px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9em;
+  }
+  a { color: var(--accent); }
+  .bug-table td:first-child { color: var(--err); font-weight: 600; width: 8%; }
+  .bug-table td:last-child { color: var(--accent-2); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SW2GZ v2.0 — UI Walkthrough</h1>
+  <div class="sub">SolidWorks → ROS 2 Jazzy + Gz Sim Harmonic exporter</div>
+  <div class="badges">
+    <span class="badge ok">Tests 242 / 242</span>
+    <span class="badge ok">11 / 11 bugs fixed</span>
+    <span class="badge">ROS 2 Jazzy</span>
+    <span class="badge">Gz Sim Harmonic</span>
+    <span class="badge">.NET 4.8.1</span>
+  </div>
+</header>
+
+<main>
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#what">What is SW2GZ?</a></li>
+    <li><a href="#install">Install + Enable</a></li>
+    <li><a href="#menu">Where to Find It (Menu)</a></li>
+    <li><a href="#wizard">Export Wizard</a></li>
+    <li><a href="#profile">Profile Dialog</a></li>
+    <li><a href="#output">Output Package</a></li>
+    <li><a href="#run">Running in ROS 2 + Gazebo</a></li>
+    <li><a href="#bugs">Bug Fixes vs v1</a></li>
+    <li><a href="#troubleshoot">Troubleshooting</a></li>
+  </ol>
+</nav>
+
+<!-- ──────────────────────────────────────────────────────────────────── -->
+<section id="what">
+<h2>1. What is SW2GZ?</h2>
+<p>SW2GZ is a SolidWorks add-in that exports an assembly to a ready-to-build
+ROS 2 package targeting <strong>ROS 2 Jazzy + Gz Sim Harmonic</strong>.
+Fork of <code>solidworks_urdf_exporter</code> with ROS 1 / Gazebo Classic
+support replaced by modern Gz Sim writers.</p>
+
+<p>One export produces:</p>
+<ul>
+  <li><strong>URDF + xacro</strong> — robot description.</li>
+  <li><strong>DAE visual meshes</strong> — colour-preserved via Collada 1.4.1.</li>
+  <li><strong>STL collision meshes</strong> — convex-hull-decimated (AABB in v2.0; QuickHull v2.1).</li>
+  <li><strong>SDF world</strong> + <strong>Gz launch files</strong> — spawns the model in <code>gz sim</code>.</li>
+  <li><strong>ros2_control config</strong> — joint_state_broadcaster + joint_trajectory_controller wired in.</li>
+  <li><strong>ros_gz_bridge config</strong> — bridges <code>/clock</code> and joint states between Gazebo and ROS 2.</li>
+  <li><strong>package.xml + CMakeLists.txt</strong> — colcon-buildable as-is.</li>
+</ul>
+
+<div class="note">
+<strong>Auto-calc:</strong> mass, inertia tensor, and centre-of-mass are read from
+SolidWorks' MassProperty API. No manual entry required, as long as parts have
+materials assigned.
+</div>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────────────── -->
+<section id="install">
+<h2>2. Install + Enable</h2>
+
+<h3>2.1 Run the installer (admin)</h3>
+<p>Right-click <code>SW2GZ-Setup-1.0.0.exe</code> →
+<strong>Run as administrator</strong>. The installer:</p>
+<ul>
+  <li>Copies <code>SW2GZ.dll</code> + dependencies to <code>C:\Program Files\SW2GZ\</code>.</li>
+  <li>Runs <code>regasm /codebase</code> which registers the COM CLSID
+      <code>{34fad620-2a46-4ba6-9f5f-1dfefde894c7}</code> under
+      <code>HKLM\SOFTWARE\Classes\CLSID</code>.</li>
+  <li>The <code>[ComRegisterFunction]</code> inside the DLL writes the
+      SolidWorks-side key:
+      <code>HKLM\SOFTWARE\SolidWorks\Addins\{34fad620-...}</code>
+      with <em>Title="SW2GZ"</em> and <em>Description="SolidWorks to ROS 2 + Gz Sim Exporter"</em>.</li>
+</ul>
+
+<div class="warn">
+<strong>SolidWorks must be closed</strong> during install. Otherwise the DLL is
+locked and regasm fails silently.
+</div>
+
+<h3>2.2 Enable inside SolidWorks</h3>
+<p>Open SolidWorks → <kbd>Tools</kbd> → <kbd>Add-Ins…</kbd>.
+Find <strong>SW2GZ</strong> in the list. Tick both:</p>
+<ul>
+  <li><strong>Active Add-ins</strong> — loads it for the current session.</li>
+  <li><strong>Start Up</strong> — auto-loads on every SolidWorks start.</li>
+</ul>
+<p>Click <kbd>OK</kbd>. SW2GZ is now live.</p>
+
+<div class="mockup">
+  <div class="mockup-title"><span class="dots"><span></span><span></span><span></span></span> SolidWorks → Tools → Add-Ins</div>
+  <div class="mockup-body">
+    <svg class="screenshot" viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="720" height="360" fill="#f7f7f7"/>
+      <!-- Title -->
+      <rect x="0" y="0" width="720" height="32" fill="#e0e6ed"/>
+      <text x="16" y="22" font-family="Segoe UI" font-size="13" fill="#333">Add-Ins</text>
+      <!-- Columns -->
+      <text x="38" y="60" font-family="Segoe UI" font-size="11" fill="#555" font-weight="600">Active Add-ins</text>
+      <text x="565" y="60" font-family="Segoe UI" font-size="11" fill="#555" font-weight="600">Start Up</text>
+      <!-- Rows -->
+      <rect x="16" y="72" width="688" height="1" fill="#ccc"/>
+      <g font-family="Segoe UI" font-size="12" fill="#222">
+        <rect x="20" y="80" width="14" height="14" fill="#fff" stroke="#888"/>
+        <text x="42" y="92">SOLIDWORKS Toolbox Library</text>
+        <rect x="592" y="80" width="14" height="14" fill="#fff" stroke="#888"/>
+
+        <rect x="20" y="106" width="14" height="14" fill="#fff" stroke="#888"/>
+        <text x="42" y="118">SOLIDWORKS Routing</text>
+        <rect x="592" y="106" width="14" height="14" fill="#fff" stroke="#888"/>
+
+        <rect x="20" y="132" width="14" height="14" fill="#4fc3f7" stroke="#1976d2"/>
+        <path d="M 23 140 L 27 144 L 32 137" stroke="#fff" stroke-width="2" fill="none"/>
+        <text x="42" y="144" font-weight="700" fill="#0277bd">SW2GZ</text>
+        <text x="142" y="144" font-size="10" fill="#555" font-style="italic">SolidWorks to ROS 2 + Gz Sim Exporter</text>
+        <rect x="592" y="132" width="14" height="14" fill="#4fc3f7" stroke="#1976d2"/>
+        <path d="M 595 140 L 599 144 L 604 137" stroke="#fff" stroke-width="2" fill="none"/>
+
+        <rect x="20" y="158" width="14" height="14" fill="#fff" stroke="#888"/>
+        <text x="42" y="170">SOLIDWORKS Costing</text>
+        <rect x="592" y="158" width="14" height="14" fill="#fff" stroke="#888"/>
+      </g>
+      <!-- Buttons -->
+      <rect x="538" y="306" width="76" height="28" rx="2" fill="#0078d4"/>
+      <text x="576" y="324" font-family="Segoe UI" font-size="12" fill="#fff" text-anchor="middle">OK</text>
+      <rect x="624" y="306" width="76" height="28" rx="2" fill="#e0e0e0" stroke="#999"/>
+      <text x="662" y="324" font-family="Segoe UI" font-size="12" fill="#333" text-anchor="middle">Cancel</text>
+    </svg>
+  </div>
+</div>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────────────── -->
+<section id="menu">
+<h2>3. Where to Find It</h2>
+<p>Once enabled, SW2GZ appears as a top-level menu in the SolidWorks menu bar
+(right of <kbd>Window</kbd>).</p>
+
+<div class="mockup">
+  <div class="mockup-title"><span class="dots"><span></span><span></span><span></span></span> SolidWorks menu bar</div>
+  <div class="mockup-body">
+    <svg class="screenshot" viewBox="0 0 720 80" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="720" height="80" fill="#f5f5f5"/>
+      <g font-family="Segoe UI" font-size="13" fill="#333">
+        <text x="16"  y="50">File</text>
+        <text x="56"  y="50">Edit</text>
+        <text x="98"  y="50">View</text>
+        <text x="142" y="50">Insert</text>
+        <text x="194" y="50">Tools</text>
+        <text x="240" y="50">Window</text>
+        <text x="306" y="50" font-weight="700" fill="#0277bd">SW2GZ</text>
+        <text x="372" y="50">Help</text>
+      </g>
+      <rect x="296" y="34" width="60" height="24" fill="none" stroke="#4fc3f7" stroke-width="2" stroke-dasharray="3"/>
+    </svg>
+  </div>
+</div>
+
+<p>Click <strong>SW2GZ</strong> to open the dropdown:</p>
+<ul>
+  <li><strong>Assembly Export…</strong> — main export workflow (for assemblies)</li>
+  <li><strong>Part Export…</strong> — single-part export</li>
+  <li><strong>About</strong> — version info</li>
+</ul>
+
+<div class="note">
+<strong>Future:</strong> A ribbon-tab integration is planned for Spec #2
+(deferred UI overhaul, alongside dark mode + intuitive link/joint adding).
+v2.0 keeps the upstream menu pattern.
+</div>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────────────── -->
+<section id="wizard">
+<h2>4. Export Wizard</h2>
+
+<p>Open an assembly (must be a real assembly file, not a part).
+<strong>SW2GZ → Assembly Export…</strong> opens the multi-tab wizard.</p>
+
+<h3>4.1 Link tab — build the link tree</h3>
+<p>The left panel is a tree view representing the URDF link hierarchy.
+Each branch is a robot link; a robot's <em>base link</em> is the root.</p>
+
+<ol>
+  <li>Drag SolidWorks components from the FeatureManager (right) into the
+      tree on the left to assign them to a link.</li>
+  <li>SW2GZ auto-fills <strong>mass</strong>, <strong>inertia tensor</strong>,
+      and <strong>centre-of-mass</strong> from the SolidWorks MassProperty
+      API. These fields display as read-only.</li>
+  <li>Pick a <strong>visual material colour</strong> (carried into the DAE).</li>
+  <li>Set <strong>mesh export format</strong> — STL (default) or 3DXML.
+      v2.0 emits DAE for visual + STL for collision regardless of this
+      selection; the radio is vestigial pending Spec #2 UI cleanup.</li>
+</ol>
+
+<h3>4.2 Joint tab — define joints between links</h3>
+<ol>
+  <li>Select a child link → its joint properties appear on the right.</li>
+  <li>Pick <strong>joint type</strong>: fixed, revolute, continuous, prismatic.</li>
+  <li>Pick the <strong>axis component</strong> (a SolidWorks axis or edge).</li>
+  <li>Optional: set <strong>limits</strong> (lower/upper/effort/velocity).</li>
+</ol>
+
+<div class="warn">
+<strong>Bug 10 warning:</strong> If the joint type is <em>continuous</em> but
+the controller uses a <em>position</em> command interface, the export emits a
+warning (no limits enforced — arm can spin freely).
+</div>
+
+<h3>4.3 Finish Export</h3>
+<p>Click <strong>Export URDF and Meshes…</strong> at the bottom right.
+A file dialog asks where to save. Pick a directory.</p>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────────────── -->
+<section id="profile">
+<h2>5. Profile Dialog (NEW in v2.0)</h2>
+<p>Immediately before the export writes any files, the
+<strong>SW2GZ — Export Profile</strong> dialog pops. Set the package metadata.</p>
+
+<div class="mockup">
+  <div class="mockup-title"><span class="dots"><span></span><span></span><span></span></span> SW2GZ — Export Profile</div>
+  <div class="mockup-body">
+    <svg class="screenshot" viewBox="0 0 420 290" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="420" height="290" fill="#f0f0f0"/>
+      <!-- Title bar -->
+      <rect x="0" y="0" width="420" height="30" fill="#0078d4"/>
+      <text x="14" y="20" font-family="Segoe UI" font-size="12" fill="#fff" font-weight="600">SW2GZ — Export Profile</text>
+
+      <!-- Mode groupbox -->
+      <rect x="12" y="42" width="396" height="100" fill="none" stroke="#999"/>
+      <rect x="20" y="38" width="80" height="8" fill="#f0f0f0"/>
+      <text x="22" y="46" font-family="Segoe UI" font-size="11" fill="#333" font-weight="600">Export Target</text>
+
+      <g font-family="Segoe UI" font-size="12" fill="#222">
+        <circle cx="32" cy="68" r="6" fill="#fff" stroke="#666"/>
+        <circle cx="32" cy="68" r="3" fill="#0078d4"/>
+        <text x="44" y="72" font-weight="600">Robot Package (URDF + xacro)</text>
+
+        <circle cx="32" cy="92" r="6" fill="#fff" stroke="#666"/>
+        <text x="44" y="96">SDF Model (asset)</text>
+
+        <circle cx="32" cy="116" r="6" fill="#fff" stroke="#666"/>
+        <text x="44" y="120">SDF World</text>
+      </g>
+
+      <!-- Distro removed annotation -->
+      <text x="220" y="98" font-family="Segoe UI" font-size="10" fill="#888" font-style="italic">ROS 2 Distro + Gz Version</text>
+      <text x="220" y="112" font-family="Segoe UI" font-size="10" fill="#888" font-style="italic">combos removed in v2.0 —</text>
+      <text x="220" y="126" font-family="Segoe UI" font-size="10" fill="#888" font-style="italic">locked to Jazzy + Harmonic.</text>
+
+      <!-- Author -->
+      <text x="22" y="170" font-family="Segoe UI" font-size="12" fill="#222">Author:</text>
+      <rect x="110" y="158" width="280" height="20" fill="#fff" stroke="#888"/>
+      <text x="116" y="172" font-family="Segoe UI" font-size="12" fill="#222">Aryan Arlikar</text>
+
+      <!-- Email -->
+      <text x="22" y="200" font-family="Segoe UI" font-size="12" fill="#222">Email:</text>
+      <rect x="110" y="188" width="280" height="20" fill="#fff" stroke="#888"/>
+      <text x="116" y="202" font-family="Segoe UI" font-size="12" fill="#222">arlikararyan@gmail.com</text>
+
+      <!-- License -->
+      <text x="22" y="230" font-family="Segoe UI" font-size="12" fill="#222">License:</text>
+      <rect x="110" y="218" width="280" height="20" fill="#fff" stroke="#888"/>
+      <text x="116" y="232" font-family="Segoe UI" font-size="12" fill="#222">Apache-2.0</text>
+
+      <!-- Buttons -->
+      <rect x="232" y="252" width="80" height="28" rx="2" fill="#0078d4"/>
+      <text x="272" y="271" font-family="Segoe UI" font-size="12" fill="#fff" text-anchor="middle" font-weight="600">OK</text>
+      <rect x="322" y="252" width="80" height="28" rx="2" fill="#e0e0e0" stroke="#999"/>
+      <text x="362" y="271" font-family="Segoe UI" font-size="12" fill="#333" text-anchor="middle">Cancel</text>
+    </svg>
+  </div>
+</div>
+
+<table>
+  <tr><th>Field</th><th>Default</th><th>Notes</th></tr>
+  <tr><td>Mode</td><td>Robot Package</td><td>Picks SDF Model or SDF World for asset-only / world-only export.</td></tr>
+  <tr><td>Author</td><td>Windows username</td><td>Goes into <code>package.xml &lt;maintainer&gt;</code>.</td></tr>
+  <tr><td>Email</td><td><code>TODO@example.com</code></td><td>Maintainer email attribute. Edit before shipping.</td></tr>
+  <tr><td>License</td><td>Apache-2.0</td><td>SPDX identifier or freeform.</td></tr>
+</table>
+
+<div class="note">
+<strong>What changed from v1:</strong> The dialog previously showed ROS 2 Distro
+(Humble / Jazzy / Kilted / Rolling) and Gz Version (Fortress / Harmonic / Ionic)
+combo boxes. v2.0 hard-locks to Jazzy + Harmonic, so those controls were removed.
+The dialog is now 290 px tall (down from 360 px).
+</div>
+
+<p>Click <strong>OK</strong>. The export pipeline runs:</p>
+<ol>
+  <li><strong>SW Surface phase</strong> — walks the assembly, reads mass properties, tessellates meshes (throws <code>MaterialMissingException</code> if any part has no material assigned).</li>
+  <li><strong>Build phase</strong> — sanitizes the package name (hyphens → underscores), builds the convex-hull collision AABB, aggregates sub-assembly inertia via parallel-axis theorem.</li>
+  <li><strong>Write phase</strong> — emits 14+ files (see § 6 below).</li>
+  <li><strong>Validate phase</strong> — runs static lint (package name regex, URDF well-formedness, mesh files exist, plugin class names correct). Errors pop a MessageBox; warnings go into <code>PreExportReport.warnings.txt</code>.</li>
+</ol>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────────────── -->
+<section id="output">
+<h2>6. Output Package Layout</h2>
+<p>A successful export produces this tree under <code>&lt;output-dir&gt;/&lt;sanitized-pkg&gt;/</code>:</p>
+
+<div class="file-tree">
+<span class="dir">&lt;pkg&gt;/</span>
+├── package.xml                    <span class="comment"># ros_gz_sim, ros_gz_bridge, gz_ros2_control deps hard-coded</span>
+├── CMakeLists.txt                 <span class="comment"># install(DIRECTORY urdf launch config worlds meshes ...)</span>
+├── <span class="dir">urdf/</span>
+│   ├── &lt;pkg&gt;.urdf.xacro           <span class="comment"># top-level: includes the three .xacro under inc/</span>
+│   └── <span class="dir">inc/</span>
+│       ├── gz.xacro               <span class="new">← v2 (was empty placeholder)</span>
+│       ├── ros2_control.xacro     <span class="new">← v2 ($(find &lt;pkg&gt;), no $(arg pkg))</span>
+│       └── materials.xacro
+├── <span class="dir">worlds/</span>
+│   └── empty.sdf                  <span class="new">← v2 (unversioned gz-sim-*-system)</span>
+├── <span class="dir">launch/</span>
+│   ├── gz_sim.launch.py           <span class="new">← v2 (GZ_SIM_SYSTEM_PLUGIN_PATH + parameter_bridge)</span>
+│   ├── ros2_control.launch.py
+│   └── display.launch.py
+├── <span class="dir">config/</span>
+│   ├── controllers.yaml           <span class="comment"># joint_state_broadcaster + joint_trajectory_controller</span>
+│   ├── ros_gz_bridge.yaml         <span class="new">← v2 (gz_topic includes &lt;pkg&gt;)</span>
+│   └── rviz.rviz
+└── <span class="dir">meshes/</span>
+    ├── base_link.dae              <span class="new">← Collada 1.4.1, Z_UP, embedded colour</span>
+    ├── base_link_collision.stl    <span class="new">← binary STL (AABB convex hull)</span>
+    ├── arm1.dae
+    ├── arm1_collision.stl
+    └── ...                        <span class="comment"># one .dae + one _collision.stl per link</span>
+</div>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────────────── -->
+<section id="run">
+<h2>7. Running in ROS 2 Jazzy + Gz Sim Harmonic</h2>
+
+<p>The output package builds and runs unchanged on a ROS 2 Jazzy system with
+Gz Sim Harmonic installed. Typical Linux / WSL2 flow:</p>
+
+<pre><code># 1. Symlink into your workspace
+cd ~/ros2_ws/src
+ln -s /mnt/d/path/to/&lt;pkg&gt; .
+
+# 2. Build
+cd ~/ros2_ws
+colcon build --packages-select &lt;pkg&gt;
+source install/setup.bash
+
+# 3. Launch Gazebo + the robot + bridge + controllers, all in one
+ros2 launch &lt;pkg&gt; gz_sim.launch.py
+
+# 4. In another terminal, verify joint states flowing
+ros2 topic echo /joint_states
+
+# 5. Verify both controllers are active
+ros2 control list_controllers
+#   joint_state_broadcaster        [joint_state_broadcaster/JointStateBroadcaster] active
+#   joint_trajectory_controller    [joint_trajectory_controller/JointTrajectoryController] active
+
+# 6. Command the arm
+ros2 topic pub /joint_trajectory_controller/joint_trajectory \
+  trajectory_msgs/msg/JointTrajectory \
+  '{ ... }'   # see ROS 2 docs for the message shape</code></pre>
+
+<div class="note">
+<strong>Acceptance gate</strong> (all must be true for v2.0 to be considered shipped):
+<ul>
+  <li>Arm visible in the <code>gz sim</code> window with the correct colour (DAE carry-through).</li>
+  <li><code>/joint_states</code> publishes (means the bridge is alive).</li>
+  <li>Both controllers report <code>active</code> (means <code>gz_ros2_control</code> loaded).</li>
+  <li>No exceptions in <code>ros2 launch</code> output.</li>
+</ul>
+</div>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────────────── -->
+<section id="bugs">
+<h2>8. 11 Bugs Fixed Since v1</h2>
+<p>Each bug ships with an automated regression test in
+<code>Test/Acceptance/BugAcceptanceTests.cs</code>. All 11 pass.</p>
+
+<table class="bug-table">
+  <tr><th>#</th><th>v1 symptom</th><th>v2 fix</th></tr>
+  <tr><td>1</td><td><code>inc/gz.xacro</code> was an empty placeholder → no controller_manager ever spawned, launch hangs</td><td>Emits full <code>&lt;gazebo&gt;&lt;plugin gz_ros2_control-system&gt;</code> block</td></tr>
+  <tr><td>2</td><td>Package name carried hyphens (<code>arm-2dof_description</code>) → <code>find_package</code> breaks</td><td><code>PackageNameSanitizer</code> normalizes to <code>arm_2dof_description</code></td></tr>
+  <tr><td>3</td><td><code>$(arg pkg)</code> referenced but never declared → xacro errors out</td><td>Emits literal <code>$(find &lt;pkg&gt;)</code></td></tr>
+  <tr><td>4</td><td>World used Garden-versioned <code>gz-sim8-*-system</code> → Harmonic doesn't load it</td><td>Unversioned <code>gz-sim-*-system</code></td></tr>
+  <tr><td>5</td><td><code>GZ_SIM_SYSTEM_PLUGIN_PATH</code> never set → <code>libgz_ros2_control-system.so</code> not found</td><td>Launch file sets the env var to <code>get_package_prefix('gz_ros2_control') + '/lib'</code></td></tr>
+  <tr><td>6</td><td>Spawn <code>-name robot</code> didn't match bridge YAML <code>gz_topic_name</code></td><td>Both use the sanitized package name</td></tr>
+  <tr><td>7</td><td><code>ros_gz_bridge.yaml</code> existed but no <code>parameter_bridge</code> node launched → <code>/clock</code> never bridged → <code>use_sim_time</code> stalls</td><td>Launch file starts <code>parameter_bridge</code> with the YAML config</td></tr>
+  <tr><td>8</td><td>Plugin class name was <code>gz_ros2_control::system</code> (doesn't exist)</td><td>Correct: <code>gz_ros2_control::GazeboSimROS2ControlPlugin</code></td></tr>
+  <tr><td>9</td><td>Every link had empty <code>&lt;visual&gt;</code> and <code>&lt;collision&gt;</code> — no geometry</td><td>Emits <code>&lt;mesh filename="package://&lt;pkg&gt;/meshes/&lt;link&gt;.dae"/&gt;</code></td></tr>
+  <tr><td>10</td><td>Continuous joints with position interface had no limits (silent free-spin)</td><td><code>JointBuilder</code> emits a warning into the PreExportReport</td></tr>
+  <tr><td>11</td><td><code>gz_sim.launch.py</code> didn't compose the spawner / bridge / RSP — partial bring-up</td><td>Self-contained: one <code>ros2 launch</code> brings everything up</td></tr>
+</table>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────────────── -->
+<section id="troubleshoot">
+<h2>9. Troubleshooting</h2>
+
+<h3>SW2GZ doesn't appear in the Add-Ins list</h3>
+<ul>
+  <li>Reinstall as <strong>administrator</strong> (the COM CLSID write requires it).</li>
+  <li>Verify the registry key exists:
+      <code>HKLM\SOFTWARE\SolidWorks\Addins\{34fad620-2a46-4ba6-9f5f-1dfefde894c7}</code></li>
+  <li>Verify <code>SW2GZ.dll</code> sits at <code>C:\Program Files\SW2GZ\SW2GZ.dll</code>.</li>
+</ul>
+
+<h3><code>MaterialMissingException</code> on Export</h3>
+<p>One or more parts in the assembly have no SolidWorks material assigned
+(mass returns 0). Pipeline aborts before any files are written. Open the part
+in SolidWorks → <kbd>Edit Material</kbd> → pick one → save → re-export.</p>
+
+<h3><code>colcon build</code> fails with "Package name cannot contain hyphens"</h3>
+<p>You picked a package name with hyphens. SW2GZ already sanitized it for the
+internal file content, but check that the <strong>directory name</strong> on disk
+also got renamed by the pipeline — the sanitized name is what the dir uses.
+Re-export with a clean name to be safe.</p>
+
+<h3><code>ros2 launch</code> hangs at "waiting for /controller_manager"</h3>
+<p>Almost always means <code>gz_ros2_control</code> isn't loaded inside <code>gz sim</code>.
+Confirm:</p>
+<ul>
+  <li><code>gz_ros2_control</code> is installed: <code>ros2 pkg list | grep gz_ros2_control</code></li>
+  <li><code>libgz_ros2_control-system.so</code> exists at
+      <code>$(ros2 pkg prefix gz_ros2_control)/lib/</code></li>
+  <li>The launch file's <code>GZ_SIM_SYSTEM_PLUGIN_PATH</code> line is emitted —
+      this is v2.0's bug-5 fix; if you're somehow running a v1 export, hand-edit it.</li>
+</ul>
+
+<h3>RViz shows the robot without colour</h3>
+<p>The DAE writer embeds the SolidWorks part colour in <code>library_effects</code>.
+If RViz shows grey, the part probably had a generic Default material with
+no colour assigned. Set a non-default appearance in SolidWorks.</p>
+
+<h3>I want the dialog to remember last-used Author/Email/License</h3>
+<p>Not yet — deferred to Spec #2 (UI overhaul). For v2.0, every export prompts
+fresh defaults.</p>
+</section>
+
+</main>
+
+<footer>
+  SW2GZ v2.0 · <a href="https://github.com/">Repo</a> ·
+  © 2026 Aryan Arlikar · MIT (with upstream © 2020 Stephen Brawner)
+</footer>
+
+</body>
+</html>

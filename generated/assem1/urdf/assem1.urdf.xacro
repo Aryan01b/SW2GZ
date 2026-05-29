@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<robot name="assem1" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:arg name="prefix" default=""/>
+  <xacro:arg name="use_sim" default="false"/>
+  <xacro:arg name="use_ros2_control" default="true"/>
+  <xacro:include filename="inc/materials.xacro"/>
+  <xacro:include filename="inc/ros2_control.xacro"/>
+  <xacro:include filename="inc/gz.xacro"/>
+  <link name="a3_1">
+    <inertial>
+      <origin xyz="0.001795828 0.005 -1.240671E-18" rpy="0 0 0"/>
+      <mass value="0.111321724008126"/>
+      <inertia ixx="2.16939286860997E-05" ixy="-1.99367783866336E-23" ixz="2.84204942117303E-22" iyy="0.000566755673519115" iyz="-5.13129345177318E-40" izz="0.000546917106899818"/>
+    </inertial>
+    <visual><geometry>
+      <mesh filename="package://assem1/meshes/a3_1.dae"/>
+    </geometry></visual>
+    <collision><geometry>
+      <mesh filename="package://assem1/meshes/a3_1_collision.stl"/>
+    </geometry></collision>
+  </link>
+  <link name="a3_2">
+    <inertial>
+      <origin xyz="0.001795828 0.005 -1.240671E-18" rpy="0 0 0"/>
+      <mass value="0.111321724008126"/>
+      <inertia ixx="2.16939286860997E-05" ixy="-1.99367783866336E-23" ixz="2.84204942117303E-22" iyy="0.000566755673519115" iyz="-5.13129345177318E-40" izz="0.000546917106899818"/>
+    </inertial>
+    <visual><geometry>
+      <mesh filename="package://assem1/meshes/a3_2.dae"/>
+    </geometry></visual>
+    <collision><geometry>
+      <mesh filename="package://assem1/meshes/a3_2_collision.stl"/>
+    </geometry></collision>
+  </link>
+
+</robot>

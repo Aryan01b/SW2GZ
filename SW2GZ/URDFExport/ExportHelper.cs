@@ -174,7 +174,7 @@ namespace SW2GZ.URDFExport
                 // the legacy path below.
                 // TODO(T29-followup): remove the legacy RobotPackage branch once the pipeline
                 // is fully verified in SolidWorks smoke testing.
-                if (Profile.Mode == ExportMode.RobotPackage)
+                if (Profile != null && Profile.Mode == ExportMode.RobotPackage)
                 {
                     var pipeline = new Sw2gzPipeline(
                         new SolidWorksMassProperties((SldWorks)iSwApp, (AssemblyDoc)ActiveSWModel),
