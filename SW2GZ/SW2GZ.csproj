@@ -446,6 +446,8 @@
     <Compile Include="UI\AssemblyExportFormSw2gz.cs" />
     <Compile Include="UI\Sw2gzProfileDialog.cs" />
     <Compile Include="Compat\IsExternalInit.cs" />
+    <Compile Include="Validate\ValidationIssue.cs" />
+    <Compile Include="Validate\ValidationReport.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
