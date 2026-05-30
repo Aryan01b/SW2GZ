@@ -347,3 +347,6 @@ generated/**/build/
 generated/**/install/
 generated/**/log/
 patch_urdf.sh
+
+# Local agent tooling
+.superpowers/
