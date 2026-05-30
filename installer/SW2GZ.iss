@@ -8,7 +8,10 @@
 #define AddinGuid        "{34fad620-2a46-4ba6-9f5f-1dfefde894c7}"
 
 [Setup]
-AppId={{#AddinGuid}}
+; {{#AddinGuid} -> literal {GUID}: the leading {{ escapes to one {, the preprocessor
+; emits the brace-wrapped GUID, giving a clean AppId of {GUID} (NOT {GUID}}). The
+; uninstall key is then {GUID}_is1, which GetUninstallerPath below looks up correctly.
+AppId={{#AddinGuid}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -19,7 +22,7 @@ OutputDir=Output
 OutputBaseFilename=SW2GZ-Setup-{#MyAppVersion}
 Compression=lzma
 SolidCompression=yes
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 ; Close SolidWorks automatically if it's running — DLL is locked while SW holds the addin.
 ; The [Code] InitializeSetup hook also runs taskkill /F as a hard backstop.
@@ -132,7 +135,7 @@ begin
       can resolve it. This is a local copy of the user's own file, not redistribution. }
     sTools := GetSolidWorksToolsDll;
     if sTools <> '' then
-      FileCopy(sTools, sApp + '\solidworkstools.dll', False);
+      CopyFile(sTools, sApp + '\solidworkstools.dll', False);
     { Register the COM add-in. Must run AFTER the copy above. }
     Exec(ExpandConstant('{win}\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe'),
          '/codebase "' + sApp + '\SW2GZ.dll"', '', SW_HIDE, ewWaitUntilTerminated, iResult);

@@ -339,6 +339,8 @@ installer/Output/
 SW2GZ/Properties/Resources.Designer.cs
 .sw2gz-guids.txt
 SW2GZ/Versioning/VersionInfo.cs
+# Local build toolchain (Roslyn compiler toolset fetched for offline builds)
+.build-tools/
 
 # Sample export workspace artifacts (sample export shipped for reference)
 generated/**/build/
