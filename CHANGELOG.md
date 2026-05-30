@@ -2,6 +2,17 @@
 
 All notable changes documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v2.0.1] — 2026-05-30
+
+### Changed
+
+- **README** simplified for end users — short install/usage flow, one diagram, less clutter.
+  Deep material (pipeline architecture, internals, project status, test commands) moved to
+  `CONTRIBUTING.md`.
+- Install instructions now point to the Releases page instead of a hard-coded installer
+  filename.
+- Bumped installer version define to `2.0.1`.
+
 ## [v2.0.0] — 2026-05-29
 
 End-to-end correctness pass. Exported package now `colcon build`-able and
