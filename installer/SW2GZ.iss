@@ -38,11 +38,16 @@ Source: "..\SW2GZ\bin\x64\Release\*.dll";            DestDir: "{app}"; Flags: ig
 ; Wipe stale binaries from the install dir before laying down the new build.
 Type: filesandordirs; Name: "{app}\*"
 
-[Run]
-Filename: "{win}\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"; Parameters: "/codebase ""{app}\SW2GZ.dll"""; StatusMsg: "Registering SW2GZ add-in for SolidWorks..."; Flags: runhidden
+; RegAsm registration runs in [Code] (CurStepChanged/ssPostInstall) — it must execute
+; AFTER solidworkstools.dll is copied next to SW2GZ.dll (see CopyLocalSolidWorksTools).
+; RegAsm has to load the assembly to register it, and the assembly references SolidWorksTools.
 
 [UninstallRun]
 Filename: "{win}\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"; Parameters: "/u ""{app}\SW2GZ.dll"""; Flags: runhidden runascurrentuser; RunOnceId: "Sw2gzRegasmUnregister"
+
+[UninstallDelete]
+; Remove the locally-copied solidworkstools.dll and the (now-empty) install dir.
+Type: filesandordirs; Name: "{app}"
 
 [Code]
 { ---------- Detect + silently uninstall any previous SW2GZ install. ---------- }
@@ -94,5 +99,42 @@ begin
       { Give regasm /u a moment to release any handles before we lay down new bits. }
       Sleep(800);
     end;
+  end;
+end;
+
+{ ---------- Locate the machine's own solidworkstools.dll (Dassault's). ----------
+  We never ship this DLL. RegAsm must load SW2GZ.dll to register it, and SW2GZ.dll
+  references the SolidWorksTools assembly, so the DLL has to be resolvable. Every
+  target machine already has SolidWorks installed, so we source it from there. }
+function GetSolidWorksToolsDll: string;
+var
+  sRegPath: string;
+begin
+  Result := '';
+  if FileExists(ExpandConstant('{commonpf}\SOLIDWORKS Corp\SOLIDWORKS\solidworkstools.dll')) then
+    Result := ExpandConstant('{commonpf}\SOLIDWORKS Corp\SOLIDWORKS\solidworkstools.dll')
+  else if FileExists(ExpandConstant('{commonpf32}\SOLIDWORKS Corp\SOLIDWORKS\solidworkstools.dll')) then
+    Result := ExpandConstant('{commonpf32}\SOLIDWORKS Corp\SOLIDWORKS\solidworkstools.dll')
+  else if RegQueryStringValue(HKLM, 'SOFTWARE\SOLIDWORKS\Setup', 'SolidWorks Folder', sRegPath) then
+    if FileExists(AddBackslash(sRegPath) + 'solidworkstools.dll') then
+      Result := AddBackslash(sRegPath) + 'solidworkstools.dll';
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  sApp, sTools: string;
+  iResult: Integer;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    sApp := ExpandConstant('{app}');
+    { Copy the local (already-licensed) solidworkstools.dll next to SW2GZ.dll so RegAsm
+      can resolve it. This is a local copy of the user's own file, not redistribution. }
+    sTools := GetSolidWorksToolsDll;
+    if sTools <> '' then
+      FileCopy(sTools, sApp + '\solidworkstools.dll', False);
+    { Register the COM add-in. Must run AFTER the copy above. }
+    Exec(ExpandConstant('{win}\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe'),
+         '/codebase "' + sApp + '\SW2GZ.dll"', '', SW_HIDE, ewWaitUntilTerminated, iResult);
   end;
 end;

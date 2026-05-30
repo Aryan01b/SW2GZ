@@ -332,18 +332,6 @@
   <ItemGroup>
     <Compile Include="UI\IMessageBox.cs" />
     <Compile Include="UI\MessageBoxHelper.cs" />
-    <Compile Include="Test\SW2GZTest.cs" />
-    <Compile Include="Test\SWTestFixture.cs" />
-    <Compile Include="Test\TestCommon.cs" />
-    <Compile Include="Test\TestCSVImportExport.cs" />
-    <Compile Include="Test\TestExportHelper.cs" />
-    <Compile Include="Test\TestLogger.cs" />
-    <Compile Include="Test\TestMathOps.cs" />
-    <Compile Include="Test\TestPropertyManager.cs" />
-    <Compile Include="Test\TestSerialization.cs" />
-    <Compile Include="Test\TestSWAttached.cs" />
-    <Compile Include="Test\TestURDFMerge.cs" />
-    <Compile Include="Test\TestVersioning.cs" />
     <Compile Include="URDF\Mimic.cs" />
     <Compile Include="Utilities\Logger.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
