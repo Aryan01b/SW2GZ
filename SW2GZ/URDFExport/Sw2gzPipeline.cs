@@ -21,6 +21,7 @@ using SW2GZ.Build.Urdf;
 using SW2GZ.Gz;
 using SW2GZ.Math;
 using SW2GZ.Ros2;
+using SW2GZ.SwSurface;
 using SW2GZ.SwSurface.Abstractions;
 using SW2GZ.Write.Mesh;
 using SW2GZ.Write.Urdf;
@@ -32,13 +33,22 @@ namespace SW2GZ.URDFExport
         private readonly IMassProperties _mass;
         private readonly IAssemblyWalker _walker;
         private readonly IMeshTessellator _tess;
+        private readonly IAppearanceSource _appearances;
 
-        public Sw2gzPipeline(IMassProperties mass, IAssemblyWalker walker, IMeshTessellator tess)
+        // P5 — full ctor: IAppearanceSource is the 4th SW boundary service.
+        public Sw2gzPipeline(IMassProperties mass, IAssemblyWalker walker, IMeshTessellator tess, IAppearanceSource appearances)
         {
-            _mass   = mass   ?? throw new ArgumentNullException(nameof(mass));
-            _walker = walker ?? throw new ArgumentNullException(nameof(walker));
-            _tess   = tess   ?? throw new ArgumentNullException(nameof(tess));
+            _mass        = mass        ?? throw new ArgumentNullException(nameof(mass));
+            _walker      = walker      ?? throw new ArgumentNullException(nameof(walker));
+            _tess        = tess        ?? throw new ArgumentNullException(nameof(tess));
+            _appearances = appearances ?? throw new ArgumentNullException(nameof(appearances));
         }
+
+        // Back-compat 3-arg ctor — defaults to the no-op DefaultAppearanceSource
+        // so callers that haven't been updated still produce the same (no-material)
+        // output as before P5.
+        public Sw2gzPipeline(IMassProperties mass, IAssemblyWalker walker, IMeshTessellator tess)
+            : this(mass, walker, tess, new DefaultAppearanceSource()) { }
 
         // Runs SwSurface → Build → Write → Validate. Throws Sw2gz*Exception on
         // pre-export failures (material missing, geometry corrupt). Returns
@@ -67,6 +77,9 @@ namespace SW2GZ.URDFExport
 
             // ── Step 3: Build links ───────────────────────────────────────────
             var links = new List<UrdfLink>(specs.Count);
+            // P5 — parallel list of (link, primary part path) for appearance lookup.
+            // Multi-body links: first-part-wins for v2.1; richer schema deferred.
+            var linksWithPaths = new List<(UrdfLink Link, string PartPath)>(specs.Count);
 
             foreach (LinkSpec spec in specs)
             {
@@ -88,6 +101,7 @@ namespace SW2GZ.URDFExport
 
                 UrdfLink link = LinkBuilder.Build(spec.Name, agg, visual, collision);
                 links.Add(link);
+                linksWithPaths.Add((link, primaryPath));
             }
 
             // ── Step 4: Joints (deferred to v2.1) ────────────────────────────
@@ -121,8 +135,14 @@ namespace SW2GZ.URDFExport
                 // body XML through the dedicated serializer. The legacy
                 // BuildUrdfBodyXml helper is gone — UrdfSerializer reproduces
                 // its bytes exactly for the same input.
+                //
+                // P5: query IAppearanceSource per primary part, get back the
+                // tagged ModelLinks + deduped Materials, then build the model
+                // via the ModelLink overload so the material refs survive.
                 RobotMeta meta = new RobotMeta(pkg, author, email, license, CoordinateConvention.Identity);
-                RobotModel model = RobotModelBuilder.Build(meta, links, joints);
+                var (modelLinks, materials) =
+                    RobotModelBuilder.AssembleLinksWithMaterials(linksWithPaths, _appearances);
+                RobotModel model = RobotModelBuilder.Build(meta, modelLinks, joints, materials);
                 string bodyXml = UrdfSerializer.SerializeBody(model);
 
                 // package.xml
@@ -141,10 +161,11 @@ namespace SW2GZ.URDFExport
                     Path.Combine(root, "urdf", $"{pkg}.urdf.xacro"),
                     XacroWriter.Write(pkg, bodyXml));
 
-                // urdf/inc/materials.xacro (placeholder)
+                // urdf/inc/materials.xacro (P5: real material defs from RobotModel.Materials;
+                // empty list emits a placeholder comment so the file still parses).
                 File.WriteAllText(
                     Path.Combine(root, "urdf", "inc", "materials.xacro"),
-                    "<?xml version=\"1.0\"?>\n<robot xmlns:xacro=\"http://www.ros.org/wiki/xacro\">\n  <!-- Named materials populated by SW2GZ. -->\n</robot>\n");
+                    UrdfSerializer.SerializeMaterialsXacro(pkg, model.Materials));
 
                 // urdf/inc/ros2_control.xacro
                 var jointNames = new List<string>();

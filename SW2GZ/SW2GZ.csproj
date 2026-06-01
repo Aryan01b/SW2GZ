@@ -474,6 +474,8 @@
     <Compile Include="SwSurface\SolidWorksAssemblyWalker.cs" />
     <Compile Include="SwSurface\Abstractions\IMeshTessellator.cs" />
     <Compile Include="SwSurface\SolidWorksMeshTessellator.cs" />
+    <Compile Include="SwSurface\Abstractions\IAppearanceSource.cs" />
+    <Compile Include="SwSurface\DefaultAppearanceSource.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>

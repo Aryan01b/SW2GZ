@@ -46,7 +46,7 @@ namespace SW2GZ.Write.Urdf
             var sb = new StringBuilder();
 
             foreach (ModelLink ml in model.Links)
-                AppendLink(sb, ml.Link, pkgEsc);
+                AppendLink(sb, ml, pkgEsc);
 
             foreach (UrdfJoint j in model.Joints)
                 AppendJoint(sb, j);
@@ -54,9 +54,47 @@ namespace SW2GZ.Write.Urdf
             return sb.ToString();
         }
 
-        // Per-link emission, byte-for-byte match of the legacy BuildUrdfBodyXml.
-        private static void AppendLink(StringBuilder sb, UrdfLink link, string pkgEsc)
+        /// P5 — emits the contents of inc/materials.xacro from a RobotModel's
+        /// Materials list. Empty list => single placeholder comment so the
+        /// file still parses as valid xacro. Floats use InvariantCulture so
+        /// the test locale never injects a comma. All dynamic strings escape
+        /// via SecurityElement.Escape; the sanitizer already restricts names
+        /// to [A-Za-z0-9_], so this is defense-in-depth.
+        public static string SerializeMaterialsXacro(string packageName, IReadOnlyList<MaterialDef> materials)
         {
+            if (materials == null) throw new System.ArgumentNullException(nameof(materials));
+
+            var sb = new StringBuilder();
+            sb.AppendLine("<?xml version=\"1.0\"?>");
+            sb.AppendLine("<robot xmlns:xacro=\"http://www.ros.org/wiki/xacro\">");
+
+            if (materials.Count == 0)
+            {
+                sb.AppendLine("  <!-- No named materials defined. -->");
+            }
+            else
+            {
+                foreach (MaterialDef m in materials)
+                {
+                    string nameEsc = SecurityElement.Escape(m.Name);
+                    sb.AppendLine($"  <material name=\"{nameEsc}\">");
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "    <color rgba=\"{0} {1} {2} {3}\"/>",
+                        m.R, m.G, m.B, m.A));
+                    sb.AppendLine("  </material>");
+                }
+            }
+
+            sb.AppendLine("</robot>");
+            return sb.ToString();
+        }
+
+        // Per-link emission. Byte-for-byte match of the legacy BuildUrdfBodyXml
+        // when ml.MaterialName is null; emits a <material name="..."/> reference
+        // inside the <visual> block when MaterialName is non-null (P5).
+        private static void AppendLink(StringBuilder sb, ModelLink ml, string pkgEsc)
+        {
+            UrdfLink link = ml.Link;
             string nameEsc = SecurityElement.Escape(link.Name);
             sb.AppendLine($"  <link name=\"{nameEsc}\">");
             sb.AppendLine("    <inertial>");
@@ -70,9 +108,27 @@ namespace SW2GZ.Write.Urdf
                 "      <inertia ixx=\"{0}\" ixy=\"{1}\" ixz=\"{2}\" iyy=\"{3}\" iyz=\"{4}\" izz=\"{5}\"/>",
                 I.M11, I.M12, I.M13, I.M22, I.M23, I.M33));
             sb.AppendLine("    </inertial>");
-            sb.AppendLine("    <visual><geometry>");
-            sb.AppendLine($"      <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.VisualMeshFile)}\"/>");
-            sb.AppendLine("    </geometry></visual>");
+            if (ml.MaterialName == null)
+            {
+                // Legacy byte-identical path: no <material> tag.
+                sb.AppendLine("    <visual><geometry>");
+                sb.AppendLine($"      <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.VisualMeshFile)}\"/>");
+                sb.AppendLine("    </geometry></visual>");
+            }
+            else
+            {
+                // P5: emit <material name="..."/> reference inside <visual>.
+                // The full color block lives in inc/materials.xacro and is
+                // pulled in by the xacro include — URDF best practice is to
+                // reference by name, not duplicate the color inline.
+                string matEsc = SecurityElement.Escape(ml.MaterialName);
+                sb.AppendLine("    <visual>");
+                sb.AppendLine("      <geometry>");
+                sb.AppendLine($"        <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.VisualMeshFile)}\"/>");
+                sb.AppendLine("      </geometry>");
+                sb.AppendLine($"      <material name=\"{matEsc}\"/>");
+                sb.AppendLine("    </visual>");
+            }
             sb.AppendLine("    <collision><geometry>");
             sb.AppendLine($"      <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.CollisionMeshFile)}\"/>");
             sb.AppendLine("    </geometry></collision>");
