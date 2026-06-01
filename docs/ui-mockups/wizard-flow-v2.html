@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SW2GZ — Proposed UI v2 (SolidWorks-aligned)</title>
+<style>
+  /* Palette tuned to SolidWorks 2024 UI: neutral grays, Segoe UI, blue selection accent.
+     Theme auto-follows SolidWorks (light/dark); toggle here previews both. */
+  :root{
+    --bg:#eef0f3; --chrome:#e4e7eb; --panel:#ffffff; --panel2:#f7f8fa;
+    --ink:#23272e; --muted:#6c7178; --line:#d4d8de; --line2:#e4e7eb;
+    --accent:#1b6ec2; --accent-soft:#e8f1fb; --ok:#1d7a46; --brand:#d42a2a;
+  }
+  [data-theme="dark"]{
+    --bg:#2b2b2b; --chrome:#333337; --panel:#3a3a3e; --panel2:#333337;
+    --ink:#e9eaec; --muted:#9aa0a7; --line:#46464c; --line2:#3f3f44;
+    --accent:#3a96dd; --accent-soft:#27384a; --ok:#4ec07e; --brand:#ef5350;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:13px/1.5 "Segoe UI",system-ui,Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .app{max-width:900px;margin:24px auto;background:var(--panel);border:1px solid var(--line);
+    border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.10),0 10px 30px rgba(0,0,0,.10);overflow:hidden}
+
+  /* title bar */
+  .tbar{display:flex;align-items:center;gap:9px;height:42px;padding:0 14px;
+    background:var(--chrome);border-bottom:1px solid var(--line)}
+  .brand{width:13px;height:13px;border-radius:2px;background:var(--brand)}
+  .tbar .name{font-weight:600;font-size:13px}
+  .tbar .sub{color:var(--muted);font-size:12px}
+  .grow{flex:1}
+  .themebox{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11.5px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+  .seg button{border:0;background:var(--panel);color:var(--muted);font:inherit;font-size:11.5px;
+    padding:4px 10px;cursor:pointer}
+  .seg button.on{background:var(--accent);color:#fff}
+
+  .body{display:flex;min-height:436px}
+
+  /* step rail / sidebar */
+  .rail{width:212px;background:var(--panel2);border-right:1px solid var(--line);padding:10px 8px}
+  .rail .grp{font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);
+    padding:6px 10px 4px}
+  .step{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:5px;cursor:pointer}
+  .step:hover{background:var(--accent-soft)}
+  .step.active{background:var(--accent-soft);box-shadow:inset 2px 0 0 var(--accent)}
+  .step .n{flex:none;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line);
+    display:grid;place-items:center;font-size:11px;font-weight:600;color:var(--muted);background:var(--panel)}
+  .step.active .n{border-color:var(--accent);color:var(--accent)}
+  .step.done .n{border-color:var(--ok);background:var(--ok);color:#fff}
+  .step .lbl{font-weight:600;font-size:12.5px}
+  .step .sub{color:var(--muted);font-size:11px}
+  .step.active .lbl{color:var(--accent)}
+
+  /* main */
+  .main{flex:1;display:flex;flex-direction:column;background:var(--panel)}
+  .scroll{flex:1;padding:20px 22px}
+  .view{display:none}.view.show{display:block}
+  h2{font-size:15px;margin:0 0 3px;font-weight:600}
+  .hint{color:var(--muted);margin:0 0 16px;font-size:12.5px}
+  .label{font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+
+  /* mode cards */
+  .cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .card{border:1px solid var(--line);border-radius:6px;padding:14px;cursor:pointer;background:var(--panel)}
+  .card:hover{border-color:var(--accent)}
+  .card.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  .card svg{width:22px;height:22px;stroke:var(--accent);fill:none;stroke-width:1.6}
+  .card h3{margin:9px 0 3px;font-size:13px;font-weight:600}
+  .card p{margin:0;color:var(--muted);font-size:11.5px;line-height:1.45}
+
+  /* fields */
+  .field{margin:0 0 15px;max-width:430px}
+  .row{display:flex;gap:8px;align-items:center}
+  select,input[type=text]{font:inherit;color:var(--ink);background:var(--panel);
+    border:1px solid var(--line);border-radius:5px;padding:7px 9px;width:100%}
+  select:focus,input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+  .btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:5px;padding:7px 13px;cursor:pointer}
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.sm{padding:5px 10px;font-size:12px}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+  .tag{font-size:11px;color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent);
+    border-radius:4px;padding:2px 7px;font-weight:600}
+  .note{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .mono{font-family:Consolas,"Cascadia Mono",monospace;font-size:12px}
+
+  /* links & meshes */
+  .two{display:grid;grid-template-columns:1fr 1.05fr;gap:12px}
+  .pane{border:1px solid var(--line);border-radius:6px;overflow:hidden;display:flex;flex-direction:column}
+  .pane .ph{background:var(--panel2);border-bottom:1px solid var(--line);padding:7px 11px;
+    font-weight:600;font-size:11.5px;display:flex;align-items:center;gap:7px}
+  .pane .pb{padding:8px 9px}
+  .tn{display:flex;align-items:center;gap:7px;padding:4px 7px;border-radius:4px;cursor:pointer;font-size:12.5px}
+  .tn:hover{background:var(--accent-soft)}
+  .tn.sel{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .tn.c1{padding-left:22px}
+  .tn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.6;opacity:.8}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:7px 2px;border-bottom:1px solid var(--line2);font-size:12.5px}
+  .kv:last-child{border-bottom:0}
+  .kv .k{color:var(--muted)}
+  .pick{margin-top:10px;border:1px dashed var(--accent);border-radius:6px;background:var(--accent-soft);padding:10px}
+  .pick .t{font-weight:600;font-size:12px;margin-bottom:4px}
+  .pick .l{font-size:12px;color:var(--muted);margin-bottom:8px}
+  .ok{display:inline-flex;align-items:center;gap:5px;color:var(--ok);font-weight:600;font-size:12px}
+  .ok svg{width:13px;height:13px;stroke:var(--ok);fill:none;stroke-width:2}
+
+  /* footer */
+  .foot{display:flex;align-items:center;gap:14px;padding:11px 16px;border-top:1px solid var(--line);background:var(--chrome)}
+  .prog{flex:1;height:4px;border-radius:4px;background:var(--line);overflow:hidden}
+  .prog i{display:block;height:100%;background:var(--accent);transition:width .2s}
+  .stepct{color:var(--muted);font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="tbar">
+    <span class="brand"></span><span class="name">SW2GZ</span>
+    <span class="sub">— Export to ROS 2 / Gz Sim</span>
+    <span class="grow"></span>
+    <span class="themebox">Theme follows SolidWorks
+      <span class="seg"><button id="tl" class="on" onclick="theme('light')">Light</button><button id="td" onclick="theme('dark')">Dark</button></span>
+    </span>
+  </div>
+
+  <div class="body">
+    <div class="rail">
+      <div class="grp">Export steps</div>
+      <div class="step done" data-s="0" onclick="go(0)"><span class="n">1</span><span><div class="lbl">Mode</div><div class="sub">What to generate</div></span></div>
+      <div class="step active" data-s="1" onclick="go(1)"><span class="n">2</span><span><div class="lbl">Targets</div><div class="sub">ROS distro &amp; Gz</div></span></div>
+      <div class="step" data-s="2" onclick="go(2)"><span class="n">3</span><span><div class="lbl">Output</div><div class="sub">Folder &amp; package</div></span></div>
+      <div class="step" data-s="3" onclick="go(3)"><span class="n">4</span><span><div class="lbl">Links &amp; meshes</div><div class="sub">Pick geometry</div></span></div>
+      <div class="step" data-s="4" onclick="go(4)"><span class="n">5</span><span><div class="lbl">Review &amp; export</div><div class="sub">Validate &amp; finish</div></span></div>
+    </div>
+
+    <div class="main">
+      <div class="scroll">
+        <!-- 1 mode -->
+        <div class="view" data-s="0">
+          <h2>Export mode</h2>
+          <p class="hint">Determines which files SW2GZ generates.</p>
+          <div class="cards">
+            <div class="card sel">
+              <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7M12 11v10"/></svg>
+              <h3>Robot Package</h3><p>ROS 2 package: URDF/Xacro, launch, world, meshes.</p></div>
+            <div class="card">
+              <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 9h16M9 4v16"/></svg>
+              <h3>SDF Model</h3><p>Standalone Gz model: model.config, model.sdf, meshes.</p></div>
+            <div class="card">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>
+              <h3>SDF World</h3><p>Gz world: physics, sun, ground plane.</p></div>
+          </div>
+        </div>
+
+        <!-- 2 targets -->
+        <div class="view show" data-s="1">
+          <h2>Targets</h2>
+          <p class="hint">Choose the ROS 2 distro. The Gz version is paired automatically to prevent mismatches.</p>
+          <div class="field"><div class="label">ROS 2 distro</div>
+            <select><option>Humble</option><option selected>Jazzy</option><option>Kilted</option><option>Rolling</option></select></div>
+          <div class="field"><div class="label">Gz Sim version</div>
+            <div class="row"><input type="text" value="Harmonic" readonly style="max-width:200px"><span class="tag">auto-paired</span></div>
+            <div class="note">Jazzy pairs with Harmonic. Changing the distro updates this automatically.</div></div>
+        </div>
+
+        <!-- 3 output -->
+        <div class="view" data-s="2">
+          <h2>Output</h2>
+          <p class="hint">Where the workspace is written and the package name.</p>
+          <div class="field"><div class="label">Output folder</div>
+            <div class="row"><input type="text" value="D:\ros2_ws\src" readonly><button class="btn">Browse…</button></div></div>
+          <div class="field"><div class="label">Package name</div>
+            <input type="text" value="three_dof_arm">
+            <div class="note">Sanitized live to <span class="mono">three_dof_arm</span> — valid ROS/ament name.</div></div>
+        </div>
+
+        <!-- 4 links & meshes -->
+        <div class="view" data-s="3">
+          <h2>Links &amp; meshes</h2>
+          <p class="hint">Select a link, then pick its geometry in the SolidWorks viewport. (ros2_control configured later.)</p>
+          <div class="two">
+            <div class="pane">
+              <div class="ph"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6"><path d="M3 6h18M3 12h18M3 18h18"/></svg> Link tree</div>
+              <div class="pb">
+                <div class="tn sel"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/></svg> base_link</div>
+                <div class="tn c1"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg> joint1 → link1</div>
+                <div class="tn c1"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg> joint2 → link2</div>
+                <div class="tn c1"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg> joint3 → tool0</div>
+              </div>
+            </div>
+            <div class="pane">
+              <div class="ph">Selected · base_link</div>
+              <div class="pb">
+                <div class="kv"><span class="k">Link name</span><span class="mono">base_link</span></div>
+                <div class="kv"><span class="k">Mass (from SW)</span><span>1.42 kg</span></div>
+                <div class="kv"><span class="k">Visual mesh</span><span class="mono">base_link.dae</span></div>
+                <div class="pick">
+                  <div class="t">Geometry</div>
+                  <div class="l">2 bodies selected in viewport</div>
+                  <div class="row"><button class="btn primary sm">Assign selected</button><button class="btn sm">Clear</button></div>
+                  <div style="margin-top:8px" class="ok"><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg> Geometry assigned</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5 review -->
+        <div class="view" data-s="4">
+          <h2>Review &amp; export</h2>
+          <p class="hint">Pre-flight validation runs before any file is written.</p>
+          <div style="max-width:430px">
+            <div class="kv"><span class="k">Mode</span><span>Robot Package</span></div>
+            <div class="kv"><span class="k">Target</span><span>Jazzy + Harmonic</span></div>
+            <div class="kv"><span class="k">Package</span><span class="mono">three_dof_arm</span></div>
+            <div class="kv"><span class="k">Links / joints</span><span>4 / 3</span></div>
+            <div class="kv"><span class="k">Geometry</span><span>4 / 4 links assigned</span></div>
+            <div class="kv"><span class="k">Validation</span><span class="ok"><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg> 0 errors</span></div>
+          </div>
+          <div style="margin-top:18px"><button class="btn primary">Finish export</button></div>
+        </div>
+      </div>
+
+      <div class="foot">
+        <button class="btn ghost" onclick="step(-1)">← Back</button>
+        <div class="prog"><i id="bar" style="width:40%"></i></div>
+        <span class="stepct" id="ct">Step 2 of 5</span>
+        <button class="btn primary" onclick="step(1)">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let cur=1; const N=5;
+  function go(s){cur=s;render()}
+  function step(d){cur=Math.max(0,Math.min(N-1,cur+d));render()}
+  function render(){
+    document.querySelectorAll('.view').forEach(v=>v.classList.toggle('show',+v.dataset.s===cur));
+    document.querySelectorAll('.rail .step').forEach(st=>{const s=+st.dataset.s;
+      st.classList.toggle('active',s===cur);st.classList.toggle('done',s<cur)});
+    document.getElementById('bar').style.width=((cur+1)/N*100)+'%';
+    document.getElementById('ct').textContent='Step '+(cur+1)+' of '+N;
+  }
+  function theme(t){document.documentElement.dataset.theme=t;
+    document.getElementById('tl').classList.toggle('on',t==='light');
+    document.getElementById('td').classList.toggle('on',t==='dark')}
+  render();
+</script>
+</body>
+</html>

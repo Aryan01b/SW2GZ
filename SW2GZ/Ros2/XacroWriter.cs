@@ -11,6 +11,7 @@ v1 also passed through empty-name <material name=""/> tags which produced
 xacro warnings. T15 strips any such tag from the urdfBodyXml before emission.
 */
 using System;
+using System.Security;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -34,7 +35,7 @@ namespace SW2GZ.Ros2
 
             var sb = new StringBuilder();
             sb.AppendLine("<?xml version=\"1.0\"?>");
-            sb.AppendLine($"<robot name=\"{robotName}\" xmlns:xacro=\"http://www.ros.org/wiki/xacro\">");
+            sb.AppendLine($"<robot name=\"{SecurityElement.Escape(robotName)}\" xmlns:xacro=\"http://www.ros.org/wiki/xacro\">");
             sb.AppendLine("  <xacro:arg name=\"prefix\" default=\"\"/>");
             sb.AppendLine("  <xacro:arg name=\"use_sim\" default=\"false\"/>");
             sb.AppendLine("  <xacro:arg name=\"use_ros2_control\" default=\"true\"/>");

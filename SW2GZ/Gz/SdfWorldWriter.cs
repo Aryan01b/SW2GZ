@@ -9,6 +9,7 @@ the unversioned `gz-sim-*-system` plugins.
 Locked to Harmonic — no profile parameter. SDF version 1.10.
 */
 using System;
+using System.Security;
 using System.Text;
 
 namespace SW2GZ.Gz
@@ -26,7 +27,7 @@ namespace SW2GZ.Gz
             var sb = new StringBuilder();
             sb.AppendLine("<?xml version=\"1.0\"?>");
             sb.AppendLine("<sdf version=\"1.10\">");
-            sb.AppendLine($"  <world name=\"{input.WorldName}\">");
+            sb.AppendLine($"  <world name=\"{SecurityElement.Escape(input.WorldName)}\">");
             sb.AppendLine("    <plugin filename=\"gz-sim-physics-system\"           name=\"gz::sim::systems::Physics\"/>");
             sb.AppendLine("    <plugin filename=\"gz-sim-user-commands-system\"     name=\"gz::sim::systems::UserCommands\"/>");
             sb.AppendLine("    <plugin filename=\"gz-sim-scene-broadcaster-system\" name=\"gz::sim::systems::SceneBroadcaster\"/>");

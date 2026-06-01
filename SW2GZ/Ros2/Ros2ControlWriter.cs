@@ -14,6 +14,7 @@ Locked to Harmonic — uses gz_ros2_control/GazeboSimSystem.
 */
 using System;
 using System.Collections.Generic;
+using System.Security;
 using System.Text;
 
 namespace SW2GZ.Ros2
@@ -35,11 +36,11 @@ namespace SW2GZ.Ros2
             sb.AppendLine("  <ros2_control name=\"GzSystem\" type=\"system\">");
             sb.AppendLine("    <hardware>");
             sb.AppendLine($"      <plugin>{HardwarePlugin}</plugin>");
-            sb.AppendLine($"      <parameters>$(find {packageName})/config/controllers.yaml</parameters>");
+            sb.AppendLine($"      <parameters>$(find {SecurityElement.Escape(packageName)})/config/controllers.yaml</parameters>");
             sb.AppendLine("    </hardware>");
             foreach (var j in jointNames)
             {
-                sb.AppendLine($"    <joint name=\"{j}\">");
+                sb.AppendLine($"    <joint name=\"{SecurityElement.Escape(j)}\">");
                 sb.AppendLine("      <command_interface name=\"position\"/>");
                 sb.AppendLine("      <state_interface name=\"position\"/>");
                 sb.AppendLine("      <state_interface name=\"velocity\"/>");

@@ -7,6 +7,7 @@ Fixes v1.0 export bugs 1 (gz.xacro was empty placeholder) and 8 (wrong
 plugin class name).
 */
 using System;
+using System.Security;
 using System.Text;
 
 namespace SW2GZ.Gz
@@ -30,7 +31,7 @@ $@"<?xml version=""1.0""?>
   <gazebo>
     <plugin filename=""gz_ros2_control-system""
             name=""gz_ros2_control::GazeboSimROS2ControlPlugin"">
-      <parameters>$(find {packageName})/config/controllers.yaml</parameters>
+      <parameters>$(find {SecurityElement.Escape(packageName)})/config/controllers.yaml</parameters>
     </plugin>
   </gazebo>
 </robot>

@@ -46,7 +46,9 @@ namespace SW2GZ.Utilities
             string homeDir = Environment.ExpandEnvironmentVariables("%HOMEDRIVE%%HOMEPATH%");
             RollingFileAppender roller = new RollingFileAppender
             {
-                AppendToFile = false,
+                // Append across sessions so prior-run logs survive for support;
+                // MaxSizeRollBackups + MaximumFileSize still bound total size.
+                AppendToFile = true,
                 File = Path.Combine(homeDir, "sw2gz_logs", "sw2gz.log"),
                 Layout = patternLayout,
                 MaxSizeRollBackups = 5,

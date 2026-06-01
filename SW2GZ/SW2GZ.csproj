@@ -91,7 +91,7 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>bin\Release\</OutputPath>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <BaseAddress>285212672</BaseAddress>
     <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
@@ -419,6 +419,7 @@
     <Compile Include="Math\Matrix3.cs" />
     <Compile Include="Math\Pose.cs" />
     <Compile Include="Build\PackageNameSanitizer.cs" />
+    <Compile Include="Build\RosNameSanitizer.cs" />
     <Compile Include="Build\MassProps.cs" />
     <Compile Include="Build\InertialAggregator.cs" />
     <Compile Include="Build\MeshData.cs" />

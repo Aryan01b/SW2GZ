@@ -18,6 +18,7 @@ using SW2GZ.Exceptions;
 using SW2GZ.SwSurface.Abstractions;
 
 #if SW_INTEROP
+using System.Runtime.InteropServices;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 #endif
@@ -62,27 +63,40 @@ namespace SW2GZ.SwSurface
                 throw new Sw2gzExportException(
                     "Component path not found in active assembly: " + componentPathName);
 
-            IModelDoc2 model = (IModelDoc2)comp.GetModelDoc2();
-            IMassProperty swMass = ((ModelDocExtension)model.Extension).CreateMassProperty();
+            IModelDoc2 model = null;
+            ModelDocExtension ext = null;
+            IMassProperty swMass = null;
+            try
+            {
+                model = (IModelDoc2)comp.GetModelDoc2();
+                ext = (ModelDocExtension)model.Extension;
+                swMass = ext.CreateMassProperty();
 
-            if (swMass.Mass <= 0)
-                throw new MaterialMissingException(componentPathName);
+                if (swMass.Mass <= 0)
+                    throw new MaterialMissingException(componentPathName);
 
-            double mass = swMass.Mass;
-            double[] com = (double[])swMass.CenterOfMass;
-            double[] moment = (double[])swMass.GetMomentOfInertia(
-                (int)swMassPropertyMoment_e.swMassPropertyMomentAboutCenterOfMass);
+                double mass = swMass.Mass;
+                double[] com = (double[])swMass.CenterOfMass;
+                double[] moment = (double[])swMass.GetMomentOfInertia(
+                    (int)swMassPropertyMoment_e.swMassPropertyMomentAboutCenterOfMass);
 
-            var props = new MassProps(
-                mass,
-                new System.Numerics.Vector3((float)com[0], (float)com[1], (float)com[2]),
-                new SW2GZ.Math.Matrix3(
-                    moment[0], moment[1], moment[2],
-                    moment[3], moment[4], moment[5],
-                    moment[6], moment[7], moment[8]));
+                var props = new MassProps(
+                    mass,
+                    new System.Numerics.Vector3((float)com[0], (float)com[1], (float)com[2]),
+                    new SW2GZ.Math.Matrix3(
+                        moment[0], moment[1], moment[2],
+                        moment[3], moment[4], moment[5],
+                        moment[6], moment[7], moment[8]));
 
-            _cache[componentPathName] = props;
-            return props;
+                _cache[componentPathName] = props;
+                return props;
+            }
+            finally
+            {
+                if (swMass != null) Marshal.ReleaseComObject(swMass);
+                if (ext != null) Marshal.ReleaseComObject(ext);
+                if (model != null) Marshal.ReleaseComObject(model);
+            }
 #endif
         }
 

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SW2GZ — Proposed UI (WPF/MVVM mockup)</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --panel:#ffffff; --ink:#1d2127; --muted:#6b7280;
+    --line:#e4e7ec; --accent:#e3242b; --accent2:#22314e; --ok:#1c8a4d;
+    --rail:#fafbfc; --sel:#fff1f1; --shadow:0 1px 2px rgba(16,24,40,.06),0 4px 16px rgba(16,24,40,.08);
+  }
+  [data-theme="dark"]{
+    --bg:#15181d; --panel:#1d2127; --ink:#e6e8eb; --muted:#9aa3af;
+    --line:#2c313a; --accent:#ff5a60; --accent2:#9db2d6; --ok:#3ecf8e;
+    --rail:#191c22; --sel:#2a1c1d; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .app{max-width:920px;margin:28px auto;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+  .titlebar{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .dot{width:14px;height:14px;border-radius:50%;background:var(--accent)}
+  .titlebar h1{font-size:15px;margin:0;font-weight:650;letter-spacing:.2px}
+  .titlebar .sub{color:var(--muted);font-size:12px}
+  .spacer{flex:1}
+  .toggle{cursor:pointer;border:1px solid var(--line);background:var(--rail);color:var(--muted);
+    border-radius:8px;padding:5px 10px;font-size:12px}
+  .body{display:flex;min-height:430px}
+  /* step rail */
+  .rail{width:230px;background:var(--rail);border-right:1px solid var(--line);padding:14px}
+  .step{display:flex;gap:11px;align-items:flex-start;padding:11px 12px;border-radius:10px;cursor:pointer;margin-bottom:2px}
+  .step:hover{background:var(--sel)}
+  .step.active{background:var(--sel)}
+  .step .n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--panel);border:1px solid var(--line);
+    display:grid;place-items:center;font-size:12px;font-weight:650;color:var(--muted)}
+  .step.active .n{background:var(--accent);border-color:var(--accent);color:#fff}
+  .step.done .n{background:var(--ok);border-color:var(--ok);color:#fff}
+  .step .lbl{font-weight:600}
+  .step .desc{color:var(--muted);font-size:12px}
+  /* main */
+  .main{flex:1;padding:22px 24px;display:flex;flex-direction:column}
+  .stepview{display:none;flex:1}
+  .stepview.show{display:block;animation:fade .18s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  h2{font-size:18px;margin:0 0 4px}
+  .hint{color:var(--muted);margin:0 0 18px}
+  .cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .card{border:1.5px solid var(--line);border-radius:12px;padding:16px;cursor:pointer;background:var(--panel)}
+  .card:hover{border-color:var(--accent)}
+  .card.sel{border-color:var(--accent);background:var(--sel)}
+  .card h3{margin:.2em 0 .3em;font-size:14px}
+  .card p{margin:0;color:var(--muted);font-size:12.5px}
+  .card .ic{font-size:22px}
+  .field{margin:0 0 16px}
+  .field label{display:block;font-weight:600;margin-bottom:6px}
+  .field .ctl{display:flex;align-items:center;gap:10px}
+  select,input{font:inherit;color:var(--ink);background:var(--panel);border:1.5px solid var(--line);
+    border-radius:9px;padding:9px 11px;width:100%}
+  .pair{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+  .pill{background:var(--sel);color:var(--accent);border:1px solid var(--accent);border-radius:999px;
+    padding:3px 10px;font-size:12px;font-weight:600}
+  .browse{flex:none;width:auto;white-space:nowrap;cursor:pointer;background:var(--rail)}
+  /* tree step */
+  .tree-wrap{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .box{border:1px solid var(--line);border-radius:11px;overflow:hidden}
+  .box .bh{background:var(--rail);border-bottom:1px solid var(--line);padding:8px 12px;font-weight:600;font-size:12.5px}
+  .box .bb{padding:10px 12px}
+  .tnode{padding:5px 8px;border-radius:7px;cursor:pointer}
+  .tnode:hover{background:var(--sel)}
+  .tnode.sel{background:var(--sel);color:var(--accent);font-weight:600}
+  .tnode.child{margin-left:18px}
+  .kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .kv span:first-child{color:var(--muted)}
+  .review .kv{border-bottom:1px solid var(--line)}
+  .badge{display:inline-flex;gap:6px;align-items:center;background:var(--sel);color:var(--ok);
+    border:1px solid var(--ok);border-radius:8px;padding:4px 9px;font-size:12px;font-weight:600}
+  /* footer */
+  .foot{display:flex;align-items:center;gap:12px;padding:14px 24px;border-top:1px solid var(--line);background:var(--rail)}
+  .prog{flex:1;height:6px;border-radius:6px;background:var(--line);overflow:hidden}
+  .prog i{display:block;height:100%;background:var(--accent);width:40%}
+  .btn{cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:9px;padding:9px 16px;font-weight:600}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.ghost{background:transparent;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="titlebar">
+    <div class="dot"></div>
+    <h1>SW2GZ</h1><span class="sub">— Export to ROS 2 / Gz Sim</span>
+    <div class="spacer"></div>
+    <div class="toggle" onclick="toggleTheme()">◐ theme</div>
+  </div>
+
+  <div class="body">
+    <div class="rail" id="rail">
+      <div class="step done" data-s="0" onclick="go(0)"><div class="n">1</div><div><div class="lbl">Mode</div><div class="desc">What to generate</div></div></div>
+      <div class="step active" data-s="1" onclick="go(1)"><div class="n">2</div><div><div class="lbl">Targets</div><div class="desc">ROS distro · Gz</div></div></div>
+      <div class="step" data-s="2" onclick="go(2)"><div class="n">3</div><div><div class="lbl">Output</div><div class="desc">Folder · package</div></div></div>
+      <div class="step" data-s="3" onclick="go(3)"><div class="n">4</div><div><div class="lbl">Link Tree</div><div class="desc">Links · joints</div></div></div>
+      <div class="step" data-s="4" onclick="go(4)"><div class="n">5</div><div><div class="lbl">Review &amp; Export</div><div class="desc">Validate · finish</div></div></div>
+    </div>
+
+    <div class="main">
+      <!-- 1 Mode -->
+      <div class="stepview" data-s="0">
+        <h2>Choose export mode</h2>
+        <p class="hint">One screen, one decision. Determines which files SW2GZ generates.</p>
+        <div class="cards">
+          <div class="card sel"><div class="ic">📦</div><h3>Robot Package</h3><p>Full ROS 2 pkg: URDF/Xacro, launch, ros2_control, world.</p></div>
+          <div class="card"><div class="ic">🧩</div><h3>SDF Model</h3><p>Standalone Gz model: model.config, model.sdf, meshes.</p></div>
+          <div class="card"><div class="ic">🌍</div><h3>SDF World</h3><p>Gz world: physics, sun, ground plane.</p></div>
+        </div>
+      </div>
+      <!-- 2 Targets -->
+      <div class="stepview show" data-s="1">
+        <h2>Targets</h2>
+        <p class="hint">Pick the ROS 2 distro — the Gz version is paired automatically.</p>
+        <div class="field"><label>ROS 2 distro</label>
+          <select><option>Humble</option><option selected>Jazzy (default)</option><option>Kilted</option><option>Rolling</option></select></div>
+        <div class="field"><label>Gz Sim version</label>
+          <div class="pair"><span class="pill">Harmonic</span> auto-paired with Jazzy · no mismatch possible</div></div>
+      </div>
+      <!-- 3 Output -->
+      <div class="stepview" data-s="2">
+        <h2>Output</h2>
+        <p class="hint">Where the workspace lands and what the package is called.</p>
+        <div class="field"><label>Output folder</label>
+          <div class="ctl"><input value="D:\ros2_ws\src" readonly><button class="btn browse">Browse…</button></div></div>
+        <div class="field"><label>Package name</label>
+          <div class="ctl"><input value="three_dof_arm"></div>
+          <div class="pair" style="margin-top:6px">→ sanitized live to <span class="pill">three_dof_arm</span> (valid ament name)</div></div>
+      </div>
+      <!-- 4 Link Tree -->
+      <div class="stepview" data-s="3">
+        <h2>Link &amp; joint tree</h2>
+        <p class="hint">Select a link to edit its name, parent joint, and properties. Live-validated.</p>
+        <div class="tree-wrap">
+          <div class="box"><div class="bh">Assembly → links</div><div class="bb">
+            <div class="tnode sel">base_link</div>
+            <div class="tnode child">↳ joint1 → link1</div>
+            <div class="tnode child">↳ joint2 → link2</div>
+            <div class="tnode child">↳ joint3 → tool0</div>
+          </div></div>
+          <div class="box"><div class="bh">Selected: base_link</div><div class="bb">
+            <div class="kv"><span>Link name</span><span>base_link</span></div>
+            <div class="kv"><span>Mesh</span><span>base_link.dae</span></div>
+            <div class="kv"><span>Mass</span><span>1.42 kg</span></div>
+            <div class="kv"><span>Joint type</span><span>— (root)</span></div>
+            <div class="kv"><span>Status</span><span class="badge">✓ valid</span></div>
+          </div></div>
+        </div>
+      </div>
+      <!-- 5 Review -->
+      <div class="stepview review" data-s="4">
+        <h2>Review &amp; export</h2>
+        <p class="hint">Pre-flight validation runs before any file is written.</p>
+        <div class="kv"><span>Mode</span><span>Robot Package</span></div>
+        <div class="kv"><span>Target</span><span>Jazzy + Harmonic</span></div>
+        <div class="kv"><span>Package</span><span>three_dof_arm</span></div>
+        <div class="kv"><span>Links / joints</span><span>4 / 3</span></div>
+        <div class="kv"><span>Validation</span><span class="badge">✓ 0 errors</span></div>
+        <div style="margin-top:18px"><button class="btn primary">Finish Export →</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <button class="btn ghost" onclick="step(-1)">← Back</button>
+    <div class="prog"><i id="bar"></i></div>
+    <button class="btn primary" onclick="step(1)">Next →</button>
+  </div>
+</div>
+
+<script>
+  let cur=1; const N=5;
+  function go(s){cur=s;render()}
+  function step(d){cur=Math.max(0,Math.min(N-1,cur+d));render()}
+  function render(){
+    document.querySelectorAll('.stepview').forEach(v=>v.classList.toggle('show',+v.dataset.s===cur));
+    document.querySelectorAll('.rail .step').forEach(st=>{
+      const s=+st.dataset.s; st.classList.toggle('active',s===cur); st.classList.toggle('done',s<cur);
+    });
+    document.getElementById('bar').style.width=((cur+1)/N*100)+'%';
+  }
+  function toggleTheme(){const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'}
+  render();
+</script>
+</body>
+</html>

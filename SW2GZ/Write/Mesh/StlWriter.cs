@@ -29,11 +29,20 @@ namespace SW2GZ.Write.Mesh
             int triCount = mesh.Triangles.Length / 3;
             bw.Write(triCount);
 
+            int vertCount = mesh.Vertices.Length;
             for (int i = 0; i < triCount; i++)
             {
-                Vector3 v0 = mesh.Vertices[mesh.Triangles[i * 3 + 0]];
-                Vector3 v1 = mesh.Vertices[mesh.Triangles[i * 3 + 1]];
-                Vector3 v2 = mesh.Vertices[mesh.Triangles[i * 3 + 2]];
+                int a = mesh.Triangles[i * 3 + 0];
+                int b = mesh.Triangles[i * 3 + 1];
+                int c = mesh.Triangles[i * 3 + 2];
+                if (a < 0 || b < 0 || c < 0 || a >= vertCount || b >= vertCount || c >= vertCount)
+                    throw new ArgumentException(
+                        $"Triangle {i} references a vertex index outside [0,{vertCount}).",
+                        nameof(mesh));
+
+                Vector3 v0 = mesh.Vertices[a];
+                Vector3 v1 = mesh.Vertices[b];
+                Vector3 v2 = mesh.Vertices[c];
                 Vector3 n = Vector3.Normalize(Vector3.Cross(v1 - v0, v2 - v0));
                 if (float.IsNaN(n.X)) n = Vector3.UnitZ;
 

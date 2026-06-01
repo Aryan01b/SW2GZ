@@ -100,6 +100,13 @@ namespace SW2GZ.Utilities
                 denominator += line[i] * line[i];
                 numerator += line[i] * (point[i] - pointOnLine[i]);
             }
+            // Degenerate case: a zero-length direction vector has no defined line to
+            // project onto, so the point projects to itself. Guards against div-by-zero
+            // (NaN/Infinity) corrupting downstream joint-origin math.
+            if (denominator == 0)
+            {
+                return (double[])pointOnLine.Clone();
+            }
             double k = numerator / denominator;
             double[] result = new double[point.Length];
             for (int i = 0; i < result.Length; i++)
