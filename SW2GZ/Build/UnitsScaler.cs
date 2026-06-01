@@ -1,3 +1,4 @@
+// TODO P3-units: helper not yet wired into Sw2gzPipeline (needs IUnitsContext from a real SolidWorks walker — SW workstation required).
 using System;
 using System.Numerics;
 using SW2GZ.Math;

@@ -2,6 +2,27 @@
 
 All notable changes documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.1.0-dev] - 2026-06-02
+
+### Added
+- **P1**: `RobotModel` immutable aggregate (`Build/Model/`) + `RobotModelBuilder` + `UrdfSerializer` replaces inline string-concat in pipeline
+- **P3-math**: `InertialAggregator` applies `R·I·Rᵀ` per part; `Matrix3.FromQuaternion`/`Transpose`/`Mul`/`IsApproximatelyOrthonormal`/`Determinant`; `IUnitsContext` + `IdentityUnitsContext` + `UnitsScaler` (schema only — pipeline wiring deferred to P3-units)
+- **P4**: Real `QuickHull3D` convex hull collider; `ColliderStrategy { ConvexHull, Aabb }` enum; AABB retained as explicit opt-in fallback
+- **P5**: `IAppearanceSource` + `DefaultAppearanceSource` stub; `MaterialDef` with RGBA validation + name dedup; per-link `<material name>` URDF emit; `inc/materials.xacro` generated from `RobotModel.Materials`
+- **P6-data**: 7 sensor record types (`ImuSensor`/`GpuLidarSensor`/`CameraSensor`/`DepthCameraSensor`/`ForceTorqueSensor`/`ContactSensor`/`NavsatSensor`) + `SdfSensorBlocks` per-type SDF emit + `SdfSensorPlugins` world-level family plugin dedup + per-sensor `ros_gz_bridge` entries + `<gazebo reference>` URDF wrappers; `Sw2gzPipeline.Run(...,sensors)` 6-arg overload
+- **P9**: `RobotModelValidator` — 12 structural checks (link/joint name uniqueness, tree connectivity, inertia PD, material/sensor/control ref resolution, frame orthonormality, ...); runs pre-write in `Sw2gzPipeline.Run`; errors throw `Sw2gzExportException`, warnings flow into the returned `ValidationReport`
+- Tests: 254 → 413 green
+
+### Changed
+- `Sw2gzPipeline` constructor: 3-arg (`mass`/`walker`/`tess`) → 4-arg (+`IAppearanceSource`); 3-arg kept as back-compat
+- `Sw2gzPipeline.Run`: 5-arg → 6-arg (+`IReadOnlyList<SensorDef> sensors`); 5-arg kept as back-compat
+- `SdfWorldWriter` no longer unconditionally emits `gz-sim-imu-system` / `gz-sim-sensors-system` plugins; `SdfSensorPlugins` is now the single source of truth for sensor-family plugins
+
+### Deferred (next-version branch)
+- **P2** (joints from SW mates), **P3-units**, **P5-COM**, **P6-COM**: require SolidWorks workstation
+- **P7**: SDF serializer + legacy `ExportHelper`/`URDFRobot` retirement
+- **P8**: WPF wizard UI (`SW2GZ.UI.Core` extraction)
+
 ## [v2.0.1] — 2026-05-30
 
 ### Changed

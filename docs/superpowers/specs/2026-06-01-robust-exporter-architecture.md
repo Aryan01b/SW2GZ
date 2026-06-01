@@ -121,19 +121,23 @@ This is the seam that **resolves the dual pipeline (ADR-001)**: both RobotPackag
 
 ## 4. Phased roadmap (each phase = own spec → plan → implement)
 
-| Phase | Deliverable | Depends on | Notes |
-|---|---|---|---|
-| **P1** | `RobotModel` aggregate + `RobotModelBuilder` + `UrdfSerializer` (links only) replacing string-concat | — | foundation; behavior-parity with today, fully tested |
-| **P2** | **Joints**: mates→joints (type/axis/origin/limits/dynamics/mimic) + ros2_control per-joint + controllers.yaml | P1 | the #1 functional gap; needs SW mate extraction (COM) |
-| **P3** | Inertia parallel-axis + multi-body links + **units** verification/scaling | P1 | correctness |
-| **P4** | Collision: **convex hull** + primitive option (no external lib; decomposition deferred) | P1 | sim fidelity |
-| **P5** | Materials/visual color from SW appearances | P1 | |
-| **P6** | **Sensors** (imu/lidar/camera/ft/contact) + world system plugins + per-sensor ros_gz_bridge; **dedicated sensors page** (assign sensor→link, pose/orientation in target frame, axis preview) | P1, P2 | biggest new surface; UI-heavy |
-| **P7** | **SDF serializer** (SdfModel/SdfWorld via `RobotModel`) + **delete legacy** `ExportHelper`/`URDFRobot` (legacy not retained — decision §9.4) | P1–P6 | all 3 modes on one path; ~3000 LOC deleted |
-| **P8** | UI: `SW2GZ.UI.Core` + WPF wizard editing `RobotModel` (separate UI design doc) | P1+ | can start after P1 model exists |
-| **P9** | Structural validators + golden tests per feature | each phase | runs alongside |
+| Phase | Status | Deliverable | Depends on | Notes |
+|---|---|---|---|---|
+| **P1** | ✅ | `RobotModel` aggregate + `RobotModelBuilder` + `UrdfSerializer` (links only) replacing string-concat | — | foundation; behavior-parity with today, fully tested |
+| **P2** | ⬜ | **Joints**: mates→joints (type/axis/origin/limits/dynamics/mimic) + ros2_control per-joint + controllers.yaml | P1 | the #1 functional gap; needs SW mate extraction (COM) — SW workstation required |
+| **P3** | 🟡 | Inertia parallel-axis + multi-body links + **units** verification/scaling | P1 | correctness; **P3-math shipped** (R·I·Rᵀ + `UnitsScaler` schema); **P3-units wiring deferred** (needs SW reader) |
+| **P4** | ✅ | Collision: **convex hull** + primitive option (no external lib; decomposition deferred) | P1 | sim fidelity — real `QuickHull3D` + AABB fallback |
+| **P5** | 🟡 | Materials/visual color from SW appearances | P1 | domain + writers shipped (`MaterialDef`, `IAppearanceSource`, `inc/materials.xacro`); **SW COM appearance reader deferred** (P5-COM) |
+| **P6** | 🟡 | **Sensors** (imu/lidar/camera/ft/contact) + world system plugins + per-sensor ros_gz_bridge; **dedicated sensors page** (assign sensor→link, pose/orientation in target frame, axis preview) | P1, P2 | biggest new surface; UI-heavy — **data path shipped** (7 sensor records + `SdfSensorBlocks` + `SdfSensorPlugins` + bridge entries); **UI + SW COM sensor reader deferred** |
+| **P7** | ⬜ | **SDF serializer** (SdfModel/SdfWorld via `RobotModel`) + **delete legacy** `ExportHelper`/`URDFRobot` (legacy not retained — decision §9.4) | P1–P6 | all 3 modes on one path; ~3000 LOC deleted |
+| **P8** | ⬜ | UI: `SW2GZ.UI.Core` + WPF wizard editing `RobotModel` (separate UI design doc) | P1+ | can start after P1 model exists |
+| **P9** | ✅ | Structural validators + golden tests per feature | each phase | runs alongside — `RobotModelValidator` (12 structural checks) wired pre-write |
 
 Sequencing logic: **P1 is the keystone** (the model everything else reads/writes). P2 (joints) is highest user value. P8 (UI) can proceed in parallel once P1 lands the model. P7 retires legacy only after serializers reach parity.
+
+### 4.1 Implementation status
+
+As of `v2.1-revamp` (HEAD `550486e`), six phases have shipped in the test suite (413/413 green): **P1** `RobotModel` keystone, **P3-math** `InertialAggregator` rotation + `UnitsScaler`, **P4** `QuickHull3D`, **P5** materials/appearances, **P6-data** sensors, **P9** `RobotModelValidator`. Phases marked 🟡 or ⬜ remain open; **P2 / P3-units / P5-COM / P6-COM** require a SolidWorks workstation to verify the COM boundary.
 
 ---
 
