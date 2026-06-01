@@ -68,6 +68,24 @@ namespace SW2GZ.Math
             return new Vector3((float)x, (float)y, (float)z);
         }
 
+        // Double-precision variant of Mul used by InertialAggregator to keep
+        // sub-mm COM offsets accurate. Avoids the float narrowing in the
+        // Vector3 overload — callers can convert at the very end.
+        public (double X, double Y, double Z) Mul(double vx, double vy, double vz)
+        {
+            double x = M11 * vx + M12 * vy + M13 * vz;
+            double y = M21 * vx + M22 * vy + M23 * vz;
+            double z = M31 * vx + M32 * vy + M33 * vz;
+            return (x, y, z);
+        }
+
+        // Standard 3x3 determinant by cofactor expansion along the first row.
+        // Used by IsApproximatelyOrthonormal to reject reflections (det ≈ -1).
+        public double Determinant() =>
+            M11 * (M22 * M33 - M23 * M32)
+          - M12 * (M21 * M33 - M23 * M31)
+          + M13 * (M21 * M32 - M22 * M31);
+
         // Build a 3x3 rotation matrix from a unit quaternion (x, y, z, w).
         // Right-handed, column-vector convention (matches System.Numerics).
         // Quaternion is normalized defensively — many sources return unit
@@ -93,22 +111,24 @@ namespace SW2GZ.Math
         }
 
         // Returns true iff R Rᵀ is within `tolerance` of the 3x3 identity
-        // (per-entry absolute deviation summed). Used by CoordinateConvention.Validate
-        // to reject scale-only or skew transforms that pretend to be rotations.
+        // (per-entry absolute deviation does not exceed tolerance) AND the
+        // determinant is positive — rejecting reflections (det ≈ -1) as well
+        // as scale-only or skew transforms that pretend to be rotations.
+        // Used by CoordinateConvention.Validate.
         public bool IsApproximatelyOrthonormal(double tolerance = 1e-6)
         {
             var p = this * this.Transpose();
             double d = 0.0;
-            d += System.Math.Abs(p.M11 - 1.0);
-            d += System.Math.Abs(p.M12);
-            d += System.Math.Abs(p.M13);
-            d += System.Math.Abs(p.M21);
-            d += System.Math.Abs(p.M22 - 1.0);
-            d += System.Math.Abs(p.M23);
-            d += System.Math.Abs(p.M31);
-            d += System.Math.Abs(p.M32);
-            d += System.Math.Abs(p.M33 - 1.0);
-            return d < tolerance;
+            d = System.Math.Max(d, System.Math.Abs(p.M11 - 1.0));
+            d = System.Math.Max(d, System.Math.Abs(p.M12));
+            d = System.Math.Max(d, System.Math.Abs(p.M13));
+            d = System.Math.Max(d, System.Math.Abs(p.M21));
+            d = System.Math.Max(d, System.Math.Abs(p.M22 - 1.0));
+            d = System.Math.Max(d, System.Math.Abs(p.M23));
+            d = System.Math.Max(d, System.Math.Abs(p.M31));
+            d = System.Math.Max(d, System.Math.Abs(p.M32));
+            d = System.Math.Max(d, System.Math.Abs(p.M33 - 1.0));
+            return d < tolerance && Determinant() > 0.5;
         }
     }
 }

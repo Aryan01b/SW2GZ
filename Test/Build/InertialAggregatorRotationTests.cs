@@ -69,6 +69,8 @@ namespace SW2GZ.Build.Tests
             Assert.Equal(0.0, result.InertiaAtComLocal.M13, 5);
             Assert.Equal(0.0, result.InertiaAtComLocal.M21, 5);
             Assert.Equal(0.0, result.InertiaAtComLocal.M23, 5);
+            Assert.Equal(0.0, result.InertiaAtComLocal.M31, 5);
+            Assert.Equal(0.0, result.InertiaAtComLocal.M32, 5);
         }
 
         [Fact]

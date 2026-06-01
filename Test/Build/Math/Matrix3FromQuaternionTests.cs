@@ -59,6 +59,17 @@ namespace SW2GZ.Build.Math.Tests
         }
 
         [Fact]
+        public void IsApproximatelyOrthonormal_Reflection_False()
+        {
+            // Reflection across the XY plane: R Rᵀ = I but det = -1.
+            // Must be rejected — a reflection is not a proper rotation.
+            var reflection = new Matrix3(1, 0, 0,
+                                         0, 1, 0,
+                                         0, 0, -1);
+            Assert.False(reflection.IsApproximatelyOrthonormal());
+        }
+
+        [Fact]
         public void Mul_Vector3_Identity_PreservesVector()
         {
             var v = new Vector3(1.5f, -2.25f, 3.0f);

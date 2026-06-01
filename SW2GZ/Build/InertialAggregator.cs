@@ -27,33 +27,54 @@ namespace SW2GZ.Build
             if (totalMass <= 0)
                 return new MassProps(0, Vector3.Zero, Matrix3.Identity);
 
-            Vector3 com = Vector3.Zero;
-            foreach (var (p, f) in parts)
+            // Cache R_f per part: FromQuaternion + the rotated COM offset are
+            // needed in both the COM pass and the parallel-axis pass.
+            var rotations = new Matrix3[parts.Count];
+            // Per-part rotated COM offset in assembly frame (double precision),
+            // i.e. (f.Position + R_f * p.ComLocal). Reused for the parallel-axis d.
+            var partComsX = new double[parts.Count];
+            var partComsY = new double[parts.Count];
+            var partComsZ = new double[parts.Count];
+
+            double comX = 0.0, comY = 0.0, comZ = 0.0;
+            for (int i = 0; i < parts.Count; i++)
             {
+                var (p, f) = parts[i];
                 var R_f = Matrix3.FromQuaternion(f.Rotation);
-                Vector3 comInAssembly = f.Position + R_f.Mul(p.ComLocal);
-                com += (float)(p.Mass / totalMass) * comInAssembly;
+                rotations[i] = R_f;
+                var (rx, ry, rz) = R_f.Mul((double)p.ComLocal.X, p.ComLocal.Y, p.ComLocal.Z);
+                double pcx = f.Position.X + rx;
+                double pcy = f.Position.Y + ry;
+                double pcz = f.Position.Z + rz;
+                partComsX[i] = pcx; partComsY[i] = pcy; partComsZ[i] = pcz;
+                double w = p.Mass / totalMass;
+                comX += w * pcx; comY += w * pcy; comZ += w * pcz;
             }
+            var com = new Vector3((float)comX, (float)comY, (float)comZ);
 
             // Parallel-axis: I_parent = sum_i ( R_i I_i R_iᵀ + m_i * (||d_i||^2 * I - d_i * d_i^T) )
             var I = new double[3, 3];
-            foreach (var (p, f) in parts)
+            for (int i = 0; i < parts.Count; i++)
             {
-                var R_f = Matrix3.FromQuaternion(f.Rotation);
+                var (p, _) = parts[i];
+                var R_f = rotations[i];
                 var I_rot = R_f * p.InertiaAtComLocal * R_f.Transpose();
 
-                Vector3 d = (f.Position + R_f.Mul(p.ComLocal)) - com;
-                double d2 = d.X * d.X + d.Y * d.Y + d.Z * d.Z;
+                // Offset from assembly COM to this part's COM, in double precision.
+                double dx = partComsX[i] - comX;
+                double dy = partComsY[i] - comY;
+                double dz = partComsZ[i] - comZ;
+                double d2 = dx * dx + dy * dy + dz * dz;
 
-                I[0, 0] += I_rot.M11 + p.Mass * (d2 - d.X * d.X);
-                I[0, 1] += I_rot.M12 + p.Mass * (    - d.X * d.Y);
-                I[0, 2] += I_rot.M13 + p.Mass * (    - d.X * d.Z);
-                I[1, 0] += I_rot.M21 + p.Mass * (    - d.Y * d.X);
-                I[1, 1] += I_rot.M22 + p.Mass * (d2 - d.Y * d.Y);
-                I[1, 2] += I_rot.M23 + p.Mass * (    - d.Y * d.Z);
-                I[2, 0] += I_rot.M31 + p.Mass * (    - d.Z * d.X);
-                I[2, 1] += I_rot.M32 + p.Mass * (    - d.Z * d.Y);
-                I[2, 2] += I_rot.M33 + p.Mass * (d2 - d.Z * d.Z);
+                I[0, 0] += I_rot.M11 + p.Mass * (d2 - dx * dx);
+                I[0, 1] += I_rot.M12 + p.Mass * (    - dx * dy);
+                I[0, 2] += I_rot.M13 + p.Mass * (    - dx * dz);
+                I[1, 0] += I_rot.M21 + p.Mass * (    - dy * dx);
+                I[1, 1] += I_rot.M22 + p.Mass * (d2 - dy * dy);
+                I[1, 2] += I_rot.M23 + p.Mass * (    - dy * dz);
+                I[2, 0] += I_rot.M31 + p.Mass * (    - dz * dx);
+                I[2, 1] += I_rot.M32 + p.Mass * (    - dz * dy);
+                I[2, 2] += I_rot.M33 + p.Mass * (d2 - dz * dz);
             }
 
             return new MassProps(totalMass, com,
