@@ -92,6 +92,7 @@ namespace SW2GZ.Write.Urdf
             sb.AppendLine($"    <parent link=\"{parentEsc}\"/>");
             sb.AppendLine($"    <child link=\"{childEsc}\"/>");
 
+            // TODO P2: convert j.Origin.Rotation (quaternion) to rpy; identity-only here.
             // Origin: position + rpy. Quaternion → rpy conversion stays in
             // P2 (the joint-graph pass); for now we emit position with rpy
             // "0 0 0" if rotation is identity, matching the link inertial
@@ -105,9 +106,12 @@ namespace SW2GZ.Write.Urdf
             // Axis. URDF requires <axis> for revolute/continuous/prismatic;
             // we emit unconditionally for simplicity (harmless on fixed joints
             // since downstream xacro/parsers ignore it).
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
-                "    <axis xyz=\"{0} {1} {2}\"/>",
-                j.Axis.X, j.Axis.Y, j.Axis.Z));
+            if (j.Type != UrdfJointType.Fixed)
+            {
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                    "    <axis xyz=\"{0} {1} {2}\"/>",
+                    j.Axis.X, j.Axis.Y, j.Axis.Z));
+            }
 
             // Limits. Revolute/prismatic need lower/upper; continuous omits them.
             // effort and velocity are always emitted.
@@ -135,7 +139,7 @@ namespace SW2GZ.Write.Urdf
             UrdfJointType.Revolute   => "revolute",
             UrdfJointType.Continuous => "continuous",
             UrdfJointType.Prismatic  => "prismatic",
-            _                        => "fixed",
+            _                        => throw new System.InvalidOperationException($"Unhandled UrdfJointType: {t}"),
         };
     }
 }

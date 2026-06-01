@@ -26,7 +26,7 @@ namespace SW2GZ.Build.Tests
         [Fact]
         public void Build_HappyPath_SingleLinkNoJoints()
         {
-            var model = new RobotModelBuilder().Build(Meta(), new[] { MakeLink() }, Array.Empty<UrdfJoint>());
+            var model = RobotModelBuilder.Build(Meta(), new[] { MakeLink() }, Array.Empty<UrdfJoint>());
 
             Assert.Equal("test_pkg", model.Meta.PackageName);
             Assert.Single(model.Links);
@@ -40,28 +40,28 @@ namespace SW2GZ.Build.Tests
         public void Build_RejectsNullMeta()
         {
             Assert.Throws<ArgumentNullException>(() =>
-                new RobotModelBuilder().Build(null!, new[] { MakeLink() }, Array.Empty<UrdfJoint>()));
+                RobotModelBuilder.Build(null!, new[] { MakeLink() }, Array.Empty<UrdfJoint>()));
         }
 
         [Fact]
         public void Build_RejectsNullLinks()
         {
             Assert.Throws<ArgumentNullException>(() =>
-                new RobotModelBuilder().Build(Meta(), null!, Array.Empty<UrdfJoint>()));
+                RobotModelBuilder.Build(Meta(), null!, Array.Empty<UrdfJoint>()));
         }
 
         [Fact]
         public void Build_RejectsEmptyLinks()
         {
             Assert.Throws<ArgumentException>(() =>
-                new RobotModelBuilder().Build(Meta(), Array.Empty<UrdfLink>(), Array.Empty<UrdfJoint>()));
+                RobotModelBuilder.Build(Meta(), Array.Empty<UrdfLink>(), Array.Empty<UrdfJoint>()));
         }
 
         [Fact]
         public void Build_RejectsNullJoints()
         {
             Assert.Throws<ArgumentNullException>(() =>
-                new RobotModelBuilder().Build(Meta(), new[] { MakeLink() }, null!));
+                RobotModelBuilder.Build(Meta(), new[] { MakeLink() }, null!));
         }
 
         [Fact]
@@ -70,7 +70,7 @@ namespace SW2GZ.Build.Tests
             // PackageNameSanitizer lowercases and replaces non-[a-z0-9_] with '_',
             // collapses repeats and strips trailing underscores. "My Robot!" → "my_robot".
             var meta = Meta("My Robot!");
-            var model = new RobotModelBuilder().Build(meta, new[] { MakeLink() }, Array.Empty<UrdfJoint>());
+            var model = RobotModelBuilder.Build(meta, new[] { MakeLink() }, Array.Empty<UrdfJoint>());
 
             Assert.Equal("my_robot", model.Meta.PackageName);
         }
@@ -78,7 +78,7 @@ namespace SW2GZ.Build.Tests
         [Fact]
         public void Build_DefaultsMaterialsAndSensorsToEmpty()
         {
-            var model = new RobotModelBuilder().Build(Meta(), new[] { MakeLink() }, Array.Empty<UrdfJoint>());
+            var model = RobotModelBuilder.Build(Meta(), new[] { MakeLink() }, Array.Empty<UrdfJoint>());
 
             Assert.Empty(model.Materials);
             Assert.Empty(model.Sensors);
@@ -95,14 +95,14 @@ namespace SW2GZ.Build.Tests
                     Pose.Identity, Vector3.UnitZ, -1.0, 1.0, 10.0, 1.0, UrdfCmdInterface.Position),
             };
 
-            var model = new RobotModelBuilder().Build(Meta(),
+            var model = RobotModelBuilder.Build(Meta(),
                 new[] { MakeLink("base_link"), MakeLink("arm1"), MakeLink("arm2") },
                 joints);
 
             Assert.Equal(2, model.Control.JointNames.Count);
             Assert.Equal("j1", model.Control.JointNames[0]);
             Assert.Equal("j2", model.Control.JointNames[1]);
-            Assert.Equal("joint_state_broadcaster", model.Control.DefaultController);
+            Assert.Equal(ControlSpec.DefaultJointStateBroadcaster, model.Control.DefaultController);
         }
 
         [Fact]
@@ -112,7 +112,7 @@ namespace SW2GZ.Build.Tests
             var sens = new[] { new SensorDef("cam", "camera", "base_link", Pose.Identity, "/cam", "cam_frame") };
             var ctrl = new ControlSpec(new List<string> { "j1" }, "custom_controller");
 
-            var model = new RobotModelBuilder().Build(Meta(),
+            var model = RobotModelBuilder.Build(Meta(),
                 new[] { MakeLink() },
                 Array.Empty<UrdfJoint>(),
                 mats, sens, ctrl);

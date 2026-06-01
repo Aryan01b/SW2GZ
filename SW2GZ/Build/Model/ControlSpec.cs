@@ -12,5 +12,8 @@ namespace SW2GZ.Build.Model
 {
     public sealed record ControlSpec(
         IReadOnlyList<string> JointNames,
-        string DefaultController);
+        string DefaultController)
+    {
+        public const string DefaultJointStateBroadcaster = "joint_state_broadcaster";
+    }
 }

@@ -19,9 +19,9 @@ using SW2GZ.Build.Urdf;
 
 namespace SW2GZ.Build
 {
-    public sealed class RobotModelBuilder
+    public static class RobotModelBuilder
     {
-        public RobotModel Build(
+        public static RobotModel Build(
             RobotMeta meta,
             IReadOnlyList<UrdfLink> links,
             IReadOnlyList<UrdfJoint> joints,
@@ -47,7 +47,7 @@ namespace SW2GZ.Build
             IReadOnlyList<SensorDef> sens = sensors ?? Array.Empty<SensorDef>();
             ControlSpec ctrl = control ?? new ControlSpec(
                 joints.Select(j => j.Name).ToList(),
-                "joint_state_broadcaster");
+                ControlSpec.DefaultJointStateBroadcaster);
 
             return new RobotModel(safeMeta, modelLinks, joints, mats, sens, ctrl);
         }

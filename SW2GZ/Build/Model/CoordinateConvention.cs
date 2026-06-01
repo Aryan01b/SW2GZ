@@ -13,6 +13,7 @@ namespace SW2GZ.Build.Model
         public static CoordinateConvention Identity =>
             new CoordinateConvention(SW2GZ.Math.Matrix3.Identity, 1.0);
 
+        // Called by P3 InertialAggregator wiring; not exercised in P1 production code.
         // Rough sanity check. Strict orthonormality belongs in P3 once the
         // math helpers exist; here we just guard against the obvious bad
         // values (zero scale, zero matrix).

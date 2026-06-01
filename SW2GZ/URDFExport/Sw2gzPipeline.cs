@@ -122,7 +122,7 @@ namespace SW2GZ.URDFExport
                 // BuildUrdfBodyXml helper is gone — UrdfSerializer reproduces
                 // its bytes exactly for the same input.
                 RobotMeta meta = new RobotMeta(pkg, author, email, license, CoordinateConvention.Identity);
-                RobotModel model = new RobotModelBuilder().Build(meta, links, joints);
+                RobotModel model = RobotModelBuilder.Build(meta, links, joints);
                 string bodyXml = UrdfSerializer.SerializeBody(model);
 
                 // package.xml

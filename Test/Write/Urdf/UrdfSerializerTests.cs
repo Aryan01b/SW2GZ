@@ -33,7 +33,7 @@ namespace SW2GZ.Write.Urdf.Tests
             new UrdfLink(name, mass, Vector3.Zero, Matrix3.Identity, null, null, visualFile, collisionFile);
 
         private static RobotModel ModelWith(params UrdfLink[] links) =>
-            new RobotModelBuilder().Build(Meta(), links, Array.Empty<UrdfJoint>());
+            RobotModelBuilder.Build(Meta(), links, Array.Empty<UrdfJoint>());
 
         [Fact]
         public void SerializeBody_SingleLink_ProducesExpectedFragment()
@@ -68,7 +68,7 @@ namespace SW2GZ.Write.Urdf.Tests
                 VisualMeshFile: "arm.dae",
                 CollisionMeshFile: "arm_collision.stl");
 
-            var model = new RobotModelBuilder().Build(Meta(), new[] { link }, Array.Empty<UrdfJoint>());
+            var model = RobotModelBuilder.Build(Meta(), new[] { link }, Array.Empty<UrdfJoint>());
             string xml = UrdfSerializer.SerializeBody(model);
 
             Assert.Contains("<mass value=\"4.25\"/>", xml);
@@ -83,7 +83,7 @@ namespace SW2GZ.Write.Urdf.Tests
         {
             var joint = new UrdfJoint("j_fixed", UrdfJointType.Fixed, "base_link", "arm1",
                 Pose.Identity, Vector3.UnitZ, null, null, 10.0, 1.0, UrdfCmdInterface.Position);
-            var model = new RobotModelBuilder().Build(Meta(),
+            var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") },
                 new[] { joint });
             string xml = UrdfSerializer.SerializeBody(model);
@@ -91,7 +91,7 @@ namespace SW2GZ.Write.Urdf.Tests
             Assert.Contains("<joint name=\"j_fixed\" type=\"fixed\">", xml);
             Assert.Contains("<parent link=\"base_link\"/>", xml);
             Assert.Contains("<child link=\"arm1\"/>", xml);
-            Assert.Contains("<axis xyz=\"0 0 1\"/>", xml);
+            Assert.DoesNotContain("<axis", xml);
             // Fixed joints don't get a <limit> block.
             Assert.DoesNotContain("<limit", xml);
             Assert.Contains("</joint>", xml);
@@ -102,7 +102,7 @@ namespace SW2GZ.Write.Urdf.Tests
         {
             var joint = new UrdfJoint("j_rev", UrdfJointType.Revolute, "base_link", "arm1",
                 Pose.Identity, Vector3.UnitZ, -1.5, 1.5, 12.0, 2.0, UrdfCmdInterface.Position);
-            var model = new RobotModelBuilder().Build(Meta(),
+            var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") },
                 new[] { joint });
             string xml = UrdfSerializer.SerializeBody(model);
@@ -116,7 +116,7 @@ namespace SW2GZ.Write.Urdf.Tests
         {
             var joint = new UrdfJoint("j_cont", UrdfJointType.Continuous, "base_link", "arm1",
                 Pose.Identity, Vector3.UnitZ, null, null, 8.0, 4.0, UrdfCmdInterface.Velocity);
-            var model = new RobotModelBuilder().Build(Meta(),
+            var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") },
                 new[] { joint });
             string xml = UrdfSerializer.SerializeBody(model);
@@ -133,7 +133,7 @@ namespace SW2GZ.Write.Urdf.Tests
         {
             var joint = new UrdfJoint("j1", UrdfJointType.Revolute, "base_link", "arm1",
                 Pose.Identity, Vector3.UnitZ, -1.0, 1.0, 10.0, 1.0, UrdfCmdInterface.Position);
-            var model = new RobotModelBuilder().Build(Meta(),
+            var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") },
                 new[] { joint });
             string body = UrdfSerializer.SerializeBody(model);
@@ -155,7 +155,7 @@ namespace SW2GZ.Write.Urdf.Tests
             // (already-clean) and a link name containing '&' which the
             // sanitizer doesn't touch (UrdfLink names are not sanitized).
             var link = new UrdfLink("a&b", 1.0, Vector3.Zero, Matrix3.Identity, null, null, "x.dae", "x.stl");
-            var model = new RobotModelBuilder().Build(Meta(), new[] { link }, Array.Empty<UrdfJoint>());
+            var model = RobotModelBuilder.Build(Meta(), new[] { link }, Array.Empty<UrdfJoint>());
             string xml = UrdfSerializer.SerializeBody(model);
 
             // SecurityElement.Escape turns '&' into '&amp;'.
@@ -171,7 +171,7 @@ namespace SW2GZ.Write.Urdf.Tests
             // from the byte-identical contract — golden tests will break too.
             var link = Link("base_link", mass: 1.0,
                 visualFile: "base_link.dae", collisionFile: "base_link_collision.stl");
-            var model = new RobotModelBuilder().Build(Meta("test_pkg"),
+            var model = RobotModelBuilder.Build(Meta("test_pkg"),
                 new[] { link }, Array.Empty<UrdfJoint>());
 
             string nl = Environment.NewLine;
@@ -198,7 +198,7 @@ namespace SW2GZ.Write.Urdf.Tests
         [Fact]
         public void SerializeBody_MultipleLinks_OrderPreserved()
         {
-            var model = new RobotModelBuilder().Build(Meta(),
+            var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1"), Link("arm2") },
                 Array.Empty<UrdfJoint>());
             string xml = UrdfSerializer.SerializeBody(model);
