@@ -14,13 +14,12 @@ namespace SW2GZ.Build.Model
             new CoordinateConvention(SW2GZ.Math.Matrix3.Identity, 1.0);
 
         // Called by P3 InertialAggregator wiring; not exercised in P1 production code.
-        // Rough sanity check. Strict orthonormality belongs in P3 once the
-        // math helpers exist; here we just guard against the obvious bad
-        // values (zero scale, zero matrix).
+        // Orthonormality enforced via Matrix3.IsApproximatelyOrthonormal (P3).
         public bool Validate()
         {
             if (LengthScale <= 0) return false;
             if (SwToRos.IsZero()) return false;
+            if (!SwToRos.IsApproximatelyOrthonormal()) return false;
             return true;
         }
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 
 namespace SW2GZ.Math
 {
@@ -47,10 +48,67 @@ namespace SW2GZ.Math
                 a.M31 * b.M13 + a.M32 * b.M23 + a.M33 * b.M33);
 
         // Cheap sanity helper used by CoordinateConvention.Validate to reject the
-        // obvious "all-zero matrix" mistake. Strict orthonormality lives in P3.
+        // obvious "all-zero matrix" mistake. Orthonormality is checked separately
+        // via IsApproximatelyOrthonormal (P3).
         public bool IsZero() =>
             M11 == 0 && M12 == 0 && M13 == 0 &&
             M21 == 0 && M22 == 0 && M23 == 0 &&
             M31 == 0 && M32 == 0 && M33 == 0;
+
+        // Multiply this matrix (treated as row-by-column) by a column vector.
+        // Used by P3 InertialAggregator to rotate per-part COM offsets into
+        // the assembly frame before applying parallel-axis. Vector3 components
+        // are float, but the multiply is performed in double precision and
+        // narrowed at the end to match Vector3's storage type.
+        public Vector3 Mul(Vector3 v)
+        {
+            double x = M11 * v.X + M12 * v.Y + M13 * v.Z;
+            double y = M21 * v.X + M22 * v.Y + M23 * v.Z;
+            double z = M31 * v.X + M32 * v.Y + M33 * v.Z;
+            return new Vector3((float)x, (float)y, (float)z);
+        }
+
+        // Build a 3x3 rotation matrix from a unit quaternion (x, y, z, w).
+        // Right-handed, column-vector convention (matches System.Numerics).
+        // Quaternion is normalized defensively — many sources return unit
+        // quaternions but rounding errors creep in. Throws if |q| == 0
+        // because there is no meaningful rotation to extract.
+        public static Matrix3 FromQuaternion(Quaternion q)
+        {
+            double x = q.X, y = q.Y, z = q.Z, w = q.W;
+            double n2 = x * x + y * y + z * z + w * w;
+            if (n2 == 0.0)
+                throw new ArgumentException("Cannot derive rotation matrix from a zero quaternion.", nameof(q));
+            double inv = 1.0 / System.Math.Sqrt(n2);
+            x *= inv; y *= inv; z *= inv; w *= inv;
+
+            double xx = x * x, yy = y * y, zz = z * z;
+            double xy = x * y, xz = x * z, yz = y * z;
+            double wx = w * x, wy = w * y, wz = w * z;
+
+            return new Matrix3(
+                1.0 - 2.0 * (yy + zz),       2.0 * (xy - wz),             2.0 * (xz + wy),
+                2.0 * (xy + wz),             1.0 - 2.0 * (xx + zz),       2.0 * (yz - wx),
+                2.0 * (xz - wy),             2.0 * (yz + wx),             1.0 - 2.0 * (xx + yy));
+        }
+
+        // Returns true iff R Rᵀ is within `tolerance` of the 3x3 identity
+        // (per-entry absolute deviation summed). Used by CoordinateConvention.Validate
+        // to reject scale-only or skew transforms that pretend to be rotations.
+        public bool IsApproximatelyOrthonormal(double tolerance = 1e-6)
+        {
+            var p = this * this.Transpose();
+            double d = 0.0;
+            d += System.Math.Abs(p.M11 - 1.0);
+            d += System.Math.Abs(p.M12);
+            d += System.Math.Abs(p.M13);
+            d += System.Math.Abs(p.M21);
+            d += System.Math.Abs(p.M22 - 1.0);
+            d += System.Math.Abs(p.M23);
+            d += System.Math.Abs(p.M31);
+            d += System.Math.Abs(p.M32);
+            d += System.Math.Abs(p.M33 - 1.0);
+            return d < tolerance;
+        }
     }
 }
