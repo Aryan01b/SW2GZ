@@ -31,6 +31,7 @@ using System.Security;
 using System.Text;
 using SW2GZ.Build.Model;
 using SW2GZ.Build.Urdf;
+using SW2GZ.Gz;
 using SW2GZ.Math;
 
 namespace SW2GZ.Write.Urdf
@@ -51,6 +52,54 @@ namespace SW2GZ.Write.Urdf
             foreach (UrdfJoint j in model.Joints)
                 AppendJoint(sb, j);
 
+            // P6-data — emit <gazebo reference="$link"> blocks for any sensors
+            // attached to each link. Empty Sensors -> empty string -> byte-
+            // identical body output (golden parity).
+            sb.Append(SerializeGazeboSensorBlocks(model.Sensors));
+
+            return sb.ToString();
+        }
+
+        /// P6-data — for each sensor in `sensors`, emits a
+        /// <gazebo reference="$AttachedLink"> wrapper containing the SDF
+        /// <sensor> block from SdfSensorBlocks. Sensors that share an
+        /// AttachedLink are grouped into one <gazebo> wrapper (order
+        /// preserved within the group); the group order matches the first
+        /// occurrence of each link in `sensors`.
+        public static string SerializeGazeboSensorBlocks(IReadOnlyList<SensorDef> sensors)
+        {
+            if (sensors == null || sensors.Count == 0)
+                return string.Empty;
+
+            // Preserve first-seen-link order while grouping.
+            var order = new List<string>();
+            var groups = new Dictionary<string, List<SensorDef>>(System.StringComparer.Ordinal);
+            foreach (SensorDef s in sensors)
+            {
+                if (!groups.TryGetValue(s.AttachedLink, out List<SensorDef> bucket))
+                {
+                    bucket = new List<SensorDef>();
+                    groups[s.AttachedLink] = bucket;
+                    order.Add(s.AttachedLink);
+                }
+                bucket.Add(s);
+            }
+
+            var sb = new StringBuilder();
+            foreach (string linkName in order)
+            {
+                string linkEsc = SecurityElement.Escape(linkName);
+                sb.AppendLine($"  <gazebo reference=\"{linkEsc}\">");
+                foreach (SensorDef s in groups[linkName])
+                {
+                    // SdfSensorBlocks defaults to 6-space indent which lines up
+                    // with the legacy two-space indent doubled-then-some inside
+                    // the <gazebo> wrapper. Pass 4 so the sensor sits at
+                    // <gazebo>(2) -> <sensor>(4).
+                    sb.Append(SdfSensorBlocks.Write(s, indentSpaces: 4));
+                }
+                sb.AppendLine("  </gazebo>");
+            }
             return sb.ToString();
         }
 

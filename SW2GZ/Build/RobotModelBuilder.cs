@@ -179,5 +179,119 @@ namespace SW2GZ.Build
             System.Math.Abs(a.G - b.G) <= RgbaTolerance &&
             System.Math.Abs(a.B - b.B) <= RgbaTolerance &&
             System.Math.Abs(a.A - b.A) <= RgbaTolerance;
+
+        /// P6-data — validates a sensor list and returns a parallel list with
+        /// sanitized names + topics. Mutations preserve order and concrete type
+        /// (each SensorDef subclass round-trips via record `with`).
+        ///
+        /// Validation rules:
+        ///   - Name must be non-empty; sanitized via RosNameSanitizer.
+        ///   - Names must be unique post-sanitization (collision => InvalidOperationException).
+        ///   - AttachedLink must reference a link in modelLinks (by Link.Name).
+        ///   - Topic must start with '/'; non-slash prefix is added, then the
+        ///     rest sanitized as a ROS-name segment.
+        ///   - UpdateRate must be > 0.
+        ///   - ForceTorqueSensor.ChildJointName must resolve to a joint in `joints`.
+        public static IReadOnlyList<SensorDef> AssembleSensors(
+            IReadOnlyList<SensorDef> rawSensors,
+            IReadOnlyList<ModelLink> modelLinks,
+            IReadOnlyList<UrdfJoint> joints)
+        {
+            if (rawSensors == null) throw new ArgumentNullException(nameof(rawSensors));
+            if (modelLinks == null) throw new ArgumentNullException(nameof(modelLinks));
+            if (joints == null) throw new ArgumentNullException(nameof(joints));
+
+            if (rawSensors.Count == 0)
+                return Array.Empty<SensorDef>();
+
+            var linkNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ModelLink ml in modelLinks)
+                linkNames.Add(ml.Link.Name);
+
+            var jointNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (UrdfJoint j in joints)
+                jointNames.Add(j.Name);
+
+            var seenNames = new HashSet<string>(StringComparer.Ordinal);
+            var result = new List<SensorDef>(rawSensors.Count);
+
+            foreach (SensorDef s in rawSensors)
+            {
+                if (s == null)
+                    throw new ArgumentException("Sensor list contains a null entry.", nameof(rawSensors));
+
+                if (string.IsNullOrWhiteSpace(s.Name))
+                    throw new ArgumentException("Sensor Name must be non-empty.", nameof(rawSensors));
+
+                string sanitizedName = RosNameSanitizer.Sanitize(s.Name).Value;
+                if (!seenNames.Add(sanitizedName))
+                    throw new InvalidOperationException(
+                        $"Duplicate sensor name '{sanitizedName}' after sanitization.");
+
+                if (!linkNames.Contains(s.AttachedLink))
+                    throw new ArgumentException(
+                        $"Sensor '{sanitizedName}' references unknown link '{s.AttachedLink}'.",
+                        nameof(rawSensors));
+
+                if (s.UpdateRate <= 0)
+                    throw new ArgumentException(
+                        $"Sensor '{sanitizedName}' has non-positive UpdateRate {s.UpdateRate}.",
+                        nameof(rawSensors));
+
+                string sanitizedTopic = SanitizeTopic(s.Topic);
+
+                SensorDef updated = s switch
+                {
+                    ImuSensor imu => imu with { Name = sanitizedName, Topic = sanitizedTopic },
+                    GpuLidarSensor lidar => lidar with { Name = sanitizedName, Topic = sanitizedTopic },
+                    CameraSensor cam => cam with { Name = sanitizedName, Topic = sanitizedTopic },
+                    DepthCameraSensor dcam => dcam with { Name = sanitizedName, Topic = sanitizedTopic },
+                    ContactSensor c => c with { Name = sanitizedName, Topic = sanitizedTopic },
+                    NavsatSensor n => n with { Name = sanitizedName, Topic = sanitizedTopic },
+                    ForceTorqueSensor ft => ValidateAndUpdateForceTorque(ft, sanitizedName, sanitizedTopic, joints, jointNames),
+                    _ => throw new InvalidOperationException($"Unhandled SensorDef subtype: {s.GetType().Name}"),
+                };
+
+                result.Add(updated);
+            }
+
+            return result;
+        }
+
+        private static ForceTorqueSensor ValidateAndUpdateForceTorque(
+            ForceTorqueSensor ft, string sanitizedName, string sanitizedTopic,
+            IReadOnlyList<UrdfJoint> joints, HashSet<string> jointNames)
+        {
+            if (joints.Count == 0)
+                throw new ArgumentException(
+                    "ForceTorque sensor cannot reference a joint when no joints are defined.");
+
+            if (string.IsNullOrEmpty(ft.ChildJointName) || !jointNames.Contains(ft.ChildJointName))
+                throw new ArgumentException(
+                    $"ForceTorque sensor '{sanitizedName}' references unknown joint '{ft.ChildJointName}'.");
+
+            return ft with { Name = sanitizedName, Topic = sanitizedTopic };
+        }
+
+        // Topics: must start with '/'. The leading '/' is preserved verbatim; the
+        // remainder is split on '/' so each segment can be sanitized independently
+        // (RosNameSanitizer treats '/' as invalid and would collapse multi-segment
+        // topics into a single underscored blob otherwise).
+        private static string SanitizeTopic(string raw)
+        {
+            string s = raw ?? string.Empty;
+            if (!s.StartsWith("/", StringComparison.Ordinal))
+                s = "/" + s;
+            string remainder = s.Substring(1);
+            if (remainder.Length == 0)
+                return "/unnamed";
+            string[] segments = remainder.Split('/');
+            for (int i = 0; i < segments.Length; i++)
+            {
+                if (string.IsNullOrEmpty(segments[i])) continue;
+                segments[i] = RosNameSanitizer.Sanitize(segments[i]).Value;
+            }
+            return "/" + string.Join("/", segments);
+        }
     }
 }

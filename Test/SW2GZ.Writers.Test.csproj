@@ -51,6 +51,14 @@
     <Compile Include="..\SW2GZ\Build\Urdf\UrdfRobot.cs"      Link="Sources\Build\Urdf\UrdfRobot.cs" />
     <Compile Include="..\SW2GZ\Build\Model\MaterialDef.cs"        Link="Sources\Build\Model\MaterialDef.cs" />
     <Compile Include="..\SW2GZ\Build\Model\SensorDef.cs"          Link="Sources\Build\Model\SensorDef.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\SensorKind.cs"         Link="Sources\Build\Model\SensorKind.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\Sensors\ImuSensor.cs"         Link="Sources\Build\Model\Sensors\ImuSensor.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\Sensors\GpuLidarSensor.cs"    Link="Sources\Build\Model\Sensors\GpuLidarSensor.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\Sensors\CameraSensor.cs"      Link="Sources\Build\Model\Sensors\CameraSensor.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\Sensors\DepthCameraSensor.cs" Link="Sources\Build\Model\Sensors\DepthCameraSensor.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\Sensors\ForceTorqueSensor.cs" Link="Sources\Build\Model\Sensors\ForceTorqueSensor.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\Sensors\ContactSensor.cs"     Link="Sources\Build\Model\Sensors\ContactSensor.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\Sensors\NavsatSensor.cs"      Link="Sources\Build\Model\Sensors\NavsatSensor.cs" />
     <Compile Include="..\SW2GZ\Build\Model\ControlSpec.cs"        Link="Sources\Build\Model\ControlSpec.cs" />
     <Compile Include="..\SW2GZ\Build\Model\CoordinateConvention.cs" Link="Sources\Build\Model\CoordinateConvention.cs" />
     <Compile Include="..\SW2GZ\Build\Model\RobotMeta.cs"          Link="Sources\Build\Model\RobotMeta.cs" />
@@ -70,6 +78,8 @@
     <Compile Include="..\SW2GZ\Gz\SdfPhysicsBlock.cs"        Link="Sources\Gz\SdfPhysicsBlock.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfWorldWriter.cs"         Link="Sources\Gz\SdfWorldWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfModelWriter.cs"         Link="Sources\Gz\SdfModelWriter.cs" />
+    <Compile Include="..\SW2GZ\Gz\SdfSensorBlocks.cs"        Link="Sources\Gz\SdfSensorBlocks.cs" />
+    <Compile Include="..\SW2GZ\Gz\SdfSensorPlugins.cs"       Link="Sources\Gz\SdfSensorPlugins.cs" />
     <Compile Include="..\SW2GZ\Gz\RosGzBridgeYaml.cs"        Link="Sources\Gz\RosGzBridgeYaml.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Ros2Package.cs"    Link="Sources\URDFExport\Ros2Package.cs" />
     <Compile Include="..\SW2GZ\URDFExport\OutputValidator.cs" Link="Sources\URDFExport\OutputValidator.cs" />

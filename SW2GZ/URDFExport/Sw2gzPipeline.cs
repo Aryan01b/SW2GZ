@@ -54,9 +54,19 @@ namespace SW2GZ.URDFExport
         // pre-export failures (material missing, geometry corrupt). Returns
         // ValidationReport after writing files. No output directory is created
         // if pre-export fails.
+        //
+        // P6-data — 5-arg overload delegates to the 6-arg one with an empty
+        // sensor list (back-compat for v2.1 callers that don't yet carry
+        // sensor specs from the SW boundary).
         public SW2GZ.Validate.ValidationReport Run(string outputDir, string packageName,
-                                    string author, string email, string license)
+                                    string author, string email, string license) =>
+            Run(outputDir, packageName, author, email, license, System.Array.Empty<SensorDef>());
+
+        public SW2GZ.Validate.ValidationReport Run(string outputDir, string packageName,
+                                    string author, string email, string license,
+                                    IReadOnlyList<SensorDef> sensors)
         {
+            if (sensors == null) throw new ArgumentNullException(nameof(sensors));
             // ── Step 1: Sanitize ──────────────────────────────────────────────
             string pkg = PackageNameSanitizer.Sanitize(packageName).Value;
 
@@ -142,7 +152,15 @@ namespace SW2GZ.URDFExport
                 RobotMeta meta = new RobotMeta(pkg, author, email, license, CoordinateConvention.Identity);
                 var (modelLinks, materials) =
                     RobotModelBuilder.AssembleLinksWithMaterials(linksWithPaths, _appearances);
-                RobotModel model = RobotModelBuilder.Build(meta, modelLinks, joints, materials);
+
+                // P6-data — validate the caller-supplied sensors against the
+                // assembled link/joint sets. Sanitizes names + topics. Empty
+                // list passes through as Array.Empty so RobotModel.Sensors stays
+                // a stable singleton (record equality friendly).
+                IReadOnlyList<SensorDef> validatedSensors =
+                    RobotModelBuilder.AssembleSensors(sensors, modelLinks, joints);
+
+                RobotModel model = RobotModelBuilder.Build(meta, modelLinks, joints, materials, validatedSensors);
                 string bodyXml = UrdfSerializer.SerializeBody(model);
 
                 // package.xml
@@ -179,10 +197,10 @@ namespace SW2GZ.URDFExport
                     Path.Combine(root, "urdf", "inc", "gz.xacro"),
                     GzPluginTags.WriteGzRos2ControlXacro(pkg));
 
-                // worlds/empty.sdf
+                // worlds/empty.sdf — P6-data: sensor list drives plugin injection.
                 File.WriteAllText(
                     Path.Combine(root, "worlds", "empty.sdf"),
-                    SdfWorldWriter.Write(new SdfWorldInput("empty")));
+                    SdfWorldWriter.Write(new SdfWorldInput("empty"), model.Sensors));
 
                 // launch/
                 string launchDir = Path.Combine(root, "launch");
@@ -197,7 +215,7 @@ namespace SW2GZ.URDFExport
 
                 File.WriteAllText(
                     Path.Combine(root, "config", "ros_gz_bridge.yaml"),
-                    RosGzBridgeYaml.Write(pkg));
+                    RosGzBridgeYaml.Write(pkg, model.Sensors));
 
                 // ── Step 6: Validate ──────────────────────────────────────────────
                 return new SW2GZ.Validate.OutputValidator().Run(root, pkg);

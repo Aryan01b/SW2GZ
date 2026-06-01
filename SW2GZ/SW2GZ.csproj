@@ -431,6 +431,14 @@
     <Compile Include="Build\Urdf\UrdfRobot.cs" />
     <Compile Include="Build\Model\MaterialDef.cs" />
     <Compile Include="Build\Model\SensorDef.cs" />
+    <Compile Include="Build\Model\SensorKind.cs" />
+    <Compile Include="Build\Model\Sensors\ImuSensor.cs" />
+    <Compile Include="Build\Model\Sensors\GpuLidarSensor.cs" />
+    <Compile Include="Build\Model\Sensors\CameraSensor.cs" />
+    <Compile Include="Build\Model\Sensors\DepthCameraSensor.cs" />
+    <Compile Include="Build\Model\Sensors\ForceTorqueSensor.cs" />
+    <Compile Include="Build\Model\Sensors\ContactSensor.cs" />
+    <Compile Include="Build\Model\Sensors\NavsatSensor.cs" />
     <Compile Include="Build\Model\ControlSpec.cs" />
     <Compile Include="Build\Model\CoordinateConvention.cs" />
     <Compile Include="Build\Model\RobotMeta.cs" />
@@ -450,6 +458,8 @@
     <Compile Include="Gz\SdfPhysicsBlock.cs" />
     <Compile Include="Gz\SdfWorldWriter.cs" />
     <Compile Include="Gz\SdfModelWriter.cs" />
+    <Compile Include="Gz\SdfSensorBlocks.cs" />
+    <Compile Include="Gz\SdfSensorPlugins.cs" />
     <Compile Include="Gz\RosGzBridgeYaml.cs" />
     <Compile Include="URDFExport\Ros2Package.cs" />
     <Compile Include="URDFExport\OutputValidator.cs" />

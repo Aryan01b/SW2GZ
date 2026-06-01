@@ -109,7 +109,13 @@ namespace SW2GZ.Build.Tests
         public void Build_AcceptsExplicitMaterialsSensorsAndControl()
         {
             var mats = new[] { new MaterialDef("steel", 0.5, 0.5, 0.5, 1.0) };
-            var sens = new[] { new SensorDef("cam", "camera", "base_link", Pose.Identity, "/cam", "cam_frame") };
+            // P6-data: SensorDef is now abstract; use a concrete subtype.
+            var sens = new SensorDef[]
+            {
+                new CameraSensor("cam", "base_link", Pose.Identity, "/cam", "cam_frame",
+                    UpdateRate: 30.0, Width: 640, Height: 480, HorizontalFovRad: 1.047,
+                    NearClip: 0.1, FarClip: 100.0),
+            };
             var ctrl = new ControlSpec(new List<string> { "j1" }, "custom_controller");
 
             var model = RobotModelBuilder.Build(Meta(),
