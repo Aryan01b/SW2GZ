@@ -427,6 +427,16 @@
     <Compile Include="Build\Urdf\UrdfLink.cs" />
     <Compile Include="Build\Urdf\UrdfJoint.cs" />
     <Compile Include="Build\Urdf\UrdfRobot.cs" />
+    <Compile Include="Build\Model\MaterialDef.cs" />
+    <Compile Include="Build\Model\SensorDef.cs" />
+    <Compile Include="Build\Model\ControlSpec.cs" />
+    <Compile Include="Build\Model\CoordinateConvention.cs" />
+    <Compile Include="Build\Model\RobotMeta.cs" />
+    <Compile Include="Build\Model\GazeboLinkProps.cs" />
+    <Compile Include="Build\Model\ModelLink.cs" />
+    <Compile Include="Build\Model\RobotModel.cs" />
+    <Compile Include="Build\RobotModelBuilder.cs" />
+    <Compile Include="Write\Urdf\UrdfSerializer.cs" />
     <Compile Include="Build\LinkBuilder.cs" />
     <Compile Include="Build\MateSpec.cs" />
     <Compile Include="Build\JointBuilder.cs" />

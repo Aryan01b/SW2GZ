@@ -14,17 +14,16 @@ caller for display.
 */
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
-using System.Security;
-using System.Text;
 using SW2GZ.Build;
+using SW2GZ.Build.Model;
 using SW2GZ.Build.Urdf;
 using SW2GZ.Gz;
 using SW2GZ.Math;
 using SW2GZ.Ros2;
 using SW2GZ.SwSurface.Abstractions;
 using SW2GZ.Write.Mesh;
+using SW2GZ.Write.Urdf;
 
 namespace SW2GZ.URDFExport
 {
@@ -118,8 +117,13 @@ namespace SW2GZ.URDFExport
                     StlWriter.Write(link.CollisionMesh, Path.Combine(meshesDir, link.CollisionMeshFile));
                 }
 
-                // Build URDF body XML (no SW interop needed — pure POCO).
-                string bodyXml = BuildUrdfBodyXml(links, pkg);
+                // Build the immutable RobotModel keystone (P1) and route the
+                // body XML through the dedicated serializer. The legacy
+                // BuildUrdfBodyXml helper is gone — UrdfSerializer reproduces
+                // its bytes exactly for the same input.
+                RobotMeta meta = new RobotMeta(pkg, author, email, license, CoordinateConvention.Identity);
+                RobotModel model = new RobotModelBuilder().Build(meta, links, joints);
+                string bodyXml = UrdfSerializer.SerializeBody(model);
 
                 // package.xml
                 File.WriteAllText(
@@ -188,35 +192,5 @@ namespace SW2GZ.URDFExport
             }
         }
 
-        // Emits per-link URDF XML inline (no SW interop dependency).
-        private static string BuildUrdfBodyXml(IReadOnlyList<UrdfLink> links, string pkg)
-        {
-            string pkgEsc = SecurityElement.Escape(pkg);
-            var bodyXml = new StringBuilder();
-            foreach (UrdfLink link in links)
-            {
-                string nameEsc = SecurityElement.Escape(link.Name);
-                bodyXml.AppendLine($"  <link name=\"{nameEsc}\">");
-                bodyXml.AppendLine("    <inertial>");
-                bodyXml.AppendLine(string.Format(CultureInfo.InvariantCulture,
-                    "      <origin xyz=\"{0} {1} {2}\" rpy=\"0 0 0\"/>",
-                    link.ComLocal.X, link.ComLocal.Y, link.ComLocal.Z));
-                bodyXml.AppendLine(string.Format(CultureInfo.InvariantCulture,
-                    "      <mass value=\"{0}\"/>", link.Mass));
-                Matrix3 I = link.InertiaAtComLocal;
-                bodyXml.AppendLine(string.Format(CultureInfo.InvariantCulture,
-                    "      <inertia ixx=\"{0}\" ixy=\"{1}\" ixz=\"{2}\" iyy=\"{3}\" iyz=\"{4}\" izz=\"{5}\"/>",
-                    I.M11, I.M12, I.M13, I.M22, I.M23, I.M33));
-                bodyXml.AppendLine("    </inertial>");
-                bodyXml.AppendLine("    <visual><geometry>");
-                bodyXml.AppendLine($"      <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.VisualMeshFile)}\"/>");
-                bodyXml.AppendLine("    </geometry></visual>");
-                bodyXml.AppendLine("    <collision><geometry>");
-                bodyXml.AppendLine($"      <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.CollisionMeshFile)}\"/>");
-                bodyXml.AppendLine("    </geometry></collision>");
-                bodyXml.AppendLine("  </link>");
-            }
-            return bodyXml.ToString();
-        }
     }
 }

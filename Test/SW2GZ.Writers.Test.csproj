@@ -47,6 +47,16 @@
     <Compile Include="..\SW2GZ\Build\Urdf\UrdfLink.cs"       Link="Sources\Build\Urdf\UrdfLink.cs" />
     <Compile Include="..\SW2GZ\Build\Urdf\UrdfJoint.cs"      Link="Sources\Build\Urdf\UrdfJoint.cs" />
     <Compile Include="..\SW2GZ\Build\Urdf\UrdfRobot.cs"      Link="Sources\Build\Urdf\UrdfRobot.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\MaterialDef.cs"        Link="Sources\Build\Model\MaterialDef.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\SensorDef.cs"          Link="Sources\Build\Model\SensorDef.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\ControlSpec.cs"        Link="Sources\Build\Model\ControlSpec.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\CoordinateConvention.cs" Link="Sources\Build\Model\CoordinateConvention.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\RobotMeta.cs"          Link="Sources\Build\Model\RobotMeta.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\GazeboLinkProps.cs"    Link="Sources\Build\Model\GazeboLinkProps.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\ModelLink.cs"          Link="Sources\Build\Model\ModelLink.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\RobotModel.cs"         Link="Sources\Build\Model\RobotModel.cs" />
+    <Compile Include="..\SW2GZ\Build\RobotModelBuilder.cs"        Link="Sources\Build\RobotModelBuilder.cs" />
+    <Compile Include="..\SW2GZ\Write\Urdf\UrdfSerializer.cs"      Link="Sources\Write\Urdf\UrdfSerializer.cs" />
     <Compile Include="..\SW2GZ\Build\LinkBuilder.cs"          Link="Sources\Build\LinkBuilder.cs" />
     <Compile Include="..\SW2GZ\Build\MateSpec.cs"             Link="Sources\Build\MateSpec.cs" />
     <Compile Include="..\SW2GZ\Build\JointBuilder.cs"         Link="Sources\Build\JointBuilder.cs" />
