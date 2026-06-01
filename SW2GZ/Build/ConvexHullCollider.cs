@@ -5,11 +5,50 @@ using System.Numerics;
 
 namespace SW2GZ.Build
 {
+    /// <summary>
+    /// Builds a closed collision mesh from a visual mesh.
+    ///
+    /// P4 (v2.1): adds real 3D convex hull (QuickHull) via
+    /// <see cref="ColliderStrategy.ConvexHull"/>. AABB remains as
+    /// <see cref="ColliderStrategy.Aabb"/> for the explicit primitive fallback
+    /// and is the default of the parameterless <see cref="Build(MeshData)"/>
+    /// overload to preserve historic behavior for unit-test callers that
+    /// pass degenerate point clouds (colinear / coplanar) and expect a
+    /// safe AABB box rather than an exception.
+    ///
+    /// Production code (<c>Sw2gzPipeline</c>) opts in to
+    /// <see cref="ColliderStrategy.ConvexHull"/> explicitly.
+    ///
+    /// Output mesh is closed-manifold with CCW winding seen from outside —
+    /// every face normal points away from the hull centroid.
+    /// </summary>
     public static class ConvexHullCollider
     {
-        // v2.0: ship the AABB fallback only. Real QuickHull lands in v2.1 once basic export
-        // pipeline is green. AABB is a strict superset of the visual mesh, safe for collision.
+        /// <summary>
+        /// Backwards-compatible entry point. Defaults to
+        /// <see cref="ColliderStrategy.Aabb"/> — the original v2.0 behavior.
+        /// New callers should prefer the strategy-aware overload.
+        /// </summary>
         public static MeshData Build(MeshData visual)
+            => Build(visual, ColliderStrategy.Aabb);
+
+        /// <summary>
+        /// Strategy-aware collider builder. <see cref="ColliderStrategy.ConvexHull"/>
+        /// invokes the 3D QuickHull implementation; degenerate inputs throw
+        /// <see cref="ArgumentException"/>. <see cref="ColliderStrategy.Aabb"/>
+        /// returns the axis-aligned bounding box and tolerates degenerate inputs.
+        /// </summary>
+        public static MeshData Build(MeshData visual, ColliderStrategy strategy)
+        {
+            return strategy switch
+            {
+                ColliderStrategy.Aabb => BuildAabbHull(visual),
+                ColliderStrategy.ConvexHull => QuickHull3D.Build(visual),
+                _ => throw new ArgumentOutOfRangeException(nameof(strategy), strategy, "Unknown collider strategy."),
+            };
+        }
+
+        private static MeshData BuildAabbHull(MeshData visual)
         {
             if (visual == null || visual.Vertices == null || visual.Vertices.Length == 0)
                 throw new ArgumentException("MeshData has no vertices", nameof(visual));

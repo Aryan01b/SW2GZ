@@ -44,6 +44,8 @@
     <Compile Include="..\SW2GZ\Build\InertialAggregator.cs"   Link="Sources\Build\InertialAggregator.cs" />
     <Compile Include="..\SW2GZ\Build\MeshData.cs"            Link="Sources\Build\MeshData.cs" />
     <Compile Include="..\SW2GZ\Build\ConvexHullCollider.cs"  Link="Sources\Build\ConvexHullCollider.cs" />
+    <Compile Include="..\SW2GZ\Build\ColliderStrategy.cs"    Link="Sources\Build\ColliderStrategy.cs" />
+    <Compile Include="..\SW2GZ\Build\QuickHull3D.cs"         Link="Sources\Build\QuickHull3D.cs" />
     <Compile Include="..\SW2GZ\Build\Urdf\UrdfLink.cs"       Link="Sources\Build\Urdf\UrdfLink.cs" />
     <Compile Include="..\SW2GZ\Build\Urdf\UrdfJoint.cs"      Link="Sources\Build\Urdf\UrdfJoint.cs" />
     <Compile Include="..\SW2GZ\Build\Urdf\UrdfRobot.cs"      Link="Sources\Build\Urdf\UrdfRobot.cs" />

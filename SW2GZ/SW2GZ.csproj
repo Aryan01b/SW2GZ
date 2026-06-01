@@ -424,6 +424,8 @@
     <Compile Include="Build\InertialAggregator.cs" />
     <Compile Include="Build\MeshData.cs" />
     <Compile Include="Build\ConvexHullCollider.cs" />
+    <Compile Include="Build\ColliderStrategy.cs" />
+    <Compile Include="Build\QuickHull3D.cs" />
     <Compile Include="Build\Urdf\UrdfLink.cs" />
     <Compile Include="Build\Urdf\UrdfJoint.cs" />
     <Compile Include="Build\Urdf\UrdfRobot.cs" />
