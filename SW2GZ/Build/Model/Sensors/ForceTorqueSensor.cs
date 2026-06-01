@@ -9,6 +9,7 @@ using SW2GZ.Math;
 
 namespace SW2GZ.Build.Model
 {
+    // Pose is inherited from SensorDef for record-hierarchy uniformity but is ignored by SDF emission; force-torque sensors attach to a joint frame (see ChildJointName).
     public sealed record ForceTorqueSensor(
         string Name,
         string AttachedLink,

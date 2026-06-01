@@ -9,9 +9,9 @@ using SW2GZ.Gz;
 using SW2GZ.Math;
 using Xunit;
 
-namespace SW2GZ.Test.Writers
+namespace SW2GZ.Test.Gz
 {
-    public class TestSdfSensorPlugins
+    public class SdfSensorPluginsTests
     {
         private static ImuSensor Imu(string name) =>
             new ImuSensor(name, "base", Pose.Identity, "/" + name, "base", 100.0, 0.0);

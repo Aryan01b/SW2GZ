@@ -11,9 +11,9 @@ using SW2GZ.Gz;
 using SW2GZ.Math;
 using Xunit;
 
-namespace SW2GZ.Test.Writers
+namespace SW2GZ.Test.Gz
 {
-    public class TestRosGzBridgeYamlSensors
+    public class RosGzBridgeYamlSensorsTests
     {
         [Fact]
         public void Write_NoSensors_ByteIdenticalToSingleArgOverload()

@@ -14,9 +14,9 @@ using SW2GZ.Gz;
 using SW2GZ.Math;
 using Xunit;
 
-namespace SW2GZ.Test.Writers
+namespace SW2GZ.Test.Gz
 {
-    public class TestSdfSensorBlocks
+    public class SdfSensorBlocksTests
     {
         [Fact]
         public void Write_Imu_ContainsImuTypeAndNoise()
@@ -148,6 +148,32 @@ namespace SW2GZ.Test.Writers
             string xml = SdfSensorBlocks.Write(s);
             // Identity quaternion → rpy 0 0 0.
             Assert.Contains("<pose>1 2 3 0 0 0</pose>", xml);
+        }
+
+        [Fact]
+        public void Write_PoseWithPitch90Deg_RpyContainsHalfPi()
+        {
+            // Build a quaternion that drives sinp = 2*(W*Y - Z*X) past 1.0 so
+            // QuatToRpy must fall into the CopySign(π/2, sinp) gimbal-lock
+            // branch (asin would NaN at |sinp| > 1). W=Y=0.9 → sinp = 1.62 ≥ 1
+            // → pitch = +π/2 ≈ 1.5707963.
+            // (Quaternion.CreateFromAxisAngle(UnitY, π/2) doesn't hit the branch
+            // because float roundoff leaves sinp ≈ 0.99999, asin → 1.57045…)
+            var q = new System.Numerics.Quaternion(0f, 0.9f, 0f, 0.9f);
+            var sensor = new ImuSensor(
+                Name: "gimbal_test_imu",
+                AttachedLink: "base_link",
+                Pose: new Pose(System.Numerics.Vector3.Zero, q),
+                Topic: "/gimbal/imu",
+                GzFrameId: "base_link",
+                UpdateRate: 30.0,
+                GaussianNoiseStdDev: 0.0);
+
+            string xml = SdfSensorBlocks.Write(sensor);
+
+            // pitch should be approximately π/2 (1.5707963...) — verify the CopySign(π/2, sinp) branch
+            Assert.Contains("1.5707", xml);
+            Assert.DoesNotContain("NaN", xml);
         }
     }
 }

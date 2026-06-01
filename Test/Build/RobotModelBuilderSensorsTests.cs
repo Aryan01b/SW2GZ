@@ -140,11 +140,12 @@ namespace SW2GZ.Test.Build
         [Fact]
         public void AssembleSensors_OrderPreserved()
         {
+            // Topics must be unique now (Fix 5: AssembleSensors rejects duplicate topics).
             var sensors = new SensorDef[]
             {
-                Imu("a"),
-                Imu("b"),
-                Imu("c"),
+                Imu("a", topic: "/imu_a"),
+                Imu("b", topic: "/imu_b"),
+                Imu("c", topic: "/imu_c"),
             };
             var result = RobotModelBuilder.AssembleSensors(
                 sensors,
@@ -172,6 +173,24 @@ namespace SW2GZ.Test.Build
                     null!,
                     new[] { Link("base_link") },
                     Array.Empty<UrdfJoint>()));
+        }
+
+        [Fact]
+        public void AssembleSensors_DuplicateTopicAcrossSensors_Throws()
+        {
+            var modelLinks = new[]
+            {
+                new ModelLink(
+                    new UrdfLink("base_link", 1, Vector3.Zero, Matrix3.Identity, null, null, "v.dae", "c.stl"),
+                    null, null)
+            };
+            var sensors = new SensorDef[]
+            {
+                new ImuSensor("imu_a", "base_link", Pose.Identity, "/sensors/data", "base_link", 30, 0),
+                new ImuSensor("imu_b", "base_link", Pose.Identity, "/sensors/data", "base_link", 30, 0),
+            };
+            Assert.Throws<InvalidOperationException>(() =>
+                RobotModelBuilder.AssembleSensors(sensors, modelLinks, Array.Empty<UrdfJoint>()));
         }
     }
 }

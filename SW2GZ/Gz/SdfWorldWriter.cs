@@ -9,9 +9,10 @@ the unversioned `gz-sim-*-system` plugins.
 Locked to Harmonic — no profile parameter. SDF version 1.10.
 
 P6-data — adds a Write(input, sensors) overload that splices the family
-plugins from SdfSensorPlugins before </world>. For empty/null sensors the
-output is byte-identical to the single-arg overload, so golden tests
-keep passing.
+plugins from SdfSensorPlugins before </world>. SdfSensorPlugins is the
+single source of truth for sensor-family plugins (imu/sensors/contact/
+forcetorque/navsat) — the world writer no longer emits them
+unconditionally, so 1-arg callers with no sensors get a sensor-free world.
 */
 using System;
 using System.Collections.Generic;
@@ -40,16 +41,14 @@ namespace SW2GZ.Gz
             sb.AppendLine("    <plugin filename=\"gz-sim-physics-system\"           name=\"gz::sim::systems::Physics\"/>");
             sb.AppendLine("    <plugin filename=\"gz-sim-user-commands-system\"     name=\"gz::sim::systems::UserCommands\"/>");
             sb.AppendLine("    <plugin filename=\"gz-sim-scene-broadcaster-system\" name=\"gz::sim::systems::SceneBroadcaster\"/>");
-            sb.AppendLine("    <plugin filename=\"gz-sim-sensors-system\"           name=\"gz::sim::systems::Sensors\"/>");
-            sb.AppendLine("    <plugin filename=\"gz-sim-imu-system\"               name=\"gz::sim::systems::Imu\"/>");
             sb.Append(SdfPhysicsBlock.Default());
             sb.Append(SdfPhysicsBlock.Sun());
             sb.Append(SdfPhysicsBlock.GroundPlane());
-            // P6-data — only contact/forcetorque/navsat families add real
-            // value here (imu/sensors families already covered by the always-
-            // emitted defaults above). For an empty sensors list the helper
-            // returns "" so this overload stays byte-identical to the legacy
-            // Write(input).
+            // P6-data — SdfSensorPlugins is the single source of truth for
+            // sensor-family plugins (imu/sensors/contact/forcetorque/navsat).
+            // For an empty/null sensors list the helper returns "" so the
+            // 1-arg overload simply emits no sensor-family plugins (correct —
+            // no sensors means no sensor systems needed).
             string extra = SdfSensorPlugins.WritePluginBlock(sensors);
             if (!string.IsNullOrEmpty(extra))
                 sb.Append(extra);

@@ -62,6 +62,8 @@ namespace SW2GZ.URDFExport
                                     string author, string email, string license) =>
             Run(outputDir, packageName, author, email, license, System.Array.Empty<SensorDef>());
 
+        // TODO P6-COM: replace caller-supplied `sensors` with a SW-COM source once the
+        // workstation session lands an ISensorSource boundary similar to IAppearanceSource.
         public SW2GZ.Validate.ValidationReport Run(string outputDir, string packageName,
                                     string author, string email, string license,
                                     IReadOnlyList<SensorDef> sensors)

@@ -213,6 +213,7 @@ namespace SW2GZ.Build
                 jointNames.Add(j.Name);
 
             var seenNames = new HashSet<string>(StringComparer.Ordinal);
+            var seenTopics = new HashSet<string>(StringComparer.Ordinal);
             var result = new List<SensorDef>(rawSensors.Count);
 
             foreach (SensorDef s in rawSensors)
@@ -239,6 +240,9 @@ namespace SW2GZ.Build
                         nameof(rawSensors));
 
                 string sanitizedTopic = SanitizeTopic(s.Topic);
+                if (!seenTopics.Add(sanitizedTopic))
+                    throw new InvalidOperationException(
+                        $"Topic '{sanitizedTopic}' used by more than one sensor; ros_gz_bridge would reject duplicates.");
 
                 SensorDef updated = s switch
                 {

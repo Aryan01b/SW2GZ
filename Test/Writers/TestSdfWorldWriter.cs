@@ -1,7 +1,10 @@
 /*
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 */
+using System.Numerics;
+using SW2GZ.Build.Model;
 using SW2GZ.Gz;
+using SW2GZ.Math;
 using Xunit;
 
 namespace SW2GZ.Writers.Tests
@@ -10,13 +13,25 @@ namespace SW2GZ.Writers.Tests
     {
         [Theory]
         [InlineData("gz-sim-physics-system")]
-        [InlineData("gz-sim-sensors-system")]
-        [InlineData("gz-sim-imu-system")]
         [InlineData("gz-sim-user-commands-system")]
         [InlineData("gz-sim-scene-broadcaster-system")]
         public void Write_UsesUnversionedHarmonicPluginFilenames_Bug4(string expectedFilename)
         {
             var sdf = SdfWorldWriter.Write(new SdfWorldInput("empty"));
+            Assert.Contains(expectedFilename, sdf);
+        }
+
+        [Theory]
+        [InlineData("gz-sim-sensors-system")]
+        [InlineData("gz-sim-imu-system")]
+        public void Write_WithSensors_EmitsSensorFamilyPlugins_Bug4(string expectedFilename)
+        {
+            // After Fix 1, sensor-family plugins are only emitted when sensors are
+            // present. SdfSensorPlugins is the single source of truth.
+            var imu = new ImuSensor("imu", "base_link", Pose.Identity, "/imu", "base_link", 100, 0);
+            var cam = new CameraSensor("cam", "base_link", Pose.Identity, "/cam", "base_link", 30, 640, 480, 1.047, 0.1, 100.0);
+            var sensors = new SensorDef[] { imu, cam };
+            var sdf = SdfWorldWriter.Write(new SdfWorldInput("empty"), sensors);
             Assert.Contains(expectedFilename, sdf);
         }
 
