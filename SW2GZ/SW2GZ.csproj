@@ -474,6 +474,7 @@
     <Compile Include="Validate\PluginNameChecker.cs" />
     <Compile Include="Validate\MeshFileChecker.cs" />
     <Compile Include="Validate\OutputValidator.cs" />
+    <Compile Include="Validate\RobotModelValidator.cs" />
     <Compile Include="SwSurface\Abstractions\IUnitsContext.cs" />
     <Compile Include="SwSurface\IdentityUnitsContext.cs" />
     <Compile Include="Build\UnitsScaler.cs" />

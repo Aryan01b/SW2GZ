@@ -15,6 +15,7 @@ caller for display.
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using SW2GZ.Build;
 using SW2GZ.Build.Model;
 using SW2GZ.Build.Urdf;
@@ -120,6 +121,37 @@ namespace SW2GZ.URDFExport
             // Pipeline emits empty joints list for v2.0.
             var joints = new List<UrdfJoint>();
 
+            // Build the immutable RobotModel keystone (P1) BEFORE any I/O begins,
+            // so the P9 pre-write validator runs without creating output dirs.
+            //
+            // P5: query IAppearanceSource per primary part, get back the tagged
+            // ModelLinks + deduped Materials, then build the model via the
+            // ModelLink overload so the material refs survive.
+            RobotMeta meta = new RobotMeta(pkg, author, email, license, CoordinateConvention.Identity);
+            var (modelLinks, materials) =
+                RobotModelBuilder.AssembleLinksWithMaterials(linksWithPaths, _appearances);
+
+            // P6-data — validate the caller-supplied sensors against the
+            // assembled link/joint sets. Sanitizes names + topics. Empty list
+            // passes through as Array.Empty so RobotModel.Sensors stays a stable
+            // singleton (record equality friendly).
+            IReadOnlyList<SensorDef> validatedSensors =
+                RobotModelBuilder.AssembleSensors(sensors, modelLinks, joints);
+
+            RobotModel model = RobotModelBuilder.Build(meta, modelLinks, joints, materials, validatedSensors);
+
+            // ── Step 4.5: Pre-write structural validation (P9) ────────────────
+            // Fail-fast: any structural error throws here, BEFORE the output
+            // directory is touched. Warnings are surfaced alongside the
+            // post-write OutputValidator findings further down.
+            SW2GZ.Validate.ValidationReport preWrite =
+                SW2GZ.Validate.RobotModelValidator.Validate(model);
+            if (preWrite.HasErrors)
+            {
+                throw new SW2GZ.Exceptions.Sw2gzExportException(
+                    "Pre-write validation failed: " + preWrite.Errors.First().Message);
+            }
+
             // ── Step 5: Write package tree ────────────────────────────────────
             // v2.0 layout: <outputDir>/<pkg>_ws/src/<pkg>/...
             // Ready for `cd <pkg>_ws && colcon build` without further restructuring.
@@ -143,26 +175,9 @@ namespace SW2GZ.URDFExport
                     StlWriter.Write(link.CollisionMesh, Path.Combine(meshesDir, link.CollisionMeshFile));
                 }
 
-                // Build the immutable RobotModel keystone (P1) and route the
-                // body XML through the dedicated serializer. The legacy
+                // Body XML routed through the dedicated serializer. The legacy
                 // BuildUrdfBodyXml helper is gone — UrdfSerializer reproduces
                 // its bytes exactly for the same input.
-                //
-                // P5: query IAppearanceSource per primary part, get back the
-                // tagged ModelLinks + deduped Materials, then build the model
-                // via the ModelLink overload so the material refs survive.
-                RobotMeta meta = new RobotMeta(pkg, author, email, license, CoordinateConvention.Identity);
-                var (modelLinks, materials) =
-                    RobotModelBuilder.AssembleLinksWithMaterials(linksWithPaths, _appearances);
-
-                // P6-data — validate the caller-supplied sensors against the
-                // assembled link/joint sets. Sanitizes names + topics. Empty
-                // list passes through as Array.Empty so RobotModel.Sensors stays
-                // a stable singleton (record equality friendly).
-                IReadOnlyList<SensorDef> validatedSensors =
-                    RobotModelBuilder.AssembleSensors(sensors, modelLinks, joints);
-
-                RobotModel model = RobotModelBuilder.Build(meta, modelLinks, joints, materials, validatedSensors);
                 string bodyXml = UrdfSerializer.SerializeBody(model);
 
                 // package.xml
@@ -220,7 +235,13 @@ namespace SW2GZ.URDFExport
                     RosGzBridgeYaml.Write(pkg, model.Sensors));
 
                 // ── Step 6: Validate ──────────────────────────────────────────────
-                return new SW2GZ.Validate.OutputValidator().Run(root, pkg);
+                // Merge P9 pre-write warnings with post-write OutputValidator
+                // issues so the caller sees a single report. Pre-write errors
+                // never reach here (they throw above).
+                SW2GZ.Validate.ValidationReport postWrite =
+                    new SW2GZ.Validate.OutputValidator().Run(root, pkg);
+                return new SW2GZ.Validate.ValidationReport(
+                    preWrite.Warnings.Concat(postWrite.Issues).ToList());
             }
             catch
             {
