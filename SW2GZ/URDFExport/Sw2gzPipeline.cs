@@ -76,17 +76,7 @@ namespace SW2GZ.URDFExport
                 MeshData visual = _tess.Tessellate(primaryPath, TessellationLod.Fine);
 
                 // Build real convex hull (QuickHull) collision mesh from the visual mesh.
-                // Degenerate inputs (<4 verts, colinear, coplanar) fall back to AABB so the
-                // pipeline never aborts on a thin/flat part — AABB is a safe superset.
-                MeshData collision;
-                try
-                {
-                    collision = ConvexHullCollider.Build(visual, ColliderStrategy.ConvexHull);
-                }
-                catch (ArgumentException)
-                {
-                    collision = ConvexHullCollider.Build(visual, ColliderStrategy.Aabb);
-                }
+                MeshData collision = ConvexHullCollider.Build(visual, ColliderStrategy.ConvexHull);
 
                 // Aggregate mass over all flattened parts at identity pose (v2.0 limitation —
                 // inter-part transforms deferred to v2.1).

@@ -19,7 +19,6 @@ namespace SW2GZ.Build
         {
             public int A, B, C;            // CCW seen from outside
             public Vec3D Normal;           // unit outward normal
-            public Vec3D Centroid;
             public double Offset;          // Normal · A (plane equation: n·x = offset)
             public List<int> Conflicts;    // indices of points in front of this face
             public bool Removed;
@@ -114,21 +113,19 @@ namespace SW2GZ.Build
             double planeOff = Vec3D.Dot(planeNu, pts[i0]);
             int i3 = -1;
             double bestD3 = -1;
-            double signed3 = 0;
             for (int i = 0; i < n; i++)
             {
                 if (i == i0 || i == i1 || i == i2) continue;
                 double s = Vec3D.Dot(planeNu, pts[i]) - planeOff;
                 double a = System.Math.Abs(s);
-                if (a > bestD3) { bestD3 = a; i3 = i; signed3 = s; }
+                if (a > bestD3) { bestD3 = a; i3 = i; }
             }
             if (i3 < 0 || bestD3 <= eps)
                 throw new ArgumentException("Vertices are coplanar; cannot build convex hull.", nameof(visual));
 
-            // Build 4 faces. If i3 is below plane (signed3 < 0), the natural
-            // CCW order (i0,i1,i2) already has its outward normal opposite to i3.
-            // We want faces oriented so outward normals point AWAY from the
-            // centroid. Compute centroid and swap to fix any inverted face.
+            // Build 4 faces. We want faces oriented so outward normals point
+            // AWAY from the centroid. Compute centroid and swap to fix any
+            // inverted face.
             Vec3D centroid = (pts[i0] + pts[i1] + pts[i2] + pts[i3]) * 0.25;
 
             var faces = new List<Face>(4)
@@ -153,12 +150,12 @@ namespace SW2GZ.Build
             // horizon, replace visible faces with new ones from horizon to point.
             //
             // Safety cap: at most ~n iterations of point absorption.
-            int safetyCap = 16 * n + 64;
+            int safetyCap = n + 64;
             int iter = 0;
 
             while (true)
             {
-                Face hot = null;
+                Face pickedFace = null;
                 double bestFarDist = frontEps;
                 int eyeIdx = -1;
                 for (int fi = 0; fi < faces.Count; fi++)
@@ -170,10 +167,10 @@ namespace SW2GZ.Build
                     {
                         int pi = f.Conflicts[ci];
                         double d = Vec3D.Dot(f.Normal, pts[pi]) - f.Offset;
-                        if (d > bestFarDist) { bestFarDist = d; hot = f; eyeIdx = pi; }
+                        if (d > bestFarDist) { bestFarDist = d; pickedFace = f; eyeIdx = pi; }
                     }
                 }
-                if (hot == null) break;
+                if (pickedFace == null) break;
                 if (++iter > safetyCap)
                     throw new InvalidOperationException("QuickHull3D exceeded iteration cap; possible numerical instability.");
 
@@ -216,7 +213,7 @@ namespace SW2GZ.Build
                 {
                     // Degenerate: eye visible to all faces but no horizon — shouldn't happen
                     // for non-degenerate clouds. Drop point safely.
-                    hot.Conflicts.Remove(eyeIdx);
+                    pickedFace.Conflicts.Remove(eyeIdx);
                     continue;
                 }
 
@@ -351,7 +348,6 @@ namespace SW2GZ.Build
             {
                 A = a, B = b, C = c,
                 Normal = nu,
-                Centroid = (va + vb + vc) * (1.0 / 3.0),
                 Offset = Vec3D.Dot(nu, va),
                 Conflicts = new List<int>(),
                 Removed = false,

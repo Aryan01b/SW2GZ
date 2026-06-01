@@ -48,8 +48,14 @@ namespace SW2GZ.Acceptance.Tests
             var tess = new Mock<IMeshTessellator>();
             tess.Setup(t => t.Tessellate(It.IsAny<string>(), It.IsAny<TessellationLod>()))
                 .Returns(new MeshData(
-                    new[] { Vector3.Zero, Vector3.UnitX, Vector3.UnitY },
-                    new[] { 0, 1, 2 }, null));
+                    new[]
+                    {
+                        new Vector3(0, 0, 0),
+                        new Vector3(1, 0, 0),
+                        new Vector3(0, 1, 0),
+                        new Vector3(0, 0, 1),
+                    },
+                    new[] { 0, 2, 1,   0, 1, 3,   0, 3, 2,   1, 2, 3 }, null));
 
             var report = new Sw2gzPipeline(mass.Object, walker.Object, tess.Object)
                 .Run(_tmp, rawName, "A", "a@b", "Apache-2.0");

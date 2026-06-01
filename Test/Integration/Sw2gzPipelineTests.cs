@@ -16,8 +16,19 @@ namespace SW2GZ.Integration.Tests
 {
     public class Sw2gzPipelineTests
     {
-        private static MeshData TinyMesh() =>
-            new MeshData(new[] { Vector3.Zero, Vector3.UnitX, Vector3.UnitY }, new[] { 0, 1, 2 }, null);
+        private static MeshData TinyMesh()
+        {
+            // unit tetrahedron centered near the origin
+            var verts = new[]
+            {
+                new Vector3(0, 0, 0),
+                new Vector3(1, 0, 0),
+                new Vector3(0, 1, 0),
+                new Vector3(0, 0, 1),
+            };
+            var tris = new int[] { 0, 2, 1,   0, 1, 3,   0, 3, 2,   1, 2, 3 };
+            return new MeshData(verts, tris, null);
+        }
 
         [Fact]
         public void Run_TwoLinks_WritesFullPackageTree()
