@@ -32,7 +32,9 @@ namespace SW2GZ.Build
 {
     public static class RobotModelBuilder
     {
+        // 1e-6 is ~4000× tighter than 8-bit color resolution (1/255), tolerates float<->double round-trip,
         private const double RgbaTolerance = 1e-6;
+        // but still triggers on intentional RGBA edits. Tune if SW appearance round-trip introduces wider drift.
 
         public static RobotModel Build(
             RobotMeta meta,
@@ -101,7 +103,6 @@ namespace SW2GZ.Build
         ///
         /// Validation:
         ///   - RGBA components must be in [0, 1] (else ArgumentException).
-        ///   - Sanitized material name must be non-empty.
         ///   - Same sanitized name with different RGBA (beyond 1e-6) =>
         ///     InvalidOperationException ("conflicting definitions").
         ///   - Same sanitized name + same RGBA => deduped into a single entry.
@@ -119,7 +120,9 @@ namespace SW2GZ.Build
 
             var modelLinks = new List<ModelLink>(linksWithPaths.Count);
             var orderedMaterials = new List<MaterialDef>();
-            var byName = new Dictionary<string, MaterialDef>(StringComparer.Ordinal);
+            // Track the raw (pre-sanitization) name of the first material seen for
+            // each sanitized key so a conflict can report both colliding inputs.
+            var byName = new Dictionary<string, (MaterialDef Canonical, string FirstSeenRawName)>(StringComparer.Ordinal);
 
             foreach ((UrdfLink link, string partPath) in linksWithPaths)
             {
@@ -132,23 +135,24 @@ namespace SW2GZ.Build
 
                 ValidateRgba(raw);
 
+                // RosNameSanitizer guarantees a non-empty result (returns "unnamed"
+                // for inputs that would otherwise sanitize to empty), so no empty-
+                // string guard is needed here.
                 string sanitized = RosNameSanitizer.Sanitize(raw.Name).Value;
-                if (string.IsNullOrWhiteSpace(sanitized))
-                    throw new ArgumentException(
-                        $"Material name '{raw.Name}' sanitizes to empty.", nameof(linksWithPaths));
 
                 MaterialDef canonical = raw with { Name = sanitized };
 
-                if (byName.TryGetValue(sanitized, out MaterialDef? existing))
+                if (byName.TryGetValue(sanitized, out (MaterialDef Canonical, string FirstSeenRawName) existing))
                 {
-                    if (!RgbaEquals(existing!, canonical))
+                    if (!RgbaEquals(existing.Canonical, canonical))
                         throw new InvalidOperationException(
-                            $"Material name '{sanitized}' has conflicting definitions.");
+                            $"Material name '{sanitized}' has conflicting definitions: " +
+                            $"first seen as '{existing.FirstSeenRawName}', then as '{raw.Name}' with different RGBA.");
                     // Same RGBA — reuse existing entry; nothing new to add.
                 }
                 else
                 {
-                    byName[sanitized] = canonical;
+                    byName[sanitized] = (canonical, raw.Name);
                     orderedMaterials.Add(canonical);
                 }
 

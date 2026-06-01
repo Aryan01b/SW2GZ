@@ -60,7 +60,7 @@ namespace SW2GZ.Write.Urdf
         /// the test locale never injects a comma. All dynamic strings escape
         /// via SecurityElement.Escape; the sanitizer already restricts names
         /// to [A-Za-z0-9_], so this is defense-in-depth.
-        public static string SerializeMaterialsXacro(string packageName, IReadOnlyList<MaterialDef> materials)
+        public static string SerializeMaterialsXacro(IReadOnlyList<MaterialDef> materials)
         {
             if (materials == null) throw new System.ArgumentNullException(nameof(materials));
 

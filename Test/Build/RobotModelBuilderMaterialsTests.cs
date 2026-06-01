@@ -100,10 +100,12 @@ namespace SW2GZ.Test.Build
         [Fact]
         public void TwoLinks_SameNameDifferentRgba_Throws()
         {
+            // Use raw names that sanitize to the same key but differ as inputs, so
+            // the message can be checked for both raw forms.
             var src = new MapAppearanceSource(new Dictionary<string, MaterialDef?>
             {
-                ["/p/a"] = new MaterialDef("blue", 0.0, 0.0, 1.0, 1.0),
-                ["/p/b"] = new MaterialDef("blue", 0.0, 0.0, 0.5, 1.0),
+                ["/p/a"] = new MaterialDef("Blue!", 0.0, 0.0, 1.0, 1.0),
+                ["/p/b"] = new MaterialDef("Blue?", 0.0, 0.0, 0.5, 1.0),
             });
             var input = new[]
             {
@@ -114,14 +116,24 @@ namespace SW2GZ.Test.Build
             var ex = Assert.Throws<InvalidOperationException>(() =>
                 RobotModelBuilder.AssembleLinksWithMaterials(input, src));
             Assert.Contains("conflicting definitions", ex.Message);
+            Assert.Contains("Blue!", ex.Message);
+            Assert.Contains("Blue?", ex.Message);
         }
 
-        [Fact]
-        public void OutOfRangeRgba_Throws()
+        [Theory]
+        [InlineData(-0.1, 0.0, 0.0, 1.0)]
+        [InlineData(1.5,  0.0, 0.0, 1.0)]
+        [InlineData(0.0, -0.1, 0.0, 1.0)]
+        [InlineData(0.0,  1.5, 0.0, 1.0)]
+        [InlineData(0.0,  0.0, -0.1, 1.0)]
+        [InlineData(0.0,  0.0,  1.5, 1.0)]
+        [InlineData(0.0,  0.0,  0.0, -0.1)]
+        [InlineData(0.0,  0.0,  0.0,  1.5)]
+        public void OutOfRangeRgba_Throws(double r, double g, double b, double a)
         {
             var src = new MapAppearanceSource(new Dictionary<string, MaterialDef?>
             {
-                ["/p/a"] = new MaterialDef("bright", 1.5, 0.0, 0.0, 1.0),
+                ["/p/a"] = new MaterialDef("bright", r, g, b, a),
             });
             var input = new[] { (MakeLink("a"), "/p/a") };
 

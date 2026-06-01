@@ -6,9 +6,8 @@ P5 — Materials emission tests for UrdfSerializer. Covers both the per-link
 helper that produces inc/materials.xacro.
 */
 using System.Collections.Generic;
-using System.Globalization;
+using System.Linq;
 using System.Numerics;
-using System.Threading;
 using SW2GZ.Build;
 using SW2GZ.Build.Model;
 using SW2GZ.Build.Urdf;
@@ -95,7 +94,7 @@ namespace SW2GZ.Test.Write.Urdf
         [Fact]
         public void SerializeMaterialsXacro_Empty_EmitsPlaceholderComment()
         {
-            string xml = UrdfSerializer.SerializeMaterialsXacro("pkg",
+            string xml = UrdfSerializer.SerializeMaterialsXacro(
                 System.Array.Empty<MaterialDef>());
 
             Assert.Contains("<!-- No named materials defined. -->", xml);
@@ -109,7 +108,7 @@ namespace SW2GZ.Test.Write.Urdf
         {
             var mats = new[] { new MaterialDef("red", 1.0, 0.0, 0.0, 1.0) };
 
-            string xml = UrdfSerializer.SerializeMaterialsXacro("pkg", mats);
+            string xml = UrdfSerializer.SerializeMaterialsXacro(mats);
 
             Assert.Contains("<material name=\"red\">", xml);
             Assert.Contains("<color rgba=\"1 0 0 1\"/>", xml);
@@ -126,7 +125,7 @@ namespace SW2GZ.Test.Write.Urdf
                 new MaterialDef("gamma", 0.7, 0.8, 0.9, 1.0),
             };
 
-            string xml = UrdfSerializer.SerializeMaterialsXacro("pkg", mats);
+            string xml = UrdfSerializer.SerializeMaterialsXacro(mats);
 
             int ia = xml.IndexOf("name=\"alpha\"");
             int ib = xml.IndexOf("name=\"beta\"");
@@ -136,27 +135,26 @@ namespace SW2GZ.Test.Write.Urdf
         }
 
         [Fact]
-        public void SerializeMaterialsXacro_RgbaInvariantCulture_NoCommas()
+        public void SerializeMaterialsXacro_FloatsUseInvariantCulture_NoCommasInRgba()
         {
-            // Save the ambient locale; pin to de-DE (comma decimal) for the duration.
-            var prev = Thread.CurrentThread.CurrentCulture;
-            try
-            {
-                Thread.CurrentThread.CurrentCulture = new CultureInfo("de-DE");
-                var mats = new[] { new MaterialDef("mid", 0.5, 0.25, 0.75, 1.0) };
+            // The production code hardcodes CultureInfo.InvariantCulture in its
+            // string.Format calls, so the rgba line must use dots regardless of
+            // ambient locale. Verifying the output bytes directly avoids any
+            // Thread.CurrentCulture mutation (which is parallel-unsafe under
+            // xUnit's default test parallelization).
+            var mats = new[] { new MaterialDef("c", 0.5, 0.25, 0.75, 1.0) };
 
-                string xml = UrdfSerializer.SerializeMaterialsXacro("pkg", mats);
+            string xml = UrdfSerializer.SerializeMaterialsXacro(mats);
 
-                Assert.Contains("0.5", xml);
-                Assert.Contains("0.25", xml);
-                Assert.Contains("0.75", xml);
-                Assert.DoesNotContain("0,5", xml);
-                Assert.DoesNotContain("0,25", xml);
-            }
-            finally
-            {
-                Thread.CurrentThread.CurrentCulture = prev;
-            }
+            Assert.Contains("0.5 0.25 0.75 1", xml);
+            Assert.DoesNotContain(",", xml.Split('\n').First(l => l.Contains("rgba")));
+        }
+
+        [Fact]
+        public void SerializeMaterialsXacro_NullMaterials_Throws()
+        {
+            Assert.Throws<System.ArgumentNullException>(() =>
+                UrdfSerializer.SerializeMaterialsXacro(null!));
         }
     }
 }

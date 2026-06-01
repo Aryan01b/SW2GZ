@@ -165,7 +165,7 @@ namespace SW2GZ.URDFExport
                 // empty list emits a placeholder comment so the file still parses).
                 File.WriteAllText(
                     Path.Combine(root, "urdf", "inc", "materials.xacro"),
-                    UrdfSerializer.SerializeMaterialsXacro(pkg, model.Materials));
+                    UrdfSerializer.SerializeMaterialsXacro(model.Materials));
 
                 // urdf/inc/ros2_control.xacro
                 var jointNames = new List<string>();
