@@ -26,6 +26,11 @@ namespace SW2GZ.UI.ViewModels
         private readonly TargetsStepViewModel _targets;
         private readonly OutputStepViewModel _output;
         private readonly LinksStepViewModel _links;
+        private readonly JointsStepViewModel _joints;
+        private readonly CollisionStepViewModel _collision;
+        private readonly MaterialsStepViewModel _materials;
+        private readonly SensorsStepViewModel _sensors;
+        private readonly ControllersStepViewModel _controllers;
         private readonly IExportRunner _exportRunner;
         private readonly int _jointCount;
         private RobotModel _previewModel;
@@ -38,7 +43,12 @@ namespace SW2GZ.UI.ViewModels
             LinksStepViewModel links,
             IExportRunner exportRunner,
             int jointCount = 0,
-            RobotModel previewModel = null)
+            RobotModel previewModel = null,
+            JointsStepViewModel joints = null,
+            CollisionStepViewModel collision = null,
+            MaterialsStepViewModel materials = null,
+            SensorsStepViewModel sensors = null,
+            ControllersStepViewModel controllers = null)
             : base("Review & export", "Validate & finish")
         {
             _mode = mode ?? throw new ArgumentNullException(nameof(mode));
@@ -48,6 +58,11 @@ namespace SW2GZ.UI.ViewModels
             _exportRunner = exportRunner ?? new NullExportRunner();
             _jointCount = jointCount;
             _previewModel = previewModel;
+            _joints = joints;
+            _collision = collision;
+            _materials = materials;
+            _sensors = sensors;
+            _controllers = controllers;
 
             FinishExportCommand = new RelayCommand(FinishExport, () => CanExport);
         }
@@ -56,8 +71,23 @@ namespace SW2GZ.UI.ViewModels
         public string TargetSummary => _targets.TargetSummary;
         public string PackageName => _output.SanitizedPackageName;
         public int LinkCount => _links.LinkCount;
-        public int JointCount => _jointCount;
+
+        /// Edited-joint count when the Joints step is present; otherwise the
+        /// raw extracted count passed in.
+        public int JointCount => _joints != null ? _joints.JointCount : _jointCount;
         public int AssignedGeometryCount => _links.AssignedGeometryCount;
+
+        /// "Convex hull (tight, accurate, recommended)" — collider strategy + note.
+        public string CollisionSummary =>
+            _collision != null
+                ? _collision.SelectedStrategy + " (" + CollisionStepViewModel.Describe(_collision.SelectedStrategy) + ")"
+                : "ConvexHull";
+
+        public int MaterialCount => _materials?.MaterialCount ?? 0;
+        public int SensorCount => _sensors?.SensorCount ?? 0;
+
+        /// Canonical name of the chosen primary controller (broadcaster aside).
+        public string ControllerSummary => _controllers?.ControllerName ?? "joint_trajectory_controller";
 
         /// 0 until an export runs; thereafter mirrors the runner's report.
         public int ValidationErrorCount => _lastResult?.ErrorCount ?? 0;

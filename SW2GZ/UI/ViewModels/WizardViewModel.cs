@@ -29,23 +29,44 @@ namespace SW2GZ.UI.ViewModels
             IExportRunner exportRunner,
             IReadOnlyList<LinkDto> links = null,
             int jointCount = 0,
-            RobotModel previewModel = null)
+            RobotModel previewModel = null,
+            IReadOnlyList<JointDto> joints = null)
         {
             folderBrowser ??= new NullFolderBrowserService();
             viewportSelection ??= new NullViewportSelectionService();
             ThemeService = themeService ?? new NullThemeService();
             exportRunner ??= new NullExportRunner();
 
+            // Link names are reused by the Materials + Sensors steps for their
+            // per-link rows / attachment combos.
+            var linkNames = new List<string>();
+            if (links != null)
+                foreach (LinkDto l in links)
+                    linkNames.Add(l.Name);
+
+            // jointCount stays for back-compat callers; if a joint DTO list is
+            // supplied it is the source of truth for the Joints step + count.
+            int effectiveJointCount = joints != null ? joints.Count : jointCount;
+
             ModeStep = new ModeStepViewModel();
             TargetsStep = new TargetsStepViewModel();
             OutputStep = new OutputStepViewModel(folderBrowser);
             LinksStep = new LinksStepViewModel(links, viewportSelection);
+            JointsStep = new JointsStepViewModel(joints);
+            CollisionStep = new CollisionStepViewModel();
+            MaterialsStep = new MaterialsStepViewModel(linkNames);
+            SensorsStep = new SensorsStepViewModel(linkNames);
+            ControllersStep = new ControllersStepViewModel();
             ReviewStep = new ReviewStepViewModel(
-                ModeStep, TargetsStep, OutputStep, LinksStep, exportRunner, jointCount, previewModel);
+                ModeStep, TargetsStep, OutputStep, LinksStep, exportRunner,
+                effectiveJointCount, previewModel,
+                JointsStep, CollisionStep, MaterialsStep, SensorsStep, ControllersStep);
 
             _steps = new StepViewModelBase[]
             {
-                ModeStep, TargetsStep, OutputStep, LinksStep, ReviewStep,
+                ModeStep, TargetsStep, OutputStep, LinksStep,
+                JointsStep, CollisionStep, MaterialsStep, SensorsStep, ControllersStep,
+                ReviewStep,
             };
 
             NextCommand = new RelayCommand(MoveNext, CanMoveNext);
@@ -70,6 +91,11 @@ namespace SW2GZ.UI.ViewModels
         public TargetsStepViewModel TargetsStep { get; }
         public OutputStepViewModel OutputStep { get; }
         public LinksStepViewModel LinksStep { get; }
+        public JointsStepViewModel JointsStep { get; }
+        public CollisionStepViewModel CollisionStep { get; }
+        public MaterialsStepViewModel MaterialsStep { get; }
+        public SensorsStepViewModel SensorsStep { get; }
+        public ControllersStepViewModel ControllersStep { get; }
         public ReviewStepViewModel ReviewStep { get; }
         public IThemeService ThemeService { get; }
 

@@ -38,7 +38,8 @@ namespace SW2GZ.UI.Services.Sw
         RobotModel Model,
         IReadOnlyList<LinkDto> Links,
         int JointCount,
-        IReadOnlyList<string> Warnings);
+        IReadOnlyList<string> Warnings,
+        IReadOnlyList<JointDto> Joints);
 
     public sealed class WizardModelComposer
     {
@@ -98,12 +99,17 @@ namespace SW2GZ.UI.Services.Sw
             IReadOnlyList<MateSpec> mates = _walker.WalkMates();
             var (joints, _root, warnings) = JointGraphBuilder.Build(links, mates);
 
+            // Surface the extracted joints to the wizard's editable Joints step.
+            var jointDtos = new List<JointDto>(joints.Count);
+            foreach (UrdfJoint j in joints)
+                jointDtos.Add(JointDto.From(j));
+
             // ── Preview RobotModel: reuse the pipeline's build steps ─────────
             var (modelLinks, materials) =
                 RobotModelBuilder.AssembleLinksWithMaterials(linksWithPaths, _appearances);
             RobotModel model = RobotModelBuilder.Build(meta, modelLinks, joints, materials);
 
-            return new WizardPreview(model, linkDtos, joints.Count, warnings);
+            return new WizardPreview(model, linkDtos, joints.Count, warnings, jointDtos);
 #else
             throw new NotImplementedException(
                 "WizardModelComposer.Compose() requires the SolidWorks COM build (SW_INTEROP).");
