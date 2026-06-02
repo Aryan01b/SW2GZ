@@ -95,5 +95,54 @@ namespace SW2GZ.Test.UI
             Assert.NotNull(step.SelectedLink);
             Assert.Equal("base_link", step.SelectedLink.Name);
         }
+
+        [Fact]
+        public void ApplyGeometrySeedsHasGeometryAndBodyCountByName()
+        {
+            var step = new LinksStepViewModel(TwoLinks(), new FakeViewportSelectionService());
+
+            step.ApplyGeometry(new List<(string, bool, int)>
+            {
+                ("base_link", true, 3),
+                ("link1", false, 0),
+            });
+
+            Assert.True(step.Links[0].HasGeometry);
+            Assert.Equal(3, step.Links[0].SelectedBodyCount);
+            Assert.False(step.Links[1].HasGeometry);
+            Assert.Equal(1, step.AssignedGeometryCount);
+            Assert.False(step.AllLinksHaveGeometry);
+            Assert.False(step.CanAdvance());
+        }
+
+        [Fact]
+        public void ApplyGeometryAllAssignedEnablesAdvance()
+        {
+            var step = new LinksStepViewModel(TwoLinks(), new FakeViewportSelectionService());
+
+            step.ApplyGeometry(new List<(string, bool, int)>
+            {
+                ("base_link", true, 2),
+                ("link1", true, 1),
+            });
+
+            Assert.True(step.AllLinksHaveGeometry);
+            Assert.True(step.CanAdvance());
+            Assert.Equal(2, step.AssignedGeometryCount);
+        }
+
+        [Fact]
+        public void ApplyGeometryIgnoresUnknownLinksAndNull()
+        {
+            var step = new LinksStepViewModel(TwoLinks(), new FakeViewportSelectionService());
+
+            step.ApplyGeometry(null); // no-op
+            step.ApplyGeometry(new List<(string, bool, int)>
+            {
+                ("ghost_link", true, 9),
+            });
+
+            Assert.Equal(0, step.AssignedGeometryCount);
+        }
     }
 }

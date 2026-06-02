@@ -81,6 +81,16 @@ namespace SW2GZ.UI.ViewModels
         /// all-links-assigned gate.
         public event EventHandler GeometryChanged;
 
+        /// Seeds the geometry state from an external source (e.g. the native
+        /// PropertyManagerPage's GeometryAssignment, converted to a plain tuple).
+        /// Pure-C#: no COM, no viewport read — just sets the flags so the Links
+        /// step reflects what was assigned in the 3D panel.
+        public void ApplyGeometry(bool hasGeometry, int bodyCount)
+        {
+            SelectedBodyCount = hasGeometry ? bodyCount : 0;
+            HasGeometry = hasGeometry;
+        }
+
         private void AssignGeometry()
         {
             IReadOnlyList<string> names = _selection.GetSelectedBodyNames();

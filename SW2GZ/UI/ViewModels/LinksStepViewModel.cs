@@ -58,6 +58,26 @@ namespace SW2GZ.UI.ViewModels
         public bool AllLinksHaveGeometry =>
             Links.Count > 0 && Links.All(l => l.HasGeometry);
 
+        /// Seeds/refreshes each link's geometry state from an external source —
+        /// e.g. the native geometry PropertyManagerPage's GeometryAssignment,
+        /// converted to a simple (LinkName, HasGeometry, BodyCount) tuple list so
+        /// this stays pure-C# (no COM). Links are matched by name; entries with no
+        /// matching LinkViewModel are ignored.
+        public void ApplyGeometry(
+            IReadOnlyList<(string LinkName, bool HasGeometry, int BodyCount)> state)
+        {
+            if (state == null) return;
+            foreach ((string linkName, bool hasGeometry, int bodyCount) in state)
+            {
+                LinkViewModel link = Links.FirstOrDefault(
+                    l => string.Equals(l.Name, linkName, System.StringComparison.Ordinal));
+                link?.ApplyGeometry(hasGeometry, bodyCount);
+            }
+            OnPropertyChanged(nameof(AssignedGeometryCount));
+            OnPropertyChanged(nameof(AllLinksHaveGeometry));
+            OnAdvanceabilityChanged();
+        }
+
         // Gate Next/Finish on every link having geometry. (Empty link list is
         // treated as not-yet-ready so the wizard can't advance an empty model.)
         public override bool CanAdvance() => AllLinksHaveGeometry;

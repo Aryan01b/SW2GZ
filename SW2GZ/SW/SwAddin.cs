@@ -457,8 +457,48 @@ namespace SW2GZ.SW
                     modeldoc.Save3(options, 0, 0);
                 }
 
-                // SW boundary services — same construction ExportHelper uses.
+                // ── FLOW: native geometry panel FIRST, then the modeless wizard ──
+                // Geometry is assigned in a native left-side PropertyManagerPage so
+                // the 3D viewport stays live (the old modal ShowDialog froze it).
+                // The PMP writes into a shared GeometryAssignment seeded with the
+                // top-level link names; on PMP close we open the WPF wizard
+                // (MODELESS, owned to the SW frame) seeded from that assignment.
                 var assemblyDoc = (AssemblyDoc)modeldoc;
+                var walker = new SolidWorksAssemblyWalker(assemblyDoc);
+
+                System.Collections.Generic.IReadOnlyList<
+                    SW2GZ.SwSurface.Abstractions.LinkSpec> links = walker.WalkActive();
+                var linkNames = new System.Collections.Generic.List<string>();
+                foreach (var spec in links)
+                    linkNames.Add(spec.Name);
+
+                var assignment = new GeometryAssignment(linkNames);
+
+                // PMP-first; the continuation shows the wizard once geometry is set.
+                var pmp = new GeometryPropertyManager(
+                    (SldWorks)SwApp, modeldoc, assignment,
+                    onClosed: () => ShowWizard(modeldoc, assemblyDoc, assignment));
+                pmp.Show();
+            }
+            catch (Exception e)
+            {
+                logger.Error("An exception was caught launching the SW2GZ wizard", e);
+                MessageBox.Show("There was a problem launching the SW2GZ wizard: \n\"" +
+                    e.Message + "\"\nEmail your maintainer with the log file found at " +
+                    Logger.GetFileName());
+            }
+        }
+
+        // Builds the WPF wizard from the active assembly and shows it MODELESS so
+        // the 3D viewport stays interactive. Seeds the Links step from the geometry
+        // already assigned in the native PropertyManagerPage. Invoked as the
+        // GeometryPropertyManager's onClosed continuation.
+        private void ShowWizard(
+            ModelDoc2 modeldoc, AssemblyDoc assemblyDoc, GeometryAssignment assignment)
+        {
+            try
+            {
+                // SW boundary services — same construction ExportHelper uses.
                 var mass = new SolidWorksMassProperties((SldWorks)SwApp, assemblyDoc);
                 var walker = new SolidWorksAssemblyWalker(assemblyDoc);
                 var tess = new SolidWorksMeshTessellator((SldWorks)SwApp, assemblyDoc);
@@ -504,9 +544,16 @@ namespace SW2GZ.SW
                     defaultPackageName,
                     defaultOutputFolder);
 
-                // Ensure a WPF Application exists for resource resolution; a single
-                // ShowDialog works even without one, but the wizard pulls merged
-                // resource dictionaries so an Application keeps them resolvable.
+                // Seed the Links step from the geometry assigned in the native PMP.
+                // GeometryAssignment -> a plain tuple list (no COM) the VM consumes.
+                var geomState = new System.Collections.Generic.List<(string, bool, int)>();
+                foreach (LinkGeometry link in assignment.Links)
+                    geomState.Add((link.LinkName, link.HasGeometry, link.SelectedBodyNames.Count));
+                vm.LinksStep.ApplyGeometry(geomState);
+
+                // Ensure a WPF Application exists for resource resolution; the
+                // wizard pulls merged resource dictionaries so an Application keeps
+                // them resolvable.
                 if (System.Windows.Application.Current == null)
                 {
                     var app = new System.Windows.Application
@@ -523,16 +570,17 @@ namespace SW2GZ.SW
                 }
                 catch (Exception ownerEx)
                 {
-                    // Non-fatal: the dialog just won't be owned by the SW main window.
+                    // Non-fatal: the window just won't be owned by the SW main window.
                     logger.Warn("Could not set SW2GZ wizard owner window", ownerEx);
                 }
 
-                window.ShowDialog();
+                // MODELESS — keep the 3D viewport interactive while the wizard is up.
+                window.Show();
             }
             catch (Exception e)
             {
-                logger.Error("An exception was caught launching the SW2GZ wizard", e);
-                MessageBox.Show("There was a problem launching the SW2GZ wizard: \n\"" +
+                logger.Error("An exception was caught showing the SW2GZ wizard", e);
+                MessageBox.Show("There was a problem showing the SW2GZ wizard: \n\"" +
                     e.Message + "\"\nEmail your maintainer with the log file found at " +
                     Logger.GetFileName());
             }
