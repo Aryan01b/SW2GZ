@@ -483,6 +483,52 @@
     <Compile Include="SwSurface\SolidWorksMeshTessellator.cs" />
     <Compile Include="SwSurface\Abstractions\IAppearanceSource.cs" />
     <Compile Include="SwSurface\DefaultAppearanceSource.cs" />
+    <!-- P8 — pure-C# MVVM layer (net48 + net8 portable; source-linked into the test project). -->
+    <Compile Include="UI\Mvvm\ObservableObject.cs" />
+    <Compile Include="UI\Mvvm\RelayCommand.cs" />
+    <Compile Include="UI\Services\IFolderBrowserService.cs" />
+    <Compile Include="UI\Services\IViewportSelectionService.cs" />
+    <Compile Include="UI\Services\IThemeService.cs" />
+    <Compile Include="UI\Services\IExportRunner.cs" />
+    <Compile Include="UI\Services\NullFolderBrowserService.cs" />
+    <Compile Include="UI\Services\NullViewportSelectionService.cs" />
+    <Compile Include="UI\Services\NullThemeService.cs" />
+    <Compile Include="UI\Services\NullExportRunner.cs" />
+    <Compile Include="UI\ViewModels\Ros2Distro.cs" />
+    <Compile Include="UI\ViewModels\LinkDto.cs" />
+    <Compile Include="UI\ViewModels\StepViewModelBase.cs" />
+    <Compile Include="UI\ViewModels\ModeStepViewModel.cs" />
+    <Compile Include="UI\ViewModels\TargetsStepViewModel.cs" />
+    <Compile Include="UI\ViewModels\OutputStepViewModel.cs" />
+    <Compile Include="UI\ViewModels\LinkViewModel.cs" />
+    <Compile Include="UI\ViewModels\LinksStepViewModel.cs" />
+    <Compile Include="UI\ViewModels\ReviewStepViewModel.cs" />
+    <Compile Include="UI\ViewModels\WizardViewModel.cs" />
+    <!-- P8 — SolidWorks/WinForms service impls (net48-only; NOT source-linked into the test project). -->
+    <Compile Include="UI\Services\Sw\WinFormsFolderBrowserService.cs" />
+    <Compile Include="UI\Services\Sw\SwViewportSelectionService.cs" />
+    <Compile Include="UI\Services\Sw\SwThemeService.cs" />
+    <Compile Include="UI\Services\Sw\Sw2gzPipelineExportRunner.cs" />
+    <!-- P8 — WPF wizard code-behind + converters (net48-only; requires Visual Studio markup build). -->
+    <Compile Include="UI\Wizard\WizardConverters.cs" />
+    <Compile Include="UI\Wizard\WizardWindow.xaml.cs">
+      <DependentUpon>WizardWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Wizard\ModeStepView.xaml.cs">
+      <DependentUpon>ModeStepView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Wizard\TargetsStepView.xaml.cs">
+      <DependentUpon>TargetsStepView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Wizard\OutputStepView.xaml.cs">
+      <DependentUpon>OutputStepView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Wizard\LinksStepView.xaml.cs">
+      <DependentUpon>LinksStepView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Wizard\ReviewStepView.xaml.cs">
+      <DependentUpon>ReviewStepView.xaml</DependentUpon>
+    </Compile>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -534,6 +580,35 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="UI\UIResources.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <!-- P8 — wizard views + theme dictionary (requires Visual Studio markup build). -->
+    <Page Include="UI\Wizard\Theme\SolidWorksTheme.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Wizard\WizardWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Wizard\ModeStepView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Wizard\TargetsStepView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Wizard\OutputStepView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Wizard\LinksStepView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Wizard\ReviewStepView.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
