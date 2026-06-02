@@ -291,6 +291,116 @@ namespace SW2GZ.SwSurface
             return new Vector3(x, y, z);
         }
 
+        // P9 — highlights in the viewport the reference geometry of the mate that
+        // couples the two given link component-sets, so the user can see where a
+        // joint's axis lives. Walks the mate tree, matches a mate whose two
+        // top-level endpoints fall one in each set, clears the current selection
+        // and selects that mate's reference entities. Returns true if matched.
+        // COM-only, validated on a workstation.
+        public bool HighlightMateReferences(
+            System.Collections.Generic.ICollection<string> compIdsA,
+            System.Collections.Generic.ICollection<string> compIdsB)
+        {
+            if (compIdsA == null || compIdsB == null) return false;
+            var model = (IModelDoc2)_doc;
+            model.ClearSelection2(true);
+
+            bool matched = false;
+            Feature feat = (Feature)model.FirstFeature();
+            try
+            {
+                while (feat != null && !matched)
+                {
+                    if (feat.GetTypeName2() == "MateGroup")
+                    {
+                        Feature sub = (Feature)feat.GetFirstSubFeature();
+                        try
+                        {
+                            while (sub != null && !matched)
+                            {
+                                matched = TrySelectMateIfMatch(sub, compIdsA, compIdsB);
+                                Feature nextSub = (Feature)sub.GetNextSubFeature();
+                                Marshal.ReleaseComObject(sub);
+                                sub = nextSub;
+                            }
+                        }
+                        finally { if (sub != null) Marshal.ReleaseComObject(sub); }
+                    }
+
+                    Feature next = (Feature)feat.GetNextFeature();
+                    Marshal.ReleaseComObject(feat);
+                    feat = next;
+                }
+            }
+            finally { if (feat != null) Marshal.ReleaseComObject(feat); }
+
+            return matched;
+        }
+
+        // Selects a mate's reference entities iff its two top-level endpoints fall
+        // one in each component set. Returns whether it matched.
+        private static bool TrySelectMateIfMatch(
+            Feature feat,
+            System.Collections.Generic.ICollection<string> a,
+            System.Collections.Generic.ICollection<string> b)
+        {
+            object specific = feat.GetSpecificFeature2();
+            var mate = specific as Mate2;
+            if (mate == null)
+            {
+                if (specific != null) Marshal.ReleaseComObject(specific);
+                return false;
+            }
+
+            var ents = new List<MateEntity2>();
+            try
+            {
+                string topA = null, topB = null;
+                int n = mate.GetMateEntityCount();
+                for (int i = 0; i < n; i++)
+                {
+                    MateEntity2 ent = mate.MateEntity(i);
+                    if (ent == null) continue;
+                    ents.Add(ent);
+                    Component2 comp = ent.ReferenceComponent;
+                    if (comp != null)
+                    {
+                        try
+                        {
+                            string t = TopLevelName(comp);
+                            if (topA == null) topA = t;
+                            else if (topB == null && t != topA) topB = t;
+                        }
+                        finally { Marshal.ReleaseComObject(comp); }
+                    }
+                }
+
+                bool match = topA != null && topB != null &&
+                    ((a.Contains(topA) && b.Contains(topB)) || (a.Contains(topB) && b.Contains(topA)));
+
+                if (match)
+                {
+                    foreach (MateEntity2 ent in ents)
+                    {
+                        object refGeom = ent.Reference;
+                        if (refGeom is Entity sel)
+                        {
+                            try { sel.Select4(true, null); }
+                            catch { /* a non-selectable reference — skip it */ }
+                        }
+                        if (refGeom != null) Marshal.ReleaseComObject(refGeom);
+                    }
+                }
+
+                return match;
+            }
+            finally
+            {
+                foreach (MateEntity2 ent in ents) Marshal.ReleaseComObject(ent);
+                Marshal.ReleaseComObject(mate);
+            }
+        }
+
         // Inspects a single feature; if it wraps a Mate2, classifies it into a
         // MateSpec and appends. No-op for non-mate features. All COM RCWs touched
         // here are released in finally.

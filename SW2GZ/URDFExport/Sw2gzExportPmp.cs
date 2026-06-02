@@ -936,6 +936,41 @@ namespace SW2GZ.URDFExport
                 PMTextLimitUpper.Text = j.LimitUpper.HasValue ? j.LimitUpper.Value.ToString(CultureInfo.InvariantCulture) : "";
 
             UpdateJointValidationLabel();
+            HighlightActiveJointGeometry();
+        }
+
+        // Highlights the active joint's mate reference geometry in the viewport so
+        // the user can see the axis as they step through joints. No-op outside the
+        // Joints step. Best-effort COM — failures are swallowed (just no highlight).
+        private void HighlightActiveJointGeometry()
+        {
+            if (currentStep != 3) return;
+            try
+            {
+                JointDef j = ActiveJoint();
+                if (j == null) { model.ClearSelection2(true); return; }
+                HashSet<string> aIds = ComponentIdsForLink(j.ParentLink);
+                HashSet<string> bIds = ComponentIdsForLink(j.ChildLink);
+                if (aIds.Count == 0 || bIds.Count == 0) { model.ClearSelection2(true); return; }
+                new SolidWorksAssemblyWalker((AssemblyDoc)model).HighlightMateReferences(aIds, bIds);
+            }
+            catch (Exception e)
+            {
+                logger.Warn("Could not highlight joint mate geometry in the viewport", e);
+            }
+        }
+
+        private HashSet<string> ComponentIdsForLink(string linkName)
+        {
+            var set = new HashSet<string>();
+            if (config.Links == null) return set;
+            foreach (LinkDef l in config.Links)
+                if (l.Name == linkName && l.ComponentIds != null)
+                {
+                    foreach (string id in l.ComponentIds) set.Add(id);
+                    break;
+                }
+            return set;
         }
 
         private void UpdateJointValidationLabel()
@@ -981,11 +1016,17 @@ namespace SW2GZ.URDFExport
             PMButtonNext.Caption = isLast ? "Finish" : "Next >";
 
             // Entering Joints: re-derive joints from the link tree (preserving
-            // edits) and refresh the editor.
+            // edits) and refresh the editor (which also highlights the active
+            // joint's mate geometry in the viewport).
             if (currentStep == 3)
             {
                 SyncJoints();
                 PopulateJointSelector();
+            }
+            else if (currentStep == 4)
+            {
+                // Leaving Joints for Review — drop the joint geometry highlight.
+                try { model.ClearSelection2(true); } catch { }
             }
         }
 
