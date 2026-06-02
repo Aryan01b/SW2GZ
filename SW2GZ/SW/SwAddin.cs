@@ -252,28 +252,33 @@ namespace SW2GZ.SW
 
         #region UI Methods
 
-        // Icon list reused by both the toolbar and the command-group glyph. These
-        // are the same ROS-logo sprites the legacy menu item shipped; SolidWorks
-        // wants an array of square PNGs of increasing size and picks the best fit.
+        // Icon list reused by both the toolbar and the command-group glyph.
+        // SolidWorks wants an array of square PNGs of increasing size and picks
+        // the best fit. The PNGs ship next to the DLL (csproj copies them into an
+        // images\ subfolder of the output) so they resolve regardless of where
+        // the add-in is installed — computed from the assembly's own location.
         private static string[] Sw2gzIconList()
         {
-            const string dir = "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\";
+            string dir = System.IO.Path.Combine(
+                System.IO.Path.GetDirectoryName(
+                    System.Reflection.Assembly.GetExecutingAssembly().Location),
+                "images");
             return new[]
             {
-                dir + "ros_logo_20x20.png",
-                dir + "ros_logo_32x32.png",
-                dir + "ros_logo_40x40.png",
-                dir + "ros_logo_64x64.png",
-                dir + "ros_logo_96x96.png",
-                dir + "ros_logo_128x128.png",
+                System.IO.Path.Combine(dir, "sw2gz_20.png"),
+                System.IO.Path.Combine(dir, "sw2gz_32.png"),
+                System.IO.Path.Combine(dir, "sw2gz_40.png"),
+                System.IO.Path.Combine(dir, "sw2gz_64.png"),
+                System.IO.Path.Combine(dir, "sw2gz_96.png"),
+                System.IO.Path.Combine(dir, "sw2gz_128.png"),
             };
         }
 
         public void AddCommandMgr()
         {
             const string title = "SW2GZ";
-            const string toolTip = "Export to ROS 2 / Gz Sim";
-            const string hint = "Export the active assembly to a ROS 2 package (URDF, ros2_control, Gz sim, sensors)";
+            const string toolTip = "SW2GZ — Export to ROS 2 / Gazebo";
+            const string hint = "Generate a simulation-ready ROS 2 package (URDF, ros2_control, Gazebo, sensors) from this assembly.";
 
             int errs = 0;
             ICommandGroup grp = CmdMgr.CreateCommandGroup2(
