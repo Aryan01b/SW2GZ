@@ -1,0 +1,51 @@
+<!--
+Local preview-harness copy of SW2GZ\UI\Wizard\TargetsStepView.xaml.
+Only change vs the original: the `;assembly=SW2GZ` qualifier on the
+`vm` xmlns is stripped so the {x:Static vm:Ros2Distro.*} references
+resolve to THIS assembly (WizardPreview), into which the VM source is
+compiled. Keep this file in sync with the original if the original changes.
+-->
+<UserControl x:Class="SW2GZ.UI.Wizard.TargetsStepView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wz="clr-namespace:SW2GZ.UI.Wizard"
+             xmlns:vm="clr-namespace:SW2GZ.UI.ViewModels">
+    <UserControl.Resources>
+        <wz:BoolToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+    <StackPanel Margin="22,20">
+        <TextBlock Style="{DynamicResource H2}" Text="Targets" />
+        <TextBlock Style="{DynamicResource Hint}"
+                   Text="Choose the ROS 2 distro. The Gz version is paired automatically to prevent mismatches." />
+
+        <StackPanel Margin="0,0,0,15" MaxWidth="430" HorizontalAlignment="Left">
+            <TextBlock Style="{DynamicResource FieldLabel}" Text="ROS 2 DISTRO" />
+            <ComboBox SelectedValue="{Binding SelectedDistro, Mode=TwoWay}"
+                      SelectedValuePath="Tag">
+                <ComboBoxItem Content="Humble"  Tag="{x:Static vm:Ros2Distro.Humble}" />
+                <ComboBoxItem Content="Jazzy"   Tag="{x:Static vm:Ros2Distro.Jazzy}" />
+                <ComboBoxItem Content="Kilted"  Tag="{x:Static vm:Ros2Distro.Kilted}" />
+                <ComboBoxItem Content="Rolling" Tag="{x:Static vm:Ros2Distro.Rolling}" />
+            </ComboBox>
+        </StackPanel>
+
+        <StackPanel Margin="0,0,0,15" MaxWidth="430" HorizontalAlignment="Left">
+            <TextBlock Style="{DynamicResource FieldLabel}" Text="GZ SIM VERSION" />
+            <StackPanel Orientation="Horizontal">
+                <TextBox Width="200" IsReadOnly="True" Text="{Binding GzVersion, Mode=OneWay}" />
+                <Border Margin="8,0,0,0" Padding="7,2" CornerRadius="4"
+                        Background="{DynamicResource AccentSoftBrush}"
+                        BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1">
+                    <TextBlock Text="auto-paired" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource AccentBrush}" />
+                </Border>
+            </StackPanel>
+            <TextBlock Style="{DynamicResource Hint}" Margin="0,6,0,0"
+                       Text="The Gz version updates automatically when the distro changes." />
+            <TextBlock TextWrapping="Wrap" Margin="0,6,0,0"
+                       Foreground="{DynamicResource BrandBrush}" FontSize="11.5"
+                       Text="{Binding SupportNote}"
+                       Visibility="{Binding IsSupported, Converter={StaticResource BoolToVis}, ConverterParameter=invert}" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>
