@@ -362,6 +362,7 @@
     <Compile Include="URDFExport\Sw2gzConfigSerialization.cs" />
     <Compile Include="Build\Model\LinkDef.cs" />
     <Compile Include="Build\LinkDefValidator.cs" />
+    <Compile Include="Build\LinkHierarchy.cs" />
     <Compile Include="URDFExport\ExportHelper.cs" />
     <Compile Include="URDFExport\Sw2gzPipeline.cs" />
     <Compile Include="URDFExport\ExportHelperExtension.cs" />

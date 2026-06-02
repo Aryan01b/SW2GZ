@@ -73,20 +73,20 @@ namespace SW2GZ.Test.URDFExport
             config.Links.Add(new SW2GZ.Build.Model.LinkDef
             {
                 Name = "base_link",
-                IsBase = true,
+                ParentName = "",
                 ComponentIds = { "chassis-1@robot", "motor-1@robot" },
             });
-            config.Links.Add(new SW2GZ.Build.Model.LinkDef { Name = "wheel_left" });
+            config.Links.Add(new SW2GZ.Build.Model.LinkDef { Name = "wheel_left", ParentName = "base_link" });
 
             string xml = Sw2gzConfigCodec.ToXmlString(config);
             Sw2gzExportConfig restored = Sw2gzConfigCodec.FromXmlString(xml);
 
             Assert.Equal(2, restored.Links.Count);
             Assert.Equal("base_link", restored.Links[0].Name);
-            Assert.True(restored.Links[0].IsBase);
+            Assert.Equal("", restored.Links[0].ParentName);
             Assert.Equal(2, restored.Links[0].ComponentIds.Count);
             Assert.Equal("motor-1@robot", restored.Links[0].ComponentIds[1]);
-            Assert.False(restored.Links[1].IsBase);
+            Assert.Equal("base_link", restored.Links[1].ParentName);
         }
     }
 }

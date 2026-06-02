@@ -10,52 +10,41 @@ namespace SW2GZ.Test.Build
 {
     public class LinkDefValidatorTests
     {
-        private static LinkDef Link(string name, bool baseLink, params string[] ids) =>
-            new LinkDef { Name = name, IsBase = baseLink, ComponentIds = new List<string>(ids) };
+        private static LinkDef L(string name, string parent, params string[] ids) =>
+            new LinkDef { Name = name, ParentName = parent, ComponentIds = new List<string>(ids) };
 
         [Fact]
-        public void Valid_WhenEveryComponentAssignedOnce_OneBase_UniqueNames()
+        public void Valid_SingleRoot_FullCoverage_UniqueNames()
         {
-            var links = new List<LinkDef> { Link("base", true, "a", "b"), Link("wheel", false, "c") };
-            var issues = LinkDefValidator.Validate(links, new[] { "a", "b", "c" });
-            Assert.Empty(issues);
+            var links = new List<LinkDef> { L("base", "", "a"), L("wheel", "base", "b") };
+            Assert.Empty(LinkDefValidator.Validate(links, new[] { "a", "b" }));
         }
 
         [Fact]
-        public void Flags_UnassignedComponent()
+        public void Flags_NoRoot_And_MultipleRoots()
         {
-            var links = new List<LinkDef> { Link("base", true, "a") };
+            var two = new List<LinkDef> { L("a", "", "x"), L("b", "", "y") };
+            Assert.Contains(LinkDefValidator.Validate(two, new[] { "x", "y" }), i => i.Contains("root"));
+
+            var cyc = new List<LinkDef> { L("a", "b", "x"), L("b", "a", "y") };
+            Assert.Contains(LinkDefValidator.Validate(cyc, new[] { "x", "y" }), i => i.Contains("root") || i.Contains("cycle"));
+        }
+
+        [Fact]
+        public void Flags_UnknownParent()
+        {
+            var links = new List<LinkDef> { L("base", "", "a"), L("arm", "ghost", "b") };
+            Assert.Contains(LinkDefValidator.Validate(links, new[] { "a", "b" }), i => i.Contains("parent"));
+        }
+
+        [Fact]
+        public void Flags_Unassigned_And_EmptyLink_And_DuplicateName()
+        {
+            var links = new List<LinkDef> { L("dup", "", "a"), L("dup", "dup") };
             var issues = LinkDefValidator.Validate(links, new[] { "a", "b" });
             Assert.Contains(issues, i => i.Contains("unassigned") && i.Contains("b"));
-        }
-
-        [Fact]
-        public void Flags_ComponentInTwoLinks()
-        {
-            var links = new List<LinkDef> { Link("base", true, "a"), Link("two", false, "a") };
-            var issues = LinkDefValidator.Validate(links, new[] { "a" });
-            Assert.Contains(issues, i => i.Contains("more than one") && i.Contains("a"));
-        }
-
-        [Fact]
-        public void Flags_ZeroOrMultipleBase()
-        {
-            var none = LinkDefValidator.Validate(
-                new List<LinkDef> { Link("x", false, "a") }, new[] { "a" });
-            Assert.Contains(none, i => i.Contains("base"));
-
-            var two = LinkDefValidator.Validate(
-                new List<LinkDef> { Link("x", true, "a"), Link("y", true, "b") }, new[] { "a", "b" });
-            Assert.Contains(two, i => i.Contains("base"));
-        }
-
-        [Fact]
-        public void Flags_DuplicateNames_And_EmptyLink()
-        {
-            var links = new List<LinkDef> { Link("dup", true, "a"), Link("dup", false), };
-            var issues = LinkDefValidator.Validate(links, new[] { "a" });
-            Assert.Contains(issues, i => i.Contains("name"));
             Assert.Contains(issues, i => i.Contains("no components"));
+            Assert.Contains(issues, i => i.Contains("name"));
         }
     }
 }

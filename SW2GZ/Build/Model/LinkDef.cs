@@ -16,6 +16,8 @@ namespace SW2GZ.Build.Model
     {
         [DataMember] public string Name { get; set; } = string.Empty;
         [DataMember] public List<string> ComponentIds { get; set; } = new List<string>();
-        [DataMember] public bool IsBase { get; set; }
+
+        // Parent link name; "" (or null / unknown) means this is the root = base link.
+        [DataMember] public string ParentName { get; set; } = string.Empty;
     }
 }
