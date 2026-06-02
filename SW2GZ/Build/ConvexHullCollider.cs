@@ -40,12 +40,29 @@ namespace SW2GZ.Build
         /// </summary>
         public static MeshData Build(MeshData visual, ColliderStrategy strategy)
         {
-            return strategy switch
+            switch (strategy)
             {
-                ColliderStrategy.Aabb => BuildAabbHull(visual),
-                ColliderStrategy.ConvexHull => QuickHull3D.Build(visual),
-                _ => throw new ArgumentOutOfRangeException(nameof(strategy), strategy, "Unknown collider strategy."),
-            };
+                case ColliderStrategy.Aabb:
+                    return BuildAabbHull(visual);
+                case ColliderStrategy.ConvexHull:
+                    try
+                    {
+                        return QuickHull3D.Build(visual);
+                    }
+                    catch (ArgumentException)
+                    {
+                        // Degenerate input: a planar/colinear/thin part (gasket, shim,
+                        // washer, sheet-metal) tessellates to a cloud with no 3D extent,
+                        // so QuickHull3D cannot form a closed 3D hull and throws
+                        // ArgumentException. AABB is the safe closed-manifold fallback —
+                        // a flat link still gets a valid box collider instead of aborting
+                        // the whole export. Only ArgumentException (the documented
+                        // degeneracy signal) is caught; other failures propagate.
+                        return BuildAabbHull(visual);
+                    }
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(strategy), strategy, "Unknown collider strategy.");
+            }
         }
 
         private static MeshData BuildAabbHull(MeshData visual)

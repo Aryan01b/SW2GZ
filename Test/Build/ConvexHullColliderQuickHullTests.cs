@@ -92,32 +92,38 @@ namespace SW2GZ.Build.Tests
             Assert.Equal(1.0, SignedVolume(hull), 5);
         }
 
-        // ── 5. Too few points ────────────────────────────────────────────────
+        // ── 5. Too few points → graceful AABB fallback (Fix 1) ───────────────
+        // The ConvexHull strategy degrades to the AABB box on degenerate input
+        // instead of throwing, so a flat/thin part still gets a valid collider
+        // rather than aborting the export. (QuickHull3D.Build itself still throws;
+        // only the strategy-aware ConvexHullCollider wrapper degrades.)
         [Fact]
-        public void Build_ConvexHullStrategy_Triangle_Throws()
+        public void Build_ConvexHullStrategy_Triangle_FallsBackToAabb()
         {
             var verts = new Vector3[] { new(0,0,0), new(1,0,0), new(0,1,0) };
             var mesh = new MeshData(verts, Array.Empty<int>(), null);
-            Assert.Throws<ArgumentException>(() =>
-                ConvexHullCollider.Build(mesh, ColliderStrategy.ConvexHull));
+            var hull = ConvexHullCollider.Build(mesh, ColliderStrategy.ConvexHull);
+            Assert.Equal(8, hull.Vertices.Length);
+            Assert.Equal(12, hull.Triangles.Length / 3);
         }
 
-        // ── 6. Colinear ──────────────────────────────────────────────────────
+        // ── 6. Colinear → graceful AABB fallback (Fix 1) ─────────────────────
         [Fact]
-        public void Build_ConvexHullStrategy_CollinearPoints_Throws()
+        public void Build_ConvexHullStrategy_CollinearPoints_FallsBackToAabb()
         {
             var verts = new Vector3[]
             {
                 new(0,0,0), new(1,0,0), new(2,0,0), new(3,0,0),
             };
             var mesh = new MeshData(verts, Array.Empty<int>(), null);
-            Assert.Throws<ArgumentException>(() =>
-                ConvexHullCollider.Build(mesh, ColliderStrategy.ConvexHull));
+            var hull = ConvexHullCollider.Build(mesh, ColliderStrategy.ConvexHull);
+            Assert.Equal(8, hull.Vertices.Length);
+            Assert.Equal(12, hull.Triangles.Length / 3);
         }
 
-        // ── 7. Coplanar ──────────────────────────────────────────────────────
+        // ── 7. Coplanar → graceful AABB fallback (Fix 1) ─────────────────────
         [Fact]
-        public void Build_ConvexHullStrategy_CoplanarPoints_Throws()
+        public void Build_ConvexHullStrategy_CoplanarPoints_FallsBackToAabb()
         {
             // 4 points on z=0 plane.
             var verts = new Vector3[]
@@ -125,8 +131,9 @@ namespace SW2GZ.Build.Tests
                 new(0,0,0), new(1,0,0), new(1,1,0), new(0,1,0),
             };
             var mesh = new MeshData(verts, Array.Empty<int>(), null);
-            Assert.Throws<ArgumentException>(() =>
-                ConvexHullCollider.Build(mesh, ColliderStrategy.ConvexHull));
+            var hull = ConvexHullCollider.Build(mesh, ColliderStrategy.ConvexHull);
+            Assert.Equal(8, hull.Vertices.Length);
+            Assert.Equal(12, hull.Triangles.Length / 3);
         }
 
         // ── 8. Null input ────────────────────────────────────────────────────
