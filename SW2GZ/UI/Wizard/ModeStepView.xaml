@@ -1,0 +1,44 @@
+<!--
+Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
+P8 — Step 1 view. Three mode cards. REQUIRES VISUAL STUDIO BUILD.
+DataContext: ModeStepViewModel.
+-->
+<UserControl x:Class="SW2GZ.UI.Wizard.ModeStepView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wz="clr-namespace:SW2GZ.UI.Wizard">
+    <UserControl.Resources>
+        <wz:EnumEqualsConverter x:Key="EnumEquals" />
+    </UserControl.Resources>
+    <StackPanel Margin="22,20">
+        <TextBlock Style="{DynamicResource H2}" Text="Export mode" />
+        <TextBlock Style="{DynamicResource Hint}" Text="Determines which files SW2GZ generates." />
+
+        <UniformGrid Columns="3">
+            <RadioButton GroupName="Mode" Margin="0,0,10,0"
+                         IsChecked="{Binding SelectedMode, Converter={StaticResource EnumEquals}, ConverterParameter=RobotPackage}">
+                <StackPanel>
+                    <TextBlock Text="Robot Package" FontWeight="SemiBold" />
+                    <TextBlock Style="{DynamicResource Hint}" Margin="0,3,0,0"
+                               Text="ROS 2 package: URDF/Xacro, launch, world, meshes." />
+                </StackPanel>
+            </RadioButton>
+            <RadioButton GroupName="Mode" Margin="0,0,10,0"
+                         IsChecked="{Binding SelectedMode, Converter={StaticResource EnumEquals}, ConverterParameter=SdfModel}">
+                <StackPanel>
+                    <TextBlock Text="SDF Model" FontWeight="SemiBold" />
+                    <TextBlock Style="{DynamicResource Hint}" Margin="0,3,0,0"
+                               Text="Standalone Gz model: model.config, model.sdf, meshes." />
+                </StackPanel>
+            </RadioButton>
+            <RadioButton GroupName="Mode"
+                         IsChecked="{Binding SelectedMode, Converter={StaticResource EnumEquals}, ConverterParameter=SdfWorld}">
+                <StackPanel>
+                    <TextBlock Text="SDF World" FontWeight="SemiBold" />
+                    <TextBlock Style="{DynamicResource Hint}" Margin="0,3,0,0"
+                               Text="Gz world: physics, sun, ground plane." />
+                </StackPanel>
+            </RadioButton>
+        </UniformGrid>
+    </StackPanel>
+</UserControl>
