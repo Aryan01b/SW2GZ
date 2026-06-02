@@ -444,6 +444,7 @@
     <Compile Include="Build\Model\GazeboLinkProps.cs" />
     <Compile Include="Build\Model\ModelLink.cs" />
     <Compile Include="Build\Model\RobotModel.cs" />
+    <Compile Include="Build\Model\GeometryAssignment.cs" />
     <Compile Include="Build\RobotModelBuilder.cs" />
     <Compile Include="Write\Urdf\UrdfSerializer.cs" />
     <Compile Include="Build\LinkBuilder.cs" />

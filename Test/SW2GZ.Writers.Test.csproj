@@ -64,6 +64,7 @@
     <Compile Include="..\SW2GZ\Build\Model\GazeboLinkProps.cs"    Link="Sources\Build\Model\GazeboLinkProps.cs" />
     <Compile Include="..\SW2GZ\Build\Model\ModelLink.cs"          Link="Sources\Build\Model\ModelLink.cs" />
     <Compile Include="..\SW2GZ\Build\Model\RobotModel.cs"         Link="Sources\Build\Model\RobotModel.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\GeometryAssignment.cs" Link="Sources\Build\Model\GeometryAssignment.cs" />
     <Compile Include="..\SW2GZ\Build\RobotModelBuilder.cs"        Link="Sources\Build\RobotModelBuilder.cs" />
     <Compile Include="..\SW2GZ\Write\Urdf\UrdfSerializer.cs"      Link="Sources\Write\Urdf\UrdfSerializer.cs" />
     <Compile Include="..\SW2GZ\Build\LinkBuilder.cs"          Link="Sources\Build\LinkBuilder.cs" />
