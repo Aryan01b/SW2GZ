@@ -173,6 +173,29 @@ namespace SW2GZ.Test.UI
         }
 
         [Fact]
+        public void DefaultsAreThreadedIntoOutputStep()
+        {
+            var wizard = new WizardViewModel(
+                new NullFolderBrowserService(), new NullViewportSelectionService(),
+                new NullThemeService(), new NullExportRunner(),
+                links: null, jointCount: 0, previewModel: null, joints: null,
+                defaultPackageName: "My Robot!",
+                defaultOutputFolder: @"D:\models\arm");
+
+            Assert.Equal("My Robot!", wizard.OutputStep.PackageName);
+            Assert.Equal(@"D:\models\arm", wizard.OutputStep.OutputFolder);
+            Assert.Equal("my_robot", wizard.OutputStep.SanitizedPackageName);
+        }
+
+        [Fact]
+        public void OutputStepEmptyWhenNoDefaultsSupplied()
+        {
+            var wizard = new WizardViewModel();
+            Assert.Equal(string.Empty, wizard.OutputStep.PackageName);
+            Assert.Equal(string.Empty, wizard.OutputStep.OutputFolder);
+        }
+
+        [Fact]
         public void ReviewReachableOnlyAfterTheChain()
         {
             // Output step blank ⇒ chain blocks at index 2, Review unreachable.

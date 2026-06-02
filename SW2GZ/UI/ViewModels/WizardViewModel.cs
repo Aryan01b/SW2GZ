@@ -30,7 +30,9 @@ namespace SW2GZ.UI.ViewModels
             IReadOnlyList<LinkDto> links = null,
             int jointCount = 0,
             RobotModel previewModel = null,
-            IReadOnlyList<JointDto> joints = null)
+            IReadOnlyList<JointDto> joints = null,
+            string defaultPackageName = null,
+            string defaultOutputFolder = null)
         {
             folderBrowser ??= new NullFolderBrowserService();
             viewportSelection ??= new NullViewportSelectionService();
@@ -50,7 +52,7 @@ namespace SW2GZ.UI.ViewModels
 
             ModeStep = new ModeStepViewModel();
             TargetsStep = new TargetsStepViewModel();
-            OutputStep = new OutputStepViewModel(folderBrowser);
+            OutputStep = new OutputStepViewModel(folderBrowser, defaultPackageName, defaultOutputFolder);
             LinksStep = new LinksStepViewModel(links, viewportSelection);
             JointsStep = new JointsStepViewModel(joints);
             CollisionStep = new CollisionStepViewModel();

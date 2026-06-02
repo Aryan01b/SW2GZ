@@ -18,10 +18,22 @@ namespace SW2GZ.UI.ViewModels
         private string _outputFolder = string.Empty;
         private string _packageName = string.Empty;
 
-        public OutputStepViewModel(IFolderBrowserService folderBrowser)
+        public OutputStepViewModel(
+            IFolderBrowserService folderBrowser,
+            string defaultPackageName = null,
+            string defaultOutputFolder = null)
             : base("Output", "Folder & package")
         {
             _folderBrowser = folderBrowser ?? new NullFolderBrowserService();
+
+            // Smart defaults seeded from the active assembly (when supplied).
+            // Empty/null leaves the field blank — the pre-seed behavior. The live
+            // SanitizedPackageName preview keeps working off the raw seed.
+            if (!string.IsNullOrWhiteSpace(defaultPackageName))
+                _packageName = defaultPackageName;
+            if (!string.IsNullOrWhiteSpace(defaultOutputFolder))
+                _outputFolder = defaultOutputFolder;
+
             BrowseCommand = new RelayCommand(Browse);
         }
 

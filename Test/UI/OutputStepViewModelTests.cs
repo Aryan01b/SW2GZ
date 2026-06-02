@@ -74,5 +74,52 @@ namespace SW2GZ.Test.UI
 
             Assert.Equal(@"C:\start", vm.OutputFolder);
         }
+
+        [Fact]
+        public void CtorSeedsPackageNameAndOutputFolderFromDefaults()
+        {
+            var vm = new OutputStepViewModel(
+                new FakeFolderBrowserService(null),
+                defaultPackageName: "My Robot!",
+                defaultOutputFolder: @"D:\models\arm");
+
+            Assert.Equal("My Robot!", vm.PackageName);
+            Assert.Equal(@"D:\models\arm", vm.OutputFolder);
+        }
+
+        [Fact]
+        public void SeededPackageNameDrivesSanitizedPreview()
+        {
+            var vm = new OutputStepViewModel(
+                new FakeFolderBrowserService(null),
+                defaultPackageName: "My Robot!");
+
+            Assert.Equal("my_robot", vm.SanitizedPackageName);
+        }
+
+        [Fact]
+        public void SeededDefaultsSatisfyAdvanceGate()
+        {
+            var vm = new OutputStepViewModel(
+                new FakeFolderBrowserService(null),
+                defaultPackageName: "three_dof_arm",
+                defaultOutputFolder: @"D:\ros2_ws\src");
+
+            Assert.True(vm.CanAdvance());
+        }
+
+        [Fact]
+        public void NullOrEmptyDefaultsLeaveFieldsEmpty()
+        {
+            var vmNull = new OutputStepViewModel(
+                new FakeFolderBrowserService(null), null, null);
+            Assert.Equal(string.Empty, vmNull.PackageName);
+            Assert.Equal(string.Empty, vmNull.OutputFolder);
+
+            var vmEmpty = new OutputStepViewModel(
+                new FakeFolderBrowserService(null), "   ", "");
+            Assert.Equal(string.Empty, vmEmpty.PackageName);
+            Assert.Equal(string.Empty, vmEmpty.OutputFolder);
+        }
     }
 }

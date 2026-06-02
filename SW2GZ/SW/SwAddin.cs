@@ -468,8 +468,26 @@ namespace SW2GZ.SW
                 if (string.IsNullOrWhiteSpace(title))
                     title = "robot";
 
+                // Smart defaults for the wizard's Output step, seeded from the
+                // active assembly. Package name = the doc title without its
+                // extension (GetTitle may carry ".SLDASM"). Output folder = the
+                // assembly's own folder when saved, else MyDocuments.
+                string defaultPackageName =
+                    System.IO.Path.GetFileNameWithoutExtension(title);
+                if (string.IsNullOrWhiteSpace(defaultPackageName))
+                    defaultPackageName = title;
+
+                string defaultOutputFolder = null;
+                string docPath = modeldoc.GetPathName();
+                if (!string.IsNullOrWhiteSpace(docPath))
+                    defaultOutputFolder = System.IO.Path.GetDirectoryName(docPath);
+                if (string.IsNullOrWhiteSpace(defaultOutputFolder))
+                    defaultOutputFolder = System.Environment.GetFolderPath(
+                        System.Environment.SpecialFolder.MyDocuments);
+
                 var composer = new WizardModelComposer(mass, walker, tess, appearance);
-                var meta = new RobotMeta(title, null, null, null, CoordinateConvention.Identity);
+                var meta = new RobotMeta(
+                    defaultPackageName, null, null, null, CoordinateConvention.Identity);
                 WizardPreview preview = composer.Compose(meta);
 
                 // Build the wizard VM from the preview + the SW-backed services so
@@ -482,7 +500,9 @@ namespace SW2GZ.SW
                     preview.Links,
                     preview.JointCount,
                     preview.Model,
-                    preview.Joints);
+                    preview.Joints,
+                    defaultPackageName,
+                    defaultOutputFolder);
 
                 // Ensure a WPF Application exists for resource resolution; a single
                 // ShowDialog works even without one, but the wizard pulls merged
