@@ -326,14 +326,14 @@ namespace SW2GZ.SW
                     // Remove any existing SW2GZ tab from a previous load BEFORE re-adding,
                     // otherwise AddCommandTabBox() stacks a second button box on top of the
                     // persisted one each session — the cause of the duplicate ribbon button.
-                    ICommandTab existing = CmdMgr.GetCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
+                    CommandTab existing = CmdMgr.GetCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
                     if (existing != null)
                     {
                         CmdMgr.RemoveCommandTab(existing);
                         existing = null;
                     }
 
-                    ICommandTab tab = CmdMgr.AddCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
+                    CommandTab tab = CmdMgr.AddCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
                     if (tab != null)
                     {
                         ICommandTabBox box = tab.AddCommandTabBox();
