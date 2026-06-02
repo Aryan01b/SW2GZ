@@ -22,6 +22,11 @@ namespace SW2GZ.Build
             public double Offset;          // Normal · A (plane equation: n·x = offset)
             public List<int> Conflicts;    // indices of points in front of this face
             public bool Removed;
+            // Cached farthest conflict point + its signed distance, maintained at
+            // conflict-assignment time so the eye-point selection loop is O(faces)
+            // instead of re-scanning every face's conflict list each iteration.
+            public int FarthestPoint;      // index of farthest conflict, or -1 if none
+            public double FarthestDist;    // signed distance of FarthestPoint (or -inf)
         }
 
         private readonly struct Vec3D
@@ -158,16 +163,18 @@ namespace SW2GZ.Build
                 Face pickedFace = null;
                 double bestFarDist = frontEps;
                 int eyeIdx = -1;
+                // O(faces) pass: each live face caches its farthest conflict point
+                // and signed distance (maintained in AssignPoint), so there is no
+                // need to re-scan conflict lists here.
                 for (int fi = 0; fi < faces.Count; fi++)
                 {
                     var f = faces[fi];
-                    if (f.Removed || f.Conflicts == null || f.Conflicts.Count == 0) continue;
-                    // Find the farthest point of this face's conflict list.
-                    for (int ci = 0; ci < f.Conflicts.Count; ci++)
+                    if (f.Removed || f.FarthestPoint < 0) continue;
+                    if (f.FarthestDist > bestFarDist)
                     {
-                        int pi = f.Conflicts[ci];
-                        double d = Vec3D.Dot(f.Normal, pts[pi]) - f.Offset;
-                        if (d > bestFarDist) { bestFarDist = d; pickedFace = f; eyeIdx = pi; }
+                        bestFarDist = f.FarthestDist;
+                        pickedFace = f;
+                        eyeIdx = f.FarthestPoint;
                     }
                 }
                 if (pickedFace == null) break;
@@ -212,8 +219,10 @@ namespace SW2GZ.Build
                 if (horizon.Count == 0)
                 {
                     // Degenerate: eye visible to all faces but no horizon — shouldn't happen
-                    // for non-degenerate clouds. Drop point safely.
+                    // for non-degenerate clouds. Drop point safely and refresh the cached
+                    // farthest conflict (the dropped eye was the cached maximum).
                     pickedFace.Conflicts.Remove(eyeIdx);
+                    RefreshFarthest(pickedFace, pts);
                     continue;
                 }
 
@@ -351,7 +360,28 @@ namespace SW2GZ.Build
                 Offset = Vec3D.Dot(nu, va),
                 Conflicts = new List<int>(),
                 Removed = false,
+                FarthestPoint = -1,
+                FarthestDist = double.NegativeInfinity,
             };
+        }
+
+        // Recompute a face's cached farthest conflict from its current conflict
+        // list. Only needed on the rare no-horizon path where the cached eye is
+        // dropped but the face itself survives.
+        private static void RefreshFarthest(Face f, Vec3D[] pts)
+        {
+            f.FarthestPoint = -1;
+            f.FarthestDist = double.NegativeInfinity;
+            if (f.Conflicts == null) return;
+            foreach (int pi in f.Conflicts)
+            {
+                double d = Vec3D.Dot(f.Normal, pts[pi]) - f.Offset;
+                if (d > f.FarthestDist)
+                {
+                    f.FarthestDist = d;
+                    f.FarthestPoint = pi;
+                }
+            }
         }
 
         private static void AssignPoint(int idx, Vec3D[] pts, List<Face> faces, double frontEps)
@@ -365,7 +395,17 @@ namespace SW2GZ.Build
                 double d = Vec3D.Dot(f.Normal, pts[idx]) - f.Offset;
                 if (d > bestD) { bestD = d; best = f; }
             }
-            if (best != null) best.Conflicts.Add(idx);
+            if (best != null)
+            {
+                best.Conflicts.Add(idx);
+                // Maintain the cached farthest conflict for this face so the
+                // eye-point selection loop never re-scans conflict lists.
+                if (bestD > best.FarthestDist)
+                {
+                    best.FarthestDist = bestD;
+                    best.FarthestPoint = idx;
+                }
+            }
         }
     }
 }
