@@ -39,6 +39,7 @@ using SW2GZ.Build.Model;
 using SW2GZ.Ros2;
 using SW2GZ.SwSurface;
 using SW2GZ.SwSurface.Abstractions;
+using SW2GZ.UI;
 using SW2GZ.Utilities;
 using System.Collections.Generic;
 using System.IO;
@@ -85,22 +86,16 @@ namespace SW2GZ.URDFExport
         private PropertyManagerPageTextbox PMTextEmail;
         private PropertyManagerPageCombobox PMComboLicense;
 
-        // Step 3 (Links) controls.
-        private PropertyManagerPageCombobox PMComboLink;
-        private PropertyManagerPageLabel PMLabelLinkProgress;
-        private PropertyManagerPageSelectionbox PMSelectionLink;
-        private PropertyManagerPageTextbox PMTextLinkName;
-        private PropertyManagerPageCheckbox PMCheckBase;
-        private PropertyManagerPageButton PMButtonAssignLink;
-        private PropertyManagerPageButton PMButtonClearLink;
+        // Step 3 (Links) controls — embedded WinForms hierarchy tree + pick funnel.
+        private PropertyManagerPageWindowFromHandle PMTreeHandle;
+        private LinkTreeView linkTree;
+        private PropertyManagerPageSelectionbox PMPickFunnel;
         private PropertyManagerPageButton PMButtonAddLink;
         private PropertyManagerPageButton PMButtonRemoveLink;
-        private PropertyManagerPageButton PMButtonPrevLink;
-        private PropertyManagerPageButton PMButtonNextLink;
         private PropertyManagerPageLabel PMLabelLinkMass;
         private PropertyManagerPageLabel PMLabelLinkValidation;
+        private LinkDef activeLink;
 
-        private int currentLinkIndex;
         private const int LinkSelectionMark = 3;
         private IMassProperties massProps;                  // combined-mass readout
         private readonly List<string> allComponentIds = new List<string>();
@@ -167,20 +162,12 @@ namespace SW2GZ.URDFExport
         private const int LabelTargetsID      = StepIdBase + 1 * 20 + 13;
 
         // Step 3 (Links) control IDs (step index 2 → base 140).
-        private const int ComboLinkID           = StepIdBase + 2 * 20 + 2;
-        private const int LabelLinkProgressID   = StepIdBase + 2 * 20 + 3;
-        private const int LabelLinkNameID       = StepIdBase + 2 * 20 + 4;
-        private const int TextLinkNameID        = StepIdBase + 2 * 20 + 5;
-        private const int SelectionLinkID       = StepIdBase + 2 * 20 + 6;
-        private const int ButtonAssignLinkID    = StepIdBase + 2 * 20 + 7;
-        private const int ButtonClearLinkID     = StepIdBase + 2 * 20 + 8;
-        private const int CheckBaseID           = StepIdBase + 2 * 20 + 9;
-        private const int ButtonAddLinkID       = StepIdBase + 2 * 20 + 10;
-        private const int ButtonRemoveLinkID    = StepIdBase + 2 * 20 + 11;
-        private const int ButtonPrevLinkID      = StepIdBase + 2 * 20 + 12;
-        private const int ButtonNextLinkID      = StepIdBase + 2 * 20 + 13;
-        private const int LabelLinkMassID       = StepIdBase + 2 * 20 + 14;
-        private const int LabelLinkValidationID = StepIdBase + 2 * 20 + 15;
+        private const int TreeHandleID          = StepIdBase + 2 * 20 + 2;
+        private const int PickFunnelID          = StepIdBase + 2 * 20 + 3;
+        private const int ButtonAddLinkID       = StepIdBase + 2 * 20 + 4;
+        private const int ButtonRemoveLinkID    = StepIdBase + 2 * 20 + 5;
+        private const int LabelLinkMassID       = StepIdBase + 2 * 20 + 6;
+        private const int LabelLinkValidationID = StepIdBase + 2 * 20 + 7;
 
         private int StepCount => StepNames.Length;
 
@@ -493,19 +480,20 @@ namespace SW2GZ.URDFExport
         // ───────────────────────────── step 3: links ─────────────────────────
 
         // Enumerates top-level components (records allComponentIds) and, only when
-        // the checkpoint has no links yet, seeds one LinkDef per component.
+        // the checkpoint has no links yet, seeds a single tree: the grounded (or
+        // first) component is the root/base, the rest are parented under it.
         private void SeedLinksFromAssembly()
         {
             allComponentIds.Clear();
             object[] comps = (object[])((AssemblyDoc)model).GetComponents(true);
-            var topLevel = new List<Component2>();
+            var top = new List<Component2>();
             if (comps != null)
             {
                 foreach (object o in comps)
                 {
                     var c = (Component2)o;
                     if (c.IsSuppressed()) continue;
-                    topLevel.Add(c);
+                    top.Add(c);
                     allComponentIds.Add(c.Name2);
                 }
             }
@@ -513,77 +501,69 @@ namespace SW2GZ.URDFExport
             if (config.Links == null) config.Links = new List<LinkDef>();
             if (config.Links.Count > 0) return;   // resume from checkpoint
 
-            bool baseAssigned = false;
-            foreach (Component2 c in topLevel)
+            int rootIdx = 0;
+            for (int i = 0; i < top.Count; i++)
             {
-                bool isBase = !baseAssigned && IsGrounded(c);
-                if (isBase) baseAssigned = true;
+                try { if (top[i].IsFixed()) { rootIdx = i; break; } } catch { }
+            }
+            string rootName = top.Count > 0
+                ? RosNameSanitizer.Sanitize(top[rootIdx].Name2).Value : "base_link";
+
+            for (int i = 0; i < top.Count; i++)
+            {
                 config.Links.Add(new LinkDef
                 {
-                    Name = RosNameSanitizer.Sanitize(c.Name2).Value,
-                    ComponentIds = new List<string> { c.Name2 },
-                    IsBase = isBase,
+                    Name = RosNameSanitizer.Sanitize(top[i].Name2).Value,
+                    ComponentIds = new List<string> { top[i].Name2 },
+                    ParentName = i == rootIdx ? "" : rootName,
                 });
             }
-            if (!baseAssigned && config.Links.Count > 0) config.Links[0].IsBase = true;
         }
 
-        private static bool IsGrounded(Component2 c)
-        {
-            try { return c.IsFixed(); } catch { return false; }
-        }
-
-        // Step 3 — link selector + viewport selection box + name + base flag +
-        // add/remove/prev/next + mass + validation. Mirrors GeometryPropertyManager.
+        // Step 3 — embedded WinForms link-hierarchy tree + pick funnel + Add/Remove.
         private void BuildLinksStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
         {
             int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
 
-            PMComboLink = (PropertyManagerPageCombobox)group.AddControl2(
-                ComboLinkID, (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
-                "", (short)indent, visibleEnabled, "Select the link to edit");
-            PMComboLink.Style =
-                (int)swPropMgrPageComboBoxStyle_e.swPropMgrPageComboBoxStyle_EditBoxReadOnly;
+            linkTree = new LinkTreeView { Height = 220, Visible = true };
+            linkTree.ActiveLinkChanged += (s, l) =>
+            {
+                activeLink = l;
+                if (activeLink != null) UpdateMassReadout(activeLink);
+                UpdateValidationLabel();
+                if (PMPickFunnel != null) PMPickFunnel.SetSelectionFocus();
+            };
+            linkTree.LinksChanged += (s, e) => UpdateValidationLabel();
 
-            PMLabelLinkProgress = AddFieldLabel(group, LabelLinkProgressID, "Link 0 of 0", leftEdge, labelOpts);
+            PMTreeHandle = (PropertyManagerPageWindowFromHandle)group.AddControl2(
+                TreeHandleID, (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
+                "Link tree", (short)leftEdge, visibleEnabled,
+                "Drag to re-parent; F2 to rename; right-click to set the base link");
+            PMTreeHandle.Height = 220;
+            PMTreeHandle.SetWindowHandlex64(linkTree.Handle.ToInt64());
 
-            AddFieldLabel(group, LabelLinkNameID, "Link name", leftEdge, labelOpts);
-            PMTextLinkName = (PropertyManagerPageTextbox)group.AddControl2(
-                TextLinkNameID, (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
-                "", (short)indent, visibleEnabled, "ROS link name (sanitized on assign)");
-
-            PMSelectionLink = (PropertyManagerPageSelectionbox)group.AddControl2(
-                SelectionLinkID, (short)swPropertyManagerPageControlType_e.swControlType_Selectionbox,
-                "Components", (short)indent, visibleEnabled,
-                "Pick the components for this link in the 3D viewport");
+            PMPickFunnel = (PropertyManagerPageSelectionbox)group.AddControl2(
+                PickFunnelID, (short)swPropertyManagerPageControlType_e.swControlType_Selectionbox,
+                "Pick geometry for the selected link", (short)indent, visibleEnabled,
+                "Pick components in the viewport — assigned to the selected link instantly");
             var filters = new swSelectType_e[]
             {
                 swSelectType_e.swSelCOMPONENTS, swSelectType_e.swSelSOLIDBODIES,
             };
-            PMSelectionLink.SingleEntityOnly = false;
-            PMSelectionLink.AllowMultipleSelectOfSameEntity = false;
-            PMSelectionLink.AllowSelectInMultipleBoxes = false;
-            PMSelectionLink.Height = 50;
-            PMSelectionLink.Mark = LinkSelectionMark;
-            PMSelectionLink.SetSelectionFilters((object)filters);
-
-            PMButtonAssignLink = AddLinkButton(group, ButtonAssignLinkID, "Assign selection", indent, visibleEnabled);
-            PMButtonClearLink = AddLinkButton(group, ButtonClearLinkID, "Clear", indent, visibleEnabled);
-
-            PMCheckBase = (PropertyManagerPageCheckbox)group.AddControl2(
-                CheckBaseID, (short)swPropertyManagerPageControlType_e.swControlType_Checkbox,
-                "Base (root) link", (short)indent, visibleEnabled, "Mark this link as the robot root");
+            PMPickFunnel.SingleEntityOnly = false;
+            PMPickFunnel.AllowMultipleSelectOfSameEntity = false;
+            PMPickFunnel.Height = 30;
+            PMPickFunnel.Mark = LinkSelectionMark;
+            PMPickFunnel.SetSelectionFilters((object)filters);
 
             PMButtonAddLink = AddLinkButton(group, ButtonAddLinkID, "Add link", indent, visibleEnabled);
             PMButtonRemoveLink = AddLinkButton(group, ButtonRemoveLinkID, "Remove link", indent, visibleEnabled);
-            PMButtonPrevLink = AddLinkButton(group, ButtonPrevLinkID, "< Prev link", indent, visibleEnabled);
-            PMButtonNextLink = AddLinkButton(group, ButtonNextLinkID, "Next link >", indent, visibleEnabled);
 
             PMLabelLinkMass = AddFieldLabel(group, LabelLinkMassID, "", leftEdge, labelOpts);
             PMLabelLinkValidation = AddFieldLabel(group, LabelLinkValidationID, "", leftEdge, labelOpts);
 
-            PopulateLinkCombo();
-            LoadCurrentLink();
+            linkTree.SetLinks(config.Links);
+            UpdateValidationLabel();
         }
 
         private PropertyManagerPageButton AddLinkButton(
@@ -596,39 +576,55 @@ namespace SW2GZ.URDFExport
             return b;
         }
 
-        private LinkDef CurrentLink =>
-            (config.Links != null && currentLinkIndex >= 0 && currentLinkIndex < config.Links.Count)
-                ? config.Links[currentLinkIndex] : null;
-
-        private void PopulateLinkCombo()
+        // Pick funnel: every component now in the box is assigned to the active link
+        // (moved off any other link), the box is cleared, and the tree rebuilt.
+        private void OnFunnelChanged()
         {
-            if (PMComboLink == null) return;
-            PMComboLink.Clear();
-            foreach (LinkDef l in config.Links) PMComboLink.AddItems(l.Name);
+            if (activeLink == null || linkTree == null) return;
+            foreach (string id in ReadSelectionBoxNames())
+                LinkHierarchy.AssignComponent(config.Links, activeLink.Name, id);
+            model.ClearSelection2(true);
+            linkTree.Rebuild();
+            UpdateMassReadout(activeLink);
+            UpdateValidationLabel();
         }
 
-        private void LoadCurrentLink()
+        private void AddLink()
         {
-            if (PMComboLink == null) return;
-            int n = config.Links.Count;
-            if (currentLinkIndex >= n) currentLinkIndex = n - 1;
-            if (currentLinkIndex < 0) currentLinkIndex = 0;
-            PMLabelLinkProgress.Caption = "Link " + (n == 0 ? 0 : currentLinkIndex + 1) + " of " + n;
-
-            LinkDef link = CurrentLink;
-            if (link == null)
-            {
-                PMTextLinkName.Text = "";
-                PMLabelLinkMass.Caption = "";
-                UpdateValidationLabel();
-                return;
-            }
-            if (n > 0) PMComboLink.CurrentSelection = (short)currentLinkIndex;
-            PMTextLinkName.Text = link.Name ?? "";
-            PMCheckBase.Checked = link.IsBase;
-            UpdateMassReadout(link);
+            List<LinkDef> roots = LinkHierarchy.Roots(config.Links);
+            string parent = activeLink?.Name ?? (roots.Count > 0 ? roots[0].Name : "");
+            var link = new LinkDef { Name = UniqueLinkName(), ParentName = parent };
+            config.Links.Add(link);
+            linkTree.SetLinks(config.Links);
+            linkTree.SelectByLinkName(link.Name);
             UpdateValidationLabel();
-            if (PMSelectionLink != null) PMSelectionLink.SetSelectionFocus();
+        }
+
+        private void RemoveLink()
+        {
+            if (activeLink == null || config.Links.Count <= 1) return;
+            string removed = activeLink.Name, parent = activeLink.ParentName ?? "";
+            foreach (LinkDef l in config.Links)
+                if (l.ParentName == removed) l.ParentName = parent;   // children adopt grandparent
+            config.Links.Remove(activeLink);
+            if (LinkHierarchy.Roots(config.Links).Count == 0 && config.Links.Count > 0)
+                config.Links[0].ParentName = "";                      // ensure a root remains
+            activeLink = null;
+            linkTree.SetLinks(config.Links);
+            UpdateValidationLabel();
+        }
+
+        private string UniqueLinkName()
+        {
+            int n = config.Links.Count + 1;
+            while (true)
+            {
+                string candidate = RosNameSanitizer.Sanitize("link_" + n).Value;
+                bool taken = false;
+                foreach (LinkDef l in config.Links) if (l.Name == candidate) { taken = true; break; }
+                if (!taken) return candidate;
+                n++;
+            }
         }
 
         private void UpdateMassReadout(LinkDef link)
@@ -667,13 +663,6 @@ namespace SW2GZ.URDFExport
                 : issues.Count + " issue(s): " + issues[0];
         }
 
-        private void GoToLink(int index)
-        {
-            if (config.Links.Count == 0) return;
-            currentLinkIndex = index;
-            LoadCurrentLink();
-        }
-
         // Reads the Component2.Name2 / Body2.Name of every entity in our selection box.
         private List<string> ReadSelectionBoxNames()
         {
@@ -703,65 +692,6 @@ namespace SW2GZ.URDFExport
                 default:
                     return null;
             }
-        }
-
-        private void AssignCurrentLink()
-        {
-            LinkDef link = CurrentLink;
-            if (link == null) return;
-            List<string> names = ReadSelectionBoxNames();
-            if (names.Count == 0)
-            {
-                MessageBox.Show("Pick one or more components in the viewport, then press Assign.");
-                return;
-            }
-            link.ComponentIds = names;
-            string raw = PMTextLinkName.Text;
-            if (!string.IsNullOrWhiteSpace(raw))
-            {
-                link.Name = RosNameSanitizer.Sanitize(raw).Value;
-                PMTextLinkName.Text = link.Name;
-            }
-            PopulateLinkCombo();
-            LoadCurrentLink();
-        }
-
-        private void ClearCurrentLink()
-        {
-            LinkDef link = CurrentLink;
-            if (link == null) return;
-            link.ComponentIds = new List<string>();
-            model.ClearSelection2(true);
-            LoadCurrentLink();
-        }
-
-        private void AddLink()
-        {
-            config.Links.Add(new LinkDef
-            {
-                Name = RosNameSanitizer.Sanitize("link_" + (config.Links.Count + 1)).Value,
-            });
-            currentLinkIndex = config.Links.Count - 1;
-            PopulateLinkCombo();
-            LoadCurrentLink();
-        }
-
-        private void RemoveLink()
-        {
-            if (config.Links.Count == 0) return;
-            config.Links.RemoveAt(currentLinkIndex);
-            if (currentLinkIndex >= config.Links.Count) currentLinkIndex = config.Links.Count - 1;
-            PopulateLinkCombo();
-            LoadCurrentLink();
-        }
-
-        private void SetCurrentBase(bool isBase)
-        {
-            LinkDef link = CurrentLink;
-            if (link == null) return;
-            if (isBase) foreach (LinkDef l in config.Links) l.IsBase = false;
-            link.IsBase = isBase;
-            UpdateValidationLabel();
         }
 
         // ───────────────────────────── navigation ────────────────────────────
@@ -871,9 +801,9 @@ namespace SW2GZ.URDFExport
         void IPropertyManagerPage2Handler9.AfterActivation()
         {
             ShowStep(currentStep);
-            if (currentStep == 2 && PMSelectionLink != null)
+            if (currentStep == 2 && PMPickFunnel != null)
             {
-                PMSelectionLink.SetSelectionFocus();
+                PMPickFunnel.SetSelectionFocus();
             }
         }
 
@@ -886,12 +816,8 @@ namespace SW2GZ.URDFExport
                     case ButtonBackID: GoBack(); break;
                     case ButtonNextID: GoNext(); break;
                     case ButtonBrowseID: BrowseForOutputFolder(); break;
-                    case ButtonAssignLinkID: AssignCurrentLink(); break;
-                    case ButtonClearLinkID: ClearCurrentLink(); break;
                     case ButtonAddLinkID: AddLink(); break;
                     case ButtonRemoveLinkID: RemoveLink(); break;
-                    case ButtonPrevLinkID: GoToLink(currentLinkIndex - 1); break;
-                    case ButtonNextLinkID: GoToLink(currentLinkIndex + 1); break;
                     default: break;
                 }
             }
@@ -929,8 +855,8 @@ namespace SW2GZ.URDFExport
         bool IPropertyManagerPage2Handler9.OnKeystroke(int Wparam, int Message, int Lparam, int Id) => false;
         bool IPropertyManagerPage2Handler9.OnSubmitSelection(int Id, object Selection, int SelType, ref string ItemText)
         {
-            // Step 3 selection box: accept only components / solid bodies.
-            if (Id != SelectionLinkID) return true;
+            // Step 3 pick funnel: accept only components / solid bodies.
+            if (Id != PickFunnelID) return true;
             switch ((swSelectType_e)SelType)
             {
                 case swSelectType_e.swSelCOMPONENTS:
@@ -955,16 +881,13 @@ namespace SW2GZ.URDFExport
         void IPropertyManagerPage2Handler9.OnSelectionboxFocusChanged(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxListChanged(int Id, int Count)
         {
-            if (Id == SelectionLinkID) UpdateValidationLabel();
+            if (Id == PickFunnelID && Count > 0) OnFunnelChanged();
         }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutCreated(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutDestroyed(int Id) { }
         void IPropertyManagerPage2Handler9.OnNumberboxChanged(int Id, double Value) { }
         void IPropertyManagerPage2Handler9.OnNumberBoxTrackingCompleted(int Id, double Value) { }
-        void IPropertyManagerPage2Handler9.OnCheckboxCheck(int Id, bool Checked)
-        {
-            if (Id == CheckBaseID) SetCurrentBase(Checked);
-        }
+        void IPropertyManagerPage2Handler9.OnCheckboxCheck(int Id, bool Checked) { }
         void IPropertyManagerPage2Handler9.OnComboboxEditChanged(int Id, string Text)
         {
             if (Id == TextLicenseID)
@@ -978,10 +901,6 @@ namespace SW2GZ.URDFExport
             if (Id == TextLicenseID)
             {
                 config.License = PMComboLicense.get_ItemText((short)Item) ?? "";
-            }
-            else if (Id == ComboLinkID)
-            {
-                GoToLink(Item);
             }
         }
         void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item) { }
