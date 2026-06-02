@@ -275,8 +275,22 @@ namespace SW2GZ.SW
             const string hint = "Generate a simulation-ready ROS 2 package (URDF, ros2_control, Gazebo, sensors) from this assembly.";
 
             int errs = 0;
+
+            // Guard against SolidWorks' cached CommandManager layout. If the commands
+            // stored in the registry from a previous load differ from what we register
+            // now, tell SW to discard the cached group (ignorePrevious = true) instead
+            // of merging old + new into duplicate buttons.
+            bool ignorePrevious = false;
+            object registryIDs;
+            int[] knownIDs = new int[] { sw2gzWizardUserID };
+            bool hadRegistryData = CmdMgr.GetGroupDataFromRegistry(sw2gzCmdGroupID, out registryIDs);
+            if (hadRegistryData && !CompareIDs((int[])registryIDs, knownIDs))
+            {
+                ignorePrevious = true;
+            }
+
             ICommandGroup grp = CmdMgr.CreateCommandGroup2(
-                sw2gzCmdGroupID, title, toolTip, hint, -1, false, ref errs);
+                sw2gzCmdGroupID, title, toolTip, hint, -1, ignorePrevious, ref errs);
             if (grp == null)
             {
                 logger.Error("Failed to create SW2GZ command group (error code " + errs + ")");
@@ -308,11 +322,18 @@ namespace SW2GZ.SW
                 try
                 {
                     int cmdId = grp.get_CommandID(cmdIndex);
-                    ICommandTab tab = CmdMgr.GetCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
-                    if (tab == null)
+
+                    // Remove any existing SW2GZ tab from a previous load BEFORE re-adding,
+                    // otherwise AddCommandTabBox() stacks a second button box on top of the
+                    // persisted one each session — the cause of the duplicate ribbon button.
+                    ICommandTab existing = CmdMgr.GetCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
+                    if (existing != null)
                     {
-                        tab = CmdMgr.AddCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
+                        CmdMgr.RemoveCommandTab(existing);
+                        existing = null;
                     }
+
+                    ICommandTab tab = CmdMgr.AddCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
                     if (tab != null)
                     {
                         ICommandTabBox box = tab.AddCommandTabBox();
@@ -331,6 +352,20 @@ namespace SW2GZ.SW
 
                 logger.Info("SW2GZ command group activated");
             }
+        }
+
+        // True iff the registry-stored command IDs match exactly what the add-in
+        // registers now. Used to decide whether SolidWorks' cached CommandManager
+        // layout is stale (see AddCommandMgr / ignorePrevious).
+        private static bool CompareIDs(int[] stored, int[] known)
+        {
+            if (stored == null || known == null) return false;
+            if (stored.Length != known.Length) return false;
+            foreach (int id in known)
+            {
+                if (System.Array.IndexOf(stored, id) < 0) return false;
+            }
+            return true;
         }
 
         public int ToolbarEnableMethod()
