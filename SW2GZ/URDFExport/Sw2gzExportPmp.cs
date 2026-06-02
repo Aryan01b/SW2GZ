@@ -113,7 +113,7 @@ namespace SW2GZ.URDFExport
         {
             "Mode",
             "Output",
-            "Geometry",
+            "Create base model structure",
             "Joints",
             "Review",
         };
@@ -122,7 +122,7 @@ namespace SW2GZ.URDFExport
         {
             "Choose what to generate: Robot package / Gz model / Gz world.",
             "Where to save + package name + ROS 2 / Gz versions.",
-            "Define links: assign bodies to each link.",
+            "Build the link tree and assign geometry to each link.",
             "Define joints: type, axis/orientation, naming.",
             "Summary + Finish.",
         };
@@ -525,7 +525,8 @@ namespace SW2GZ.URDFExport
         {
             int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
 
-            linkTree = new LinkTreeView { Height = 220, Visible = true };
+            const int treeHeight = 170;
+            linkTree = new LinkTreeView { Height = treeHeight, Visible = true };
             linkTree.ActiveLinkChanged += (s, l) =>
             {
                 activeLink = l;
@@ -535,16 +536,21 @@ namespace SW2GZ.URDFExport
             };
             linkTree.LinksChanged += (s, e) => UpdateValidationLabel();
 
+            AddFieldLabel(group, LabelLinkMassID + 100,
+                "Tree: click a link, then pick its parts in the viewport. " +
+                "Drag to re-parent, F2 to rename, right-click to set base.",
+                leftEdge, labelOpts);
+
             PMTreeHandle = (PropertyManagerPageWindowFromHandle)group.AddControl2(
                 TreeHandleID, (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
                 "Link tree", (short)leftEdge, visibleEnabled,
                 "Drag to re-parent; F2 to rename; right-click to set the base link");
-            PMTreeHandle.Height = 220;
+            PMTreeHandle.Height = treeHeight;
             PMTreeHandle.SetWindowHandlex64(linkTree.Handle.ToInt64());
 
             PMPickFunnel = (PropertyManagerPageSelectionbox)group.AddControl2(
                 PickFunnelID, (short)swPropertyManagerPageControlType_e.swControlType_Selectionbox,
-                "Pick geometry for the selected link", (short)indent, visibleEnabled,
+                "Parts for the selected link", (short)leftEdge, visibleEnabled,
                 "Pick components in the viewport — assigned to the selected link instantly");
             var filters = new swSelectType_e[]
             {
@@ -552,7 +558,7 @@ namespace SW2GZ.URDFExport
             };
             PMPickFunnel.SingleEntityOnly = false;
             PMPickFunnel.AllowMultipleSelectOfSameEntity = false;
-            PMPickFunnel.Height = 30;
+            PMPickFunnel.Height = 24;
             PMPickFunnel.Mark = LinkSelectionMark;
             PMPickFunnel.SetSelectionFilters((object)filters);
 
@@ -563,6 +569,9 @@ namespace SW2GZ.URDFExport
             PMLabelLinkValidation = AddFieldLabel(group, LabelLinkValidationID, "", leftEdge, labelOpts);
 
             linkTree.SetLinks(config.Links);
+            // Auto-select the base so picking geometry works immediately (flow fix).
+            List<LinkDef> roots = LinkHierarchy.Roots(config.Links);
+            if (roots.Count > 0) linkTree.SelectByLinkName(roots[0].Name);
             UpdateValidationLabel();
         }
 
@@ -587,6 +596,7 @@ namespace SW2GZ.URDFExport
             linkTree.Rebuild();
             UpdateMassReadout(activeLink);
             UpdateValidationLabel();
+            if (PMPickFunnel != null) PMPickFunnel.SetSelectionFocus();
         }
 
         private void AddLink()

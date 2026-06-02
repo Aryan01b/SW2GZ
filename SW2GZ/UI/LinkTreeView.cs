@@ -23,6 +23,7 @@ namespace SW2GZ.UI
     public sealed class LinkTreeView : TreeView
     {
         private List<LinkDef> links;
+        private TreeNode dropTarget;   // node currently highlighted as the drop parent
 
         public event EventHandler<LinkDef> ActiveLinkChanged = delegate { };
         public event EventHandler LinksChanged = delegate { };
@@ -32,9 +33,11 @@ namespace SW2GZ.UI
             LabelEdit = true;
             AllowDrop = true;
             HideSelection = false;
+            ShowNodeToolTips = true;
             ItemDrag += OnItemDrag;
             DragEnter += (s, e) => e.Effect = DragDropEffects.Move;
             DragOver += OnDragOver;
+            DragLeave += (s, e) => ClearDropHighlight();
             DragDrop += OnDragDrop;
             AfterSelect += OnAfterSelect;
             AfterLabelEdit += OnAfterLabelEdit;
@@ -42,6 +45,15 @@ namespace SW2GZ.UI
             var menu = new ContextMenuStrip();
             menu.Items.Add("Set as base link", null, OnSetAsBase);
             ContextMenuStrip = menu;
+        }
+
+        private void ClearDropHighlight()
+        {
+            if (dropTarget != null)
+            {
+                dropTarget.BackColor = System.Drawing.Color.Empty;
+                dropTarget = null;
+            }
         }
 
         public LinkDef ActiveLink
@@ -76,9 +88,14 @@ namespace SW2GZ.UI
         private TreeNode BuildNode(LinkDef link)
         {
             bool isRoot = string.IsNullOrEmpty(link.ParentName);
-            var node = new TreeNode((link.Name ?? "") + (isRoot ? "  (base)" : "")) { Tag = link };
-            foreach (string id in link.ComponentIds)
-                node.Nodes.Add(new TreeNode("• " + id) { Tag = id, ForeColor = System.Drawing.Color.DimGray });
+            int n = link.ComponentIds?.Count ?? 0;
+            // Links only — the component-name leaf duplicated the link name and added
+            // no information; show the part count as a suffix instead.
+            string label = (link.Name ?? "")
+                + (isRoot ? "  (base)" : "")
+                + "  [" + n + (n == 1 ? " part]" : " parts]");
+            var node = new TreeNode(label) { Tag = link };
+            if (n == 0) node.ForeColor = System.Drawing.Color.Firebrick;   // unassigned = needs attention
             foreach (LinkDef child in LinkHierarchy.ChildrenOf(links, link.Name))
                 node.Nodes.Add(BuildNode(child));
             return node;
@@ -134,17 +151,31 @@ namespace SW2GZ.UI
             bool ok = dragged?.Tag is LinkDef a && target?.Tag is LinkDef b &&
                       a != b && !LinkHierarchy.IsDescendant(links, a.Name, b.Name);
             e.Effect = ok ? DragDropEffects.Move : DragDropEffects.None;
+
+            // Highlight the prospective new parent so the drop destination is obvious.
+            if (target != dropTarget)
+            {
+                ClearDropHighlight();
+                if (ok)
+                {
+                    dropTarget = target;
+                    dropTarget.BackColor = System.Drawing.Color.LightSkyBlue;
+                    target.EnsureVisible();
+                }
+            }
         }
 
         private void OnDragDrop(object sender, DragEventArgs e)
         {
             var dragged = (TreeNode)e.Data.GetData(typeof(TreeNode));
             TreeNode target = GetNodeAt(PointToClient(new System.Drawing.Point(e.X, e.Y)));
+            ClearDropHighlight();
             if (dragged?.Tag is LinkDef a && target?.Tag is LinkDef b &&
                 a != b && !LinkHierarchy.IsDescendant(links, a.Name, b.Name))
             {
                 a.ParentName = b.Name;
                 Rebuild();
+                SelectByLinkName(a.Name);
                 LinksChanged(this, EventArgs.Empty);
             }
         }
