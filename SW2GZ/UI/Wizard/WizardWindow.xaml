@@ -11,7 +11,7 @@ DataContext: WizardViewModel.
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wz="clr-namespace:SW2GZ.UI.Wizard"
-        xmlns:vm="clr-namespace:SW2GZ.UI.ViewModels;assembly=SW2GZ"
+        xmlns:vm="clr-namespace:SW2GZ.UI.ViewModels"
         Title="SW2GZ — Export to ROS 2 / Gz Sim"
         Width="900" Height="560" WindowStartupLocation="CenterScreen"
         Background="{DynamicResource BgBrush}">
