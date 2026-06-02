@@ -30,10 +30,6 @@ namespace SW2GZ.Build
                 if (limited && j.LimitLower.HasValue && j.LimitUpper.HasValue &&
                     j.LimitLower > j.LimitUpper)
                     warnings.Add($"Joint '{j.Name}' lower limit exceeds upper limit.");
-
-                if (j.Type == UrdfJointType.Continuous && j.Interface == UrdfCmdInterface.Position)
-                    warnings.Add($"Joint '{j.Name}' is continuous but uses the position interface — " +
-                                 "no limits are enforced.");
             }
 
             return warnings;

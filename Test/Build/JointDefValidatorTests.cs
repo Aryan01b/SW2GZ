@@ -43,23 +43,12 @@ namespace SW2GZ.Test.Build
         }
 
         [Fact]
-        public void ContinuousWithPositionInterface_Warns()
-        {
-            var joints = new List<JointDef>
-            {
-                new JointDef { Name = "spin", Type = UrdfJointType.Continuous, Axis = JointAxisPreset.PlusZ,
-                               Interface = UrdfCmdInterface.Position },
-            };
-            Assert.Contains(JointDefValidator.Validate(joints), w => w.Contains("spin") && w.Contains("continuous"));
-        }
-
-        [Fact]
         public void ValidRevolute_NoWarnings()
         {
             var joints = new List<JointDef>
             {
                 new JointDef { Name = "drive", Type = UrdfJointType.Revolute, Axis = JointAxisPreset.PlusZ,
-                               LimitLower = -1, LimitUpper = 1, Interface = UrdfCmdInterface.Position },
+                               LimitLower = -1, LimitUpper = 1 },
             };
             Assert.Empty(JointDefValidator.Validate(joints));
         }

@@ -8,13 +8,16 @@ link tree while preserving the user's per-joint edits.
 */
 using System.Collections.Generic;
 using SW2GZ.Build.Model;
+using SW2GZ.Build.Urdf;
 
 namespace SW2GZ.Build
 {
     public static class JointSeeder
     {
         public static List<JointDef> Sync(
-            IReadOnlyList<LinkDef> links, IReadOnlyList<JointDef> existing)
+            IReadOnlyList<LinkDef> links,
+            IReadOnlyList<JointDef> existing,
+            IReadOnlyList<MateAxis> mateAxes = null)
         {
             var result = new List<JointDef>();
             if (links == null) return result;
@@ -25,6 +28,11 @@ namespace SW2GZ.Build
                 foreach (JointDef j in existing)
                     if (!string.IsNullOrEmpty(j.ChildLink) && !byChild.ContainsKey(j.ChildLink))
                         byChild[j.ChildLink] = j;
+
+            // Mate-derived (axis, type) keyed by the edge's child link name. Only
+            // applied to newly-seeded joints — never overrides a user's prior edit.
+            Dictionary<string, (JointAxisPreset Axis, UrdfJointType Type)> mateByChild =
+                BuildMateByChild(links, mateAxes);
 
             // A link is a root when its parent is empty or names a link that
             // doesn't exist (same rule as LinkHierarchy.Roots). Roots get no joint.
@@ -45,16 +53,70 @@ namespace SW2GZ.Build
                 }
                 else
                 {
-                    result.Add(new JointDef
+                    var fresh = new JointDef
                     {
                         Name = RosNameSanitizer.Sanitize(l.Name + "_joint").Value,
                         ParentLink = parent,
                         ChildLink = l.Name,
-                    });
+                    };
+                    if (mateByChild.TryGetValue(l.Name, out var derived))
+                    {
+                        fresh.Type = derived.Type;
+                        fresh.Axis = derived.Axis;
+                    }
+                    result.Add(fresh);
                 }
             }
 
             return result;
+        }
+
+        // Resolves each mate's two components to their owning links, identifies the
+        // child end of that tree edge, and records the snapped axis + mapped type.
+        private static Dictionary<string, (JointAxisPreset, UrdfJointType)> BuildMateByChild(
+            IReadOnlyList<LinkDef> links, IReadOnlyList<MateAxis> mateAxes)
+        {
+            var map = new Dictionary<string, (JointAxisPreset, UrdfJointType)>();
+            if (mateAxes == null) return map;
+
+            // component id -> owning link name
+            var compToLink = new Dictionary<string, string>();
+            foreach (LinkDef l in links)
+                if (l.ComponentIds != null)
+                    foreach (string cid in l.ComponentIds)
+                        if (cid != null) compToLink[cid] = l.Name;
+
+            var byName = new Dictionary<string, LinkDef>();
+            foreach (LinkDef l in links) byName[l.Name] = l;
+
+            foreach (MateAxis ma in mateAxes)
+            {
+                if (ma == null) continue;
+                if (!compToLink.TryGetValue(ma.ComponentA ?? "", out string la)) continue;
+                if (!compToLink.TryGetValue(ma.ComponentB ?? "", out string lb)) continue;
+                if (la == lb) continue;
+
+                // Which link is the child of the other on this edge?
+                string child = null;
+                if (byName.TryGetValue(la, out LinkDef da) && da.ParentName == lb) child = la;
+                else if (byName.TryGetValue(lb, out LinkDef db) && db.ParentName == la) child = lb;
+                if (child == null) continue;
+
+                map[child] = (JointDefConverter.SnapToPreset(ma.Axis), MapKind(ma.Kind));
+            }
+
+            return map;
+        }
+
+        private static UrdfJointType MapKind(MateKind kind)
+        {
+            switch (kind)
+            {
+                case MateKind.Revolute:   return UrdfJointType.Revolute;
+                case MateKind.Continuous: return UrdfJointType.Continuous;
+                case MateKind.Prismatic:  return UrdfJointType.Prismatic;
+                default:                  return UrdfJointType.Fixed;
+            }
         }
     }
 }

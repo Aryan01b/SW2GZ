@@ -32,8 +32,25 @@ namespace SW2GZ.Build
             }
         }
 
+        // Snaps an arbitrary axis direction (e.g. read from a mate) to the nearest
+        // principal-axis preset by dominant component + sign. A (near-)zero vector
+        // maps to None.
+        public static JointAxisPreset SnapToPreset(Vector3 axis)
+        {
+            float ax = System.Math.Abs(axis.X);
+            float ay = System.Math.Abs(axis.Y);
+            float az = System.Math.Abs(axis.Z);
+            if (ax < 1e-6f && ay < 1e-6f && az < 1e-6f) return JointAxisPreset.None;
+
+            if (ax >= ay && ax >= az) return axis.X >= 0 ? JointAxisPreset.PlusX : JointAxisPreset.MinusX;
+            if (ay >= ax && ay >= az) return axis.Y >= 0 ? JointAxisPreset.PlusY : JointAxisPreset.MinusY;
+            return axis.Z >= 0 ? JointAxisPreset.PlusZ : JointAxisPreset.MinusZ;
+        }
+
         public static UrdfJoint ToUrdfJoint(JointDef def)
         {
+            // Effort/velocity/interface are not part of the structural data we save;
+            // the export increment supplies real values. Pass neutral defaults here.
             return new UrdfJoint(
                 Name:          def.Name,
                 Type:          def.Type,
@@ -43,9 +60,9 @@ namespace SW2GZ.Build
                 Axis:          AxisVector(def.Axis),
                 LimitLower:    def.LimitLower,
                 LimitUpper:    def.LimitUpper,
-                LimitEffort:   def.LimitEffort,
-                LimitVelocity: def.LimitVelocity,
-                Interface:     def.Interface);
+                LimitEffort:   0.0,
+                LimitVelocity: 0.0,
+                Interface:     UrdfCmdInterface.Position);
         }
 
         public static List<UrdfJoint> ToUrdfJoints(IReadOnlyList<JointDef> defs)

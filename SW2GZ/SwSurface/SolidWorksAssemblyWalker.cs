@@ -141,7 +141,156 @@ namespace SW2GZ.SwSurface
 #endif
         }
 
+        // P9 — surfaces each mate as a MateAxis for the wizard's Joints step:
+        // raw top-level component ids (matched against LinkDef.ComponentIds) plus
+        // the axis direction (assembly frame) and an inferred joint kind. Concentric
+        // → Revolute about the cylinder axis; Slot → Prismatic; everything else →
+        // Fixed (no fabricated motion). COM-only; validated via SolidWorks smoke
+        // testing, never reaches the net8 test project.
+        public IReadOnlyList<MateAxis> WalkMateAxes()
+        {
 #if SW_INTEROP
+            if (_doc == null)
+#endif
+                throw new System.NotImplementedException(
+                    "SolidWorksAssemblyWalker.WalkMateAxes() requires a live SldWorks session.");
+
+#if SW_INTEROP
+            var axes = new List<MateAxis>();
+            var modelDoc = (IModelDoc2)_doc;
+
+            Feature feat = (Feature)modelDoc.FirstFeature();
+            try
+            {
+                while (feat != null)
+                {
+                    if (feat.GetTypeName2() == "MateGroup")
+                    {
+                        Feature sub = (Feature)feat.GetFirstSubFeature();
+                        try
+                        {
+                            while (sub != null)
+                            {
+                                TryAddMateAxis(sub, axes);
+                                Feature nextSub = (Feature)sub.GetNextSubFeature();
+                                Marshal.ReleaseComObject(sub);
+                                sub = nextSub;
+                            }
+                        }
+                        finally { if (sub != null) Marshal.ReleaseComObject(sub); }
+                    }
+                    else
+                    {
+                        TryAddMateAxis(feat, axes);
+                    }
+
+                    Feature next = (Feature)feat.GetNextFeature();
+                    Marshal.ReleaseComObject(feat);
+                    feat = next;
+                }
+            }
+            finally { if (feat != null) Marshal.ReleaseComObject(feat); }
+
+            return axes.AsReadOnly();
+#endif
+        }
+
+#if SW_INTEROP
+        // Builds a MateAxis from one mate feature (raw top-level component ids +
+        // axis + kind). No-op for non-mate features. Releases every COM RCW.
+        private static void TryAddMateAxis(Feature feat, List<MateAxis> sink)
+        {
+            object specific = feat.GetSpecificFeature2();
+            var mate = specific as Mate2;
+            if (mate == null)
+            {
+                if (specific != null) Marshal.ReleaseComObject(specific);
+                return;
+            }
+
+            try
+            {
+                string compA = null, compB = null;
+                int entCount = mate.GetMateEntityCount();
+                for (int i = 0; i < entCount; i++)
+                {
+                    MateEntity2 ent = mate.MateEntity(i);
+                    if (ent == null) continue;
+                    try
+                    {
+                        Component2 comp = ent.ReferenceComponent;
+                        if (comp == null) continue;
+                        try
+                        {
+                            string raw = TopLevelName(comp);   // raw Name2 (matches LinkDef.ComponentIds)
+                            if (compA == null) compA = raw;
+                            else if (compB == null && raw != compA) compB = raw;
+                        }
+                        finally { Marshal.ReleaseComObject(comp); }
+                    }
+                    finally { Marshal.ReleaseComObject(ent); }
+                }
+
+                if (compA == null || compB == null) return;
+
+                MateKind kind;
+                switch ((swMateType_e)mate.Type)
+                {
+                    case swMateType_e.swMateCONCENTRIC: kind = MateKind.Revolute;  break;
+                    case swMateType_e.swMateSLOT:       kind = MateKind.Prismatic; break;
+                    default:                            kind = MateKind.Fixed;     break;
+                }
+
+                Vector3 axis = kind == MateKind.Fixed ? new Vector3(0, 0, 1) : MateAxisDirection(mate);
+                sink.Add(new MateAxis(compA, compB, axis, kind));
+            }
+            finally { Marshal.ReleaseComObject(mate); }
+        }
+
+        // Best-effort axis direction for a moving mate: read the first mate
+        // entity's EntityParams (origin[0..2] + direction[3..5]) and rotate it into
+        // the assembly frame by the reference component's transform. Falls back to
+        // (0,0,1) if nothing usable is found. Geometry-API exactness is validated on
+        // a workstation; snapping to the nearest principal axis absorbs small error.
+        private static Vector3 MateAxisDirection(Mate2 mate)
+        {
+            int entCount = mate.GetMateEntityCount();
+            for (int i = 0; i < entCount; i++)
+            {
+                MateEntity2 ent = mate.MateEntity(i);
+                if (ent == null) continue;
+                try
+                {
+                    if (ent.EntityParams is double[] ep && ep.Length >= 6)
+                    {
+                        var dir = new Vector3((float)ep[3], (float)ep[4], (float)ep[5]);
+                        Component2 comp = ent.ReferenceComponent;
+                        if (comp != null)
+                        {
+                            try { dir = RotateByComponent(comp, dir); }
+                            finally { Marshal.ReleaseComObject(comp); }
+                        }
+                        if (dir.LengthSquared() > 1e-9f) return Vector3.Normalize(dir);
+                    }
+                }
+                finally { Marshal.ReleaseComObject(ent); }
+            }
+            return new Vector3(0, 0, 1);
+        }
+
+        // Applies a component's rotation (Transform2 / MathTransform 3x3 block) to a
+        // direction vector, mapping component-local → assembly frame.
+        private static Vector3 RotateByComponent(Component2 comp, Vector3 v)
+        {
+            MathTransform xform = comp.Transform2;
+            if (xform == null) return v;
+            if (!(xform.ArrayData is double[] d) || d.Length < 9) return v;
+            float x = (float)(d[0] * v.X + d[1] * v.Y + d[2] * v.Z);
+            float y = (float)(d[3] * v.X + d[4] * v.Y + d[5] * v.Z);
+            float z = (float)(d[6] * v.X + d[7] * v.Y + d[8] * v.Z);
+            return new Vector3(x, y, z);
+        }
+
         // Inspects a single feature; if it wraps a Mate2, classifies it into a
         // MateSpec and appends. No-op for non-mate features. All COM RCWs touched
         // here are released in finally.
