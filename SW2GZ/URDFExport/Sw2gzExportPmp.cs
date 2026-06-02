@@ -71,6 +71,14 @@ namespace SW2GZ.URDFExport
         private PropertyManagerPageOption PMOptSdfModel;
         private PropertyManagerPageOption PMOptSdfWorld;
 
+        // Step 2 (Output) controls.
+        private PropertyManagerPageTextbox PMTextOutputFolder;
+        private PropertyManagerPageButton PMButtonBrowse;
+        private PropertyManagerPageTextbox PMTextPackageName;
+        private PropertyManagerPageTextbox PMTextAuthor;
+        private PropertyManagerPageTextbox PMTextEmail;
+        private PropertyManagerPageTextbox PMTextLicense;
+
         // Step model — placeholder headings + descriptions only (no real controls).
         private static readonly string[] StepNames =
         {
@@ -109,6 +117,20 @@ namespace SW2GZ.URDFExport
         private const int OptRobotPackageID = StepIdBase + 0 * 20 + 3;
         private const int OptSdfModelID     = StepIdBase + 0 * 20 + 4;
         private const int OptSdfWorldID     = StepIdBase + 0 * 20 + 5;
+
+        // Step 2 (Output) control IDs (step index 1 → base 120).
+        private const int LabelOutputFolderID = StepIdBase + 1 * 20 + 2;
+        private const int TextOutputFolderID  = StepIdBase + 1 * 20 + 3;
+        private const int ButtonBrowseID      = StepIdBase + 1 * 20 + 4;
+        private const int LabelPackageNameID  = StepIdBase + 1 * 20 + 5;
+        private const int TextPackageNameID   = StepIdBase + 1 * 20 + 6;
+        private const int LabelAuthorID       = StepIdBase + 1 * 20 + 7;
+        private const int TextAuthorID        = StepIdBase + 1 * 20 + 8;
+        private const int LabelEmailID        = StepIdBase + 1 * 20 + 9;
+        private const int TextEmailID         = StepIdBase + 1 * 20 + 10;
+        private const int LabelLicenseID      = StepIdBase + 1 * 20 + 11;
+        private const int TextLicenseID       = StepIdBase + 1 * 20 + 12;
+        private const int LabelTargetsID      = StepIdBase + 1 * 20 + 13;
 
         private int StepCount => StepNames.Length;
 
@@ -197,6 +219,9 @@ namespace SW2GZ.URDFExport
                     case 0:
                         BuildModeStep(stepGroup, indent, visibleEnabled);
                         break;
+                    case 1:
+                        BuildOutputStep(stepGroup, leftEdge, indent, visibleEnabled);
+                        break;
                     default:
                         // Generic placeholder for steps not yet implemented.
                         stepGroup.AddControl2(
@@ -226,6 +251,7 @@ namespace SW2GZ.URDFExport
 
             // Reflect any loaded checkpoint onto the controls.
             SeedModeControls();
+            SeedOutputControls();
 
             // Seed the UI on the first step.
             ShowStep(0);
@@ -262,6 +288,70 @@ namespace SW2GZ.URDFExport
             PMOptRobotPackage.Checked = config.Mode == ExportMode.RobotPackage;
             PMOptSdfModel.Checked = config.Mode == ExportMode.SdfModel;
             PMOptSdfWorld.Checked = config.Mode == ExportMode.SdfWorld;
+        }
+
+        // Step 2 — output folder (+ Browse), package name, author/email/license,
+        // and read-only target labels (ROS 2 Jazzy + Gz Harmonic are locked).
+        private void BuildOutputStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
+        {
+            group.AddControl2(LabelOutputFolderID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                "Output folder", (short)leftEdge, visibleEnabled, "");
+            PMTextOutputFolder = (PropertyManagerPageTextbox)group.AddControl2(
+                TextOutputFolderID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "", (short)indent, visibleEnabled, "Folder the package is written to");
+            PMButtonBrowse = (PropertyManagerPageButton)group.AddControl2(
+                ButtonBrowseID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Button,
+                "Browse…", (short)indent, visibleEnabled, "Choose the output folder");
+
+            group.AddControl2(LabelPackageNameID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                "Package name", (short)leftEdge, visibleEnabled, "");
+            PMTextPackageName = (PropertyManagerPageTextbox)group.AddControl2(
+                TextPackageNameID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "", (short)indent, visibleEnabled, "ROS 2 package name (sanitized on export)");
+
+            group.AddControl2(LabelAuthorID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                "Author", (short)leftEdge, visibleEnabled, "");
+            PMTextAuthor = (PropertyManagerPageTextbox)group.AddControl2(
+                TextAuthorID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "", (short)indent, visibleEnabled, "Maintainer name for package.xml");
+
+            group.AddControl2(LabelEmailID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                "Email", (short)leftEdge, visibleEnabled, "");
+            PMTextEmail = (PropertyManagerPageTextbox)group.AddControl2(
+                TextEmailID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "", (short)indent, visibleEnabled, "Maintainer email for package.xml");
+
+            group.AddControl2(LabelLicenseID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                "License", (short)leftEdge, visibleEnabled, "");
+            PMTextLicense = (PropertyManagerPageTextbox)group.AddControl2(
+                TextLicenseID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "", (short)indent, visibleEnabled, "SPDX license id for package.xml (e.g. MIT)");
+
+            group.AddControl2(LabelTargetsID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                "Targets: ROS 2 Jazzy + Gz Sim Harmonic (fixed in this release)",
+                (short)leftEdge, visibleEnabled, "");
+        }
+
+        private void SeedOutputControls()
+        {
+            if (PMTextOutputFolder == null) return;
+            PMTextOutputFolder.Text = config.OutputFolder ?? "";
+            PMTextPackageName.Text = config.PackageName ?? "";
+            PMTextAuthor.Text = config.Author ?? "";
+            PMTextEmail.Text = config.Email ?? "";
+            PMTextLicense.Text = config.License ?? "";
         }
 
         // ───────────────────────────── navigation ────────────────────────────
@@ -317,6 +407,26 @@ namespace SW2GZ.URDFExport
             }
         }
 
+        // Opens a folder picker and writes the choice into config + the textbox.
+        private void BrowseForOutputFolder()
+        {
+            using (var dialog = new FolderBrowserDialog())
+            {
+                if (!string.IsNullOrEmpty(config.OutputFolder))
+                {
+                    dialog.SelectedPath = config.OutputFolder;
+                }
+                if (dialog.ShowDialog() == DialogResult.OK)
+                {
+                    config.OutputFolder = dialog.SelectedPath;
+                    if (PMTextOutputFolder != null)
+                    {
+                        PMTextOutputFolder.Text = dialog.SelectedPath;
+                    }
+                }
+            }
+        }
+
         // ───────────────────────────── handler interface ─────────────────────
 
         void IPropertyManagerPage2Handler9.AfterActivation()
@@ -332,6 +442,7 @@ namespace SW2GZ.URDFExport
                 {
                     case ButtonBackID: GoBack(); break;
                     case ButtonNextID: GoNext(); break;
+                    case ButtonBrowseID: BrowseForOutputFolder(); break;
                     default: break;
                 }
             }
@@ -368,7 +479,18 @@ namespace SW2GZ.URDFExport
         bool IPropertyManagerPage2Handler9.OnTabClicked(int Id) => true;
         bool IPropertyManagerPage2Handler9.OnKeystroke(int Wparam, int Message, int Lparam, int Id) => false;
         bool IPropertyManagerPage2Handler9.OnSubmitSelection(int Id, object Selection, int SelType, ref string ItemText) => true;
-        void IPropertyManagerPage2Handler9.OnTextboxChanged(int Id, string Text) { }
+        void IPropertyManagerPage2Handler9.OnTextboxChanged(int Id, string Text)
+        {
+            switch (Id)
+            {
+                case TextOutputFolderID: config.OutputFolder = Text ?? ""; break;
+                case TextPackageNameID:  config.PackageName = Text ?? ""; break;
+                case TextAuthorID:       config.Author = Text ?? ""; break;
+                case TextEmailID:        config.Email = Text ?? ""; break;
+                case TextLicenseID:      config.License = Text ?? ""; break;
+                default: break;
+            }
+        }
         void IPropertyManagerPage2Handler9.OnSelectionboxFocusChanged(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxListChanged(int Id, int Count) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutCreated(int Id) { }
