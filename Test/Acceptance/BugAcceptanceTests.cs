@@ -44,6 +44,7 @@ namespace SW2GZ.Acceptance.Tests
                 new LinkSpec("base_link", new[] { "/p/base.SLDPRT" }),
                 new LinkSpec("arm1",      new[] { "/p/arm1.SLDPRT" }),
             });
+            walker.Setup(w => w.WalkMates()).Returns(System.Array.Empty<SW2GZ.Build.MateSpec>());
 
             var tess = new Mock<IMeshTessellator>();
             tess.Setup(t => t.Tessellate(It.IsAny<string>(), It.IsAny<TessellationLod>()))
@@ -185,7 +186,7 @@ namespace SW2GZ.Acceptance.Tests
         public void Bug10_JointBuilder_WarnsOnContinuousPositionInterface()
         {
             var mate = new MateSpec("j1", MateKind.Continuous,
-                Pose.Identity, Vector3.UnitZ, null, null, 10, 1.0, SW2GZ.Build.Urdf.UrdfCmdInterface.Position);
+                Pose.Identity, Vector3.UnitZ, null, null, 10, 1.0, SW2GZ.Build.Urdf.UrdfCmdInterface.Position, "a", "b");
             var parent = new SW2GZ.Build.Urdf.UrdfLink("a", 1, Vector3.Zero, Matrix3.Identity, null, null, "", "");
             var child  = new SW2GZ.Build.Urdf.UrdfLink("b", 1, Vector3.Zero, Matrix3.Identity, null, null, "", "");
 

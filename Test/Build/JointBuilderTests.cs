@@ -16,7 +16,7 @@ namespace SW2GZ.Build.Tests
         public void Build_RevoluteWithLimits_FillsFields()
         {
             var mate = new MateSpec("j1", MateKind.Revolute,
-                Pose.Identity, Vector3.UnitZ, -1.0, 1.0, 10, 1.0, UrdfCmdInterface.Position);
+                Pose.Identity, Vector3.UnitZ, -1.0, 1.0, 10, 1.0, UrdfCmdInterface.Position, "a", "b");
 
             var (joint, warnings) = JointBuilder.Build(mate, L("a"), L("b"));
 
@@ -30,7 +30,7 @@ namespace SW2GZ.Build.Tests
         public void Build_ContinuousWithPositionInterface_WarnsBug10()
         {
             var mate = new MateSpec("j1", MateKind.Continuous,
-                Pose.Identity, Vector3.UnitZ, null, null, 10, 1.0, UrdfCmdInterface.Position);
+                Pose.Identity, Vector3.UnitZ, null, null, 10, 1.0, UrdfCmdInterface.Position, "a", "b");
 
             var (_, warnings) = JointBuilder.Build(mate, L("a"), L("b"));
 
@@ -41,7 +41,7 @@ namespace SW2GZ.Build.Tests
         public void Build_PlumbsParentChildNames()
         {
             var mate = new MateSpec("shoulder", MateKind.Fixed,
-                Pose.Identity, Vector3.UnitX, null, null, 0, 0, UrdfCmdInterface.Effort);
+                Pose.Identity, Vector3.UnitX, null, null, 0, 0, UrdfCmdInterface.Effort, "base", "upper_arm");
 
             var (joint, _) = JointBuilder.Build(mate, L("base"), L("upper_arm"));
 
@@ -56,7 +56,7 @@ namespace SW2GZ.Build.Tests
             var origin = new Pose(new Vector3(0.1f, 0.2f, 0.3f), Quaternion.Identity);
             var axis   = new Vector3(0, 1, 0);
             var mate   = new MateSpec("elbow", MateKind.Revolute,
-                origin, axis, -2.0, 2.0, 5, 0.5, UrdfCmdInterface.Velocity);
+                origin, axis, -2.0, 2.0, 5, 0.5, UrdfCmdInterface.Velocity, "upper", "lower");
 
             var (joint, _) = JointBuilder.Build(mate, L("upper"), L("lower"));
 
@@ -71,7 +71,7 @@ namespace SW2GZ.Build.Tests
         public void Build_ContinuousWithVelocityInterface_NoWarning()
         {
             var mate = new MateSpec("wheel", MateKind.Continuous,
-                Pose.Identity, Vector3.UnitZ, null, null, 10, 5.0, UrdfCmdInterface.Velocity);
+                Pose.Identity, Vector3.UnitZ, null, null, 10, 5.0, UrdfCmdInterface.Velocity, "chassis", "wheel_link");
 
             var (_, warnings) = JointBuilder.Build(mate, L("chassis"), L("wheel_link"));
 
@@ -89,7 +89,7 @@ namespace SW2GZ.Build.Tests
         public void Build_ThrowsOnNullParent()
         {
             var mate = new MateSpec("j", MateKind.Fixed, Pose.Identity, Vector3.UnitZ,
-                null, null, 0, 0, UrdfCmdInterface.Effort);
+                null, null, 0, 0, UrdfCmdInterface.Effort, "a", "b");
             Assert.Throws<ArgumentNullException>(() =>
                 JointBuilder.Build(mate, null, L("b")));
         }
@@ -98,7 +98,7 @@ namespace SW2GZ.Build.Tests
         public void Build_ThrowsOnNullChild()
         {
             var mate = new MateSpec("j", MateKind.Fixed, Pose.Identity, Vector3.UnitZ,
-                null, null, 0, 0, UrdfCmdInterface.Effort);
+                null, null, 0, 0, UrdfCmdInterface.Effort, "a", "b");
             Assert.Throws<ArgumentNullException>(() =>
                 JointBuilder.Build(mate, L("a"), null));
         }

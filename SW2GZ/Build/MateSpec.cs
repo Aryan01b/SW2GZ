@@ -7,6 +7,9 @@ namespace SW2GZ.Build
 {
     public enum MateKind { Fixed, Revolute, Continuous, Prismatic }
 
+    // ParentLink / ChildLink are sanitized link names matching LinkSpec.Name.
+    // They identify which two links the mate couples; JointGraphBuilder resolves
+    // them to UrdfLink instances before calling JointBuilder. (P2)
     public sealed record MateSpec(
         string Name,
         MateKind Kind,
@@ -16,5 +19,7 @@ namespace SW2GZ.Build
         double? LimitUpper,
         double LimitEffort,
         double LimitVelocity,
-        UrdfCmdInterface Interface);
+        UrdfCmdInterface Interface,
+        string ParentLink,
+        string ChildLink);
 }
