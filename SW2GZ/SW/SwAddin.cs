@@ -457,7 +457,7 @@ namespace SW2GZ.SW
                     return;
                 }
 
-                var pmp = new Sw2gzExportPmp((SldWorks)SwApp);
+                var pmp = new Sw2gzExportPmp((SldWorks)SwApp, modeldoc);
                 pmp.Show();
             }
             catch (Exception e)

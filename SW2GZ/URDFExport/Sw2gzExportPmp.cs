@@ -155,7 +155,9 @@ namespace SW2GZ.URDFExport
 
             if (longerrors == (int)swPropertyManagerPageStatus_e.swPropertyManagerPage_Okay)
             {
+                config = Sw2gzConfigSerialization.Load(model);
                 BuildPage();
+                ShowStep(config.LastStep);
             }
             else
             {
@@ -396,14 +398,31 @@ namespace SW2GZ.URDFExport
         {
             if (currentStep < StepCount - 1)
             {
+                SaveCheckpoint(currentStep + 1);
                 ShowStep(currentStep + 1);
             }
             else
             {
-                // Finish — no backend wired yet this increment.
+                // Finish — no backend wired yet this increment; still persist state.
+                SaveCheckpoint(currentStep);
                 logger.Info("SW2GZ export shell Finish pressed (no backend wired yet)");
                 swApp.SendMsgToUser("Export is not wired up yet — this is the navigation shell.");
                 PMPage.Close(true);
+            }
+        }
+
+        // Persists the live config to the assembly document tree (the "checkpoint").
+        // resumeStep is the step the wizard should reopen on.
+        private void SaveCheckpoint(int resumeStep)
+        {
+            try
+            {
+                config.LastStep = resumeStep;
+                Sw2gzConfigSerialization.Save(swApp, model, config);
+            }
+            catch (Exception e)
+            {
+                logger.Error("Failed to save SW2GZ wizard checkpoint", e);
             }
         }
 
