@@ -10,7 +10,9 @@ clicking the SW2GZ button resumes from here.
 Pure / COM-free so it round-trips in the net8 test project. Fields grow as the
 later wizard steps (Geometry/Joints/Review) are implemented.
 */
+using System.Collections.Generic;
 using System.Runtime.Serialization;
+using SW2GZ.Build.Model;
 using SW2GZ.Ros2;
 
 namespace SW2GZ.URDFExport
@@ -30,5 +32,8 @@ namespace SW2GZ.URDFExport
 
         // Resume position — 0-based wizard step index reached at last save.
         [DataMember] public int LastStep { get; set; }
+
+        // Step 3 — link definitions (name + assigned component ids + base flag).
+        [DataMember] public List<LinkDef> Links { get; set; } = new List<LinkDef>();
     }
 }

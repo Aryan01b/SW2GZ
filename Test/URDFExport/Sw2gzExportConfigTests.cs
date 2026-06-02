@@ -63,6 +63,30 @@ namespace SW2GZ.Test.URDFExport
             Assert.Equal(string.Empty, config.OutputFolder);
             Assert.Equal(string.Empty, config.PackageName);
             Assert.Equal(0, config.LastStep);
+            Assert.Empty(config.Links);
+        }
+
+        [Fact]
+        public void RoundTrip_PreservesLinks()
+        {
+            var config = new Sw2gzExportConfig();
+            config.Links.Add(new SW2GZ.Build.Model.LinkDef
+            {
+                Name = "base_link",
+                IsBase = true,
+                ComponentIds = { "chassis-1@robot", "motor-1@robot" },
+            });
+            config.Links.Add(new SW2GZ.Build.Model.LinkDef { Name = "wheel_left" });
+
+            string xml = Sw2gzConfigCodec.ToXmlString(config);
+            Sw2gzExportConfig restored = Sw2gzConfigCodec.FromXmlString(xml);
+
+            Assert.Equal(2, restored.Links.Count);
+            Assert.Equal("base_link", restored.Links[0].Name);
+            Assert.True(restored.Links[0].IsBase);
+            Assert.Equal(2, restored.Links[0].ComponentIds.Count);
+            Assert.Equal("motor-1@robot", restored.Links[0].ComponentIds[1]);
+            Assert.False(restored.Links[1].IsBase);
         }
     }
 }
