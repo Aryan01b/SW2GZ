@@ -36,6 +36,7 @@ using SolidWorks.Interop.swconst;
 using SolidWorks.Interop.swpublished;
 using SW2GZ.Ros2;
 using SW2GZ.Utilities;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 #endif
@@ -77,7 +78,15 @@ namespace SW2GZ.URDFExport
         private PropertyManagerPageTextbox PMTextPackageName;
         private PropertyManagerPageTextbox PMTextAuthor;
         private PropertyManagerPageTextbox PMTextEmail;
-        private PropertyManagerPageTextbox PMTextLicense;
+        private PropertyManagerPageCombobox PMComboLicense;
+
+        // SPDX license choices for the optional License dropdown. First entry is
+        // blank ("none"); the combo is editable so a custom id can be typed.
+        private static readonly string[] LicenseChoices =
+        {
+            "", "MIT", "Apache-2.0", "BSD-3-Clause", "BSD-2-Clause",
+            "GPL-3.0-only", "LGPL-3.0-only", "MPL-2.0", "Proprietary",
+        };
 
         // Step model — placeholder headings + descriptions only (no real controls).
         private static readonly string[] StepNames =
@@ -156,6 +165,7 @@ namespace SW2GZ.URDFExport
             if (longerrors == (int)swPropertyManagerPageStatus_e.swPropertyManagerPage_Okay)
             {
                 config = Sw2gzConfigSerialization.Load(model);
+                ApplyDefaults();
                 BuildPage();
                 ShowStep(config.LastStep);
             }
@@ -324,17 +334,20 @@ namespace SW2GZ.URDFExport
                 (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
                 "", (short)indent, visibleEnabled, "Maintainer name for package.xml");
 
-            AddFieldLabel(group, LabelEmailID, "Email", leftEdge, labelOpts);
+            AddFieldLabel(group, LabelEmailID, "Email (optional)", leftEdge, labelOpts);
             PMTextEmail = (PropertyManagerPageTextbox)group.AddControl2(
                 TextEmailID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
-                "", (short)indent, visibleEnabled, "Maintainer email for package.xml");
+                "", (short)indent, visibleEnabled, "Maintainer email for package.xml (optional)");
 
-            AddFieldLabel(group, LabelLicenseID, "License", leftEdge, labelOpts);
-            PMTextLicense = (PropertyManagerPageTextbox)group.AddControl2(
+            AddFieldLabel(group, LabelLicenseID, "License (optional)", leftEdge, labelOpts);
+            PMComboLicense = (PropertyManagerPageCombobox)group.AddControl2(
                 TextLicenseID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
-                "", (short)indent, visibleEnabled, "SPDX license id for package.xml (e.g. MIT)");
+                (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
+                "", (short)indent, visibleEnabled,
+                "SPDX license id for package.xml (pick one or type your own)");
+            // No EditBoxReadOnly style => editable; user may type a custom id.
+            PMComboLicense.AddItems(LicenseChoices);
 
             PropertyManagerPageLabel targets = AddFieldLabel(group, LabelTargetsID,
                 "Targets: ROS 2 Jazzy + Gz Sim Harmonic (fixed in this release)",
@@ -360,7 +373,75 @@ namespace SW2GZ.URDFExport
             PMTextPackageName.Text = config.PackageName ?? "";
             PMTextAuthor.Text = config.Author ?? "";
             PMTextEmail.Text = config.Email ?? "";
-            PMTextLicense.Text = config.License ?? "";
+            SeedLicenseCombo();
+        }
+
+        // Selects config.License in the combo. A custom (saved) value not in the
+        // preset list is appended and selected.
+        private void SeedLicenseCombo()
+        {
+            string val = config.License ?? "";
+            short idx = -1;
+            for (short i = 0; i < LicenseChoices.Length; i++)
+            {
+                if (LicenseChoices[i] == val) { idx = i; break; }
+            }
+            if (idx < 0 && val.Length > 0)
+            {
+                PMComboLicense.AddItems(val);
+                idx = (short)LicenseChoices.Length;
+            }
+            PMComboLicense.CurrentSelection = idx < 0 ? (short)0 : idx;
+        }
+
+        // Seeds blank fields with sensible defaults the first time the wizard runs
+        // for a document: package name from the assembly file, output folder under
+        // the user's Documents. A saved checkpoint always takes precedence.
+        private void ApplyDefaults()
+        {
+            if (string.IsNullOrWhiteSpace(config.PackageName))
+            {
+                config.PackageName = DefaultPackageName();
+            }
+            if (string.IsNullOrWhiteSpace(config.OutputFolder))
+            {
+                config.OutputFolder = DefaultOutputFolder();
+            }
+        }
+
+        // Assembly file name (no extension); falls back to the window title for an
+        // unsaved document.
+        private string DefaultPackageName()
+        {
+            try
+            {
+                string path = model.GetPathName();
+                string name = !string.IsNullOrEmpty(path)
+                    ? Path.GetFileNameWithoutExtension(path)
+                    : model.GetTitle();
+                return Path.GetFileNameWithoutExtension(name ?? "").Trim();
+            }
+            catch (Exception e)
+            {
+                logger.Warn("Could not derive default package name", e);
+                return "";
+            }
+        }
+
+        // Generic per-PC default: <Documents>\SW2GZ Exports.
+        private string DefaultOutputFolder()
+        {
+            try
+            {
+                string docs = System.Environment.GetFolderPath(
+                    System.Environment.SpecialFolder.MyDocuments);
+                return string.IsNullOrEmpty(docs) ? "" : Path.Combine(docs, "SW2GZ Exports");
+            }
+            catch (Exception e)
+            {
+                logger.Warn("Could not derive default output folder", e);
+                return "";
+            }
         }
 
         // ───────────────────────────── navigation ────────────────────────────
@@ -513,7 +594,6 @@ namespace SW2GZ.URDFExport
                 case TextPackageNameID:  config.PackageName = Text ?? ""; break;
                 case TextAuthorID:       config.Author = Text ?? ""; break;
                 case TextEmailID:        config.Email = Text ?? ""; break;
-                case TextLicenseID:      config.License = Text ?? ""; break;
                 default: break;
             }
         }
@@ -524,8 +604,21 @@ namespace SW2GZ.URDFExport
         void IPropertyManagerPage2Handler9.OnNumberboxChanged(int Id, double Value) { }
         void IPropertyManagerPage2Handler9.OnNumberBoxTrackingCompleted(int Id, double Value) { }
         void IPropertyManagerPage2Handler9.OnCheckboxCheck(int Id, bool Checked) { }
-        void IPropertyManagerPage2Handler9.OnComboboxEditChanged(int Id, string Text) { }
-        void IPropertyManagerPage2Handler9.OnComboboxSelectionChanged(int Id, int Item) { }
+        void IPropertyManagerPage2Handler9.OnComboboxEditChanged(int Id, string Text)
+        {
+            if (Id == TextLicenseID)
+            {
+                config.License = Text ?? "";
+            }
+        }
+
+        void IPropertyManagerPage2Handler9.OnComboboxSelectionChanged(int Id, int Item)
+        {
+            if (Id == TextLicenseID)
+            {
+                config.License = PMComboLicense.get_ItemText((short)Item) ?? "";
+            }
+        }
         void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item) { }
         void IPropertyManagerPage2Handler9.OnListboxRMBUp(int Id, int PosX, int PosY) { }
         void IPropertyManagerPage2Handler9.OnGroupCheck(int Id, bool Checked) { }
