@@ -211,15 +211,12 @@ namespace SW2GZ.URDFExport
                         StepGroupId(step), StepNames[step], grpOptions);
                 PMStepGroups[step] = stepGroup;
 
-                stepGroup.AddControl2(
-                    StepHeadingId(step),
-                    (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                    StepNames[step], (short)leftEdge, visibleEnabled, "");
-
+                // The group-box title already names the step and the header group
+                // shows "Step N of 5 — <Name>", so no redundant heading label here.
                 switch (step)
                 {
                     case 0:
-                        BuildModeStep(stepGroup, indent, visibleEnabled);
+                        BuildModeStep(stepGroup, leftEdge, indent, visibleEnabled);
                         break;
                     case 1:
                         BuildOutputStep(stepGroup, leftEdge, indent, visibleEnabled);
@@ -262,7 +259,7 @@ namespace SW2GZ.URDFExport
         // Step 1 — three mutually-exclusive radio buttons selecting the export
         // mode. SolidWorks treats a contiguous run of option controls in one
         // group as mutually exclusive; OnOptionCheck mirrors the pick into config.
-        private void BuildModeStep(PropertyManagerPageGroup group, int indent, int visibleEnabled)
+        private void BuildModeStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
         {
             PMOptRobotPackage = (PropertyManagerPageOption)group.AddControl2(
                 OptRobotPackageID,
@@ -293,12 +290,18 @@ namespace SW2GZ.URDFExport
         }
 
         // Step 2 — output folder (+ Browse), package name, author/email/license,
-        // and read-only target labels (ROS 2 Jazzy + Gz Harmonic are locked).
+        // and a read-only target note (ROS 2 Jazzy + Gz Harmonic are locked).
+        //
+        // Each field is a caption Label (left edge) above an indented Textbox.
+        // The label Caption is set explicitly after creation — passing it only via
+        // AddControl2 proved unreliable for some rows (labels rendered blank), so
+        // we always set Caption on the returned control (matches the dynamic-label
+        // pattern in GeometryPropertyManager).
         private void BuildOutputStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
         {
-            group.AddControl2(LabelOutputFolderID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Output folder", (short)leftEdge, visibleEnabled, "");
+            int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
+
+            AddFieldLabel(group, LabelOutputFolderID, "Output folder", leftEdge, labelOpts);
             PMTextOutputFolder = (PropertyManagerPageTextbox)group.AddControl2(
                 TextOutputFolderID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
@@ -306,44 +309,48 @@ namespace SW2GZ.URDFExport
             PMButtonBrowse = (PropertyManagerPageButton)group.AddControl2(
                 ButtonBrowseID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Browse…", (short)indent, visibleEnabled, "Choose the output folder");
+                "Browse...", (short)indent, visibleEnabled, "Choose the output folder");
+            ((IPropertyManagerPageControl)PMButtonBrowse).Width = 90;
 
-            group.AddControl2(LabelPackageNameID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Package name", (short)leftEdge, visibleEnabled, "");
+            AddFieldLabel(group, LabelPackageNameID, "Package name", leftEdge, labelOpts);
             PMTextPackageName = (PropertyManagerPageTextbox)group.AddControl2(
                 TextPackageNameID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
                 "", (short)indent, visibleEnabled, "ROS 2 package name (sanitized on export)");
 
-            group.AddControl2(LabelAuthorID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Author", (short)leftEdge, visibleEnabled, "");
+            AddFieldLabel(group, LabelAuthorID, "Author", leftEdge, labelOpts);
             PMTextAuthor = (PropertyManagerPageTextbox)group.AddControl2(
                 TextAuthorID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
                 "", (short)indent, visibleEnabled, "Maintainer name for package.xml");
 
-            group.AddControl2(LabelEmailID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Email", (short)leftEdge, visibleEnabled, "");
+            AddFieldLabel(group, LabelEmailID, "Email", leftEdge, labelOpts);
             PMTextEmail = (PropertyManagerPageTextbox)group.AddControl2(
                 TextEmailID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
                 "", (short)indent, visibleEnabled, "Maintainer email for package.xml");
 
-            group.AddControl2(LabelLicenseID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "License", (short)leftEdge, visibleEnabled, "");
+            AddFieldLabel(group, LabelLicenseID, "License", leftEdge, labelOpts);
             PMTextLicense = (PropertyManagerPageTextbox)group.AddControl2(
                 TextLicenseID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
                 "", (short)indent, visibleEnabled, "SPDX license id for package.xml (e.g. MIT)");
 
-            group.AddControl2(LabelTargetsID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+            PropertyManagerPageLabel targets = AddFieldLabel(group, LabelTargetsID,
                 "Targets: ROS 2 Jazzy + Gz Sim Harmonic (fixed in this release)",
-                (short)leftEdge, visibleEnabled, "");
+                leftEdge, labelOpts);
+        }
+
+        // Adds a caption label and sets its Caption explicitly (see BuildOutputStep).
+        private PropertyManagerPageLabel AddFieldLabel(
+            PropertyManagerPageGroup group, int id, string caption, int leftEdge, int labelOpts)
+        {
+            PropertyManagerPageLabel label = (PropertyManagerPageLabel)group.AddControl2(
+                id,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                caption, (short)leftEdge, labelOpts, "");
+            label.Caption = caption;
+            return label;
         }
 
         private void SeedOutputControls()
