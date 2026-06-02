@@ -503,6 +503,16 @@
     <Compile Include="UI\ViewModels\OutputStepViewModel.cs" />
     <Compile Include="UI\ViewModels\LinkViewModel.cs" />
     <Compile Include="UI\ViewModels\LinksStepViewModel.cs" />
+    <Compile Include="UI\ViewModels\PoseMath.cs" />
+    <Compile Include="UI\ViewModels\JointDto.cs" />
+    <Compile Include="UI\ViewModels\JointEditViewModel.cs" />
+    <Compile Include="UI\ViewModels\JointsStepViewModel.cs" />
+    <Compile Include="UI\ViewModels\CollisionStepViewModel.cs" />
+    <Compile Include="UI\ViewModels\LinkMaterialViewModel.cs" />
+    <Compile Include="UI\ViewModels\MaterialsStepViewModel.cs" />
+    <Compile Include="UI\ViewModels\SensorEditViewModel.cs" />
+    <Compile Include="UI\ViewModels\SensorsStepViewModel.cs" />
+    <Compile Include="UI\ViewModels\ControllersStepViewModel.cs" />
     <Compile Include="UI\ViewModels\ReviewStepViewModel.cs" />
     <Compile Include="UI\ViewModels\WizardViewModel.cs" />
     <!-- P8 — SolidWorks/WinForms service impls (net48-only; NOT source-linked into the test project). -->
@@ -530,6 +540,21 @@
     </Compile>
     <Compile Include="UI\Wizard\ReviewStepView.xaml.cs">
       <DependentUpon>ReviewStepView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Wizard\JointsStepView.xaml.cs">
+      <DependentUpon>JointsStepView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Wizard\CollisionStepView.xaml.cs">
+      <DependentUpon>CollisionStepView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Wizard\MaterialsStepView.xaml.cs">
+      <DependentUpon>MaterialsStepView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Wizard\SensorsStepView.xaml.cs">
+      <DependentUpon>SensorsStepView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Wizard\ControllersStepView.xaml.cs">
+      <DependentUpon>ControllersStepView.xaml</DependentUpon>
     </Compile>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
@@ -611,6 +636,26 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="UI\Wizard\ReviewStepView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Wizard\JointsStepView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Wizard\CollisionStepView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Wizard\MaterialsStepView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Wizard\SensorsStepView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Wizard\ControllersStepView.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

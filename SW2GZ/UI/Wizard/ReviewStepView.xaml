@@ -41,6 +41,22 @@ DataContext: ReviewStepViewModel.
                 </StackPanel>
             </DockPanel>
             <DockPanel Margin="0,4">
+                <TextBlock Foreground="{DynamicResource MutedBrush}" Text="Collision" />
+                <TextBlock HorizontalAlignment="Right" Text="{Binding CollisionSummary}" />
+            </DockPanel>
+            <DockPanel Margin="0,4">
+                <TextBlock Foreground="{DynamicResource MutedBrush}" Text="Materials" />
+                <TextBlock HorizontalAlignment="Right" Text="{Binding MaterialCount, StringFormat='{}{0} override(s)'}" />
+            </DockPanel>
+            <DockPanel Margin="0,4">
+                <TextBlock Foreground="{DynamicResource MutedBrush}" Text="Sensors" />
+                <TextBlock HorizontalAlignment="Right" Text="{Binding SensorCount}" />
+            </DockPanel>
+            <DockPanel Margin="0,4">
+                <TextBlock Foreground="{DynamicResource MutedBrush}" Text="Controller" />
+                <TextBlock Style="{DynamicResource Mono}" HorizontalAlignment="Right" Text="{Binding ControllerSummary}" />
+            </DockPanel>
+            <DockPanel Margin="0,4">
                 <TextBlock Foreground="{DynamicResource MutedBrush}" Text="Validation" />
                 <TextBlock HorizontalAlignment="Right" Foreground="{DynamicResource OkBrush}" FontWeight="SemiBold"
                            Text="{Binding ValidationErrorCount, StringFormat='{}{0} errors'}" />

@@ -36,6 +36,21 @@ DataContext: WizardViewModel.
             <DataTemplate DataType="{x:Type vm:LinksStepViewModel}">
                 <wz:LinksStepView />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:JointsStepViewModel}">
+                <wz:JointsStepView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:CollisionStepViewModel}">
+                <wz:CollisionStepView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:MaterialsStepViewModel}">
+                <wz:MaterialsStepView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:SensorsStepViewModel}">
+                <wz:SensorsStepView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:ControllersStepViewModel}">
+                <wz:ControllersStepView />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type vm:ReviewStepViewModel}">
                 <wz:ReviewStepView />
             </DataTemplate>

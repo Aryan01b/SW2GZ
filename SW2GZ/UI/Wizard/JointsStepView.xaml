@@ -1,0 +1,114 @@
+<!--
+Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
+P8+ — Step 5 view. Joint list (left) + selected-joint editor (right): type,
+command interface, limits. REQUIRES VISUAL STUDIO BUILD.
+DataContext: JointsStepViewModel.
+-->
+<UserControl x:Class="SW2GZ.UI.Wizard.JointsStepView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wz="clr-namespace:SW2GZ.UI.Wizard">
+    <UserControl.Resources>
+        <wz:BoolToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+    <DockPanel Margin="22,20">
+        <TextBlock DockPanel.Dock="Top" Style="{DynamicResource H2}" Text="Joints" />
+        <TextBlock DockPanel.Dock="Top" Style="{DynamicResource Hint}"
+                   Text="Override joint type, command interface, and limits. Editing is optional." />
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*" />
+                <ColumnDefinition Width="1.15*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Joint list -->
+            <Border Grid.Column="0" Margin="0,0,6,0" BorderThickness="1"
+                    BorderBrush="{DynamicResource LineBrush}" CornerRadius="6">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Background="{DynamicResource Panel2Brush}"
+                            BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1" Padding="11,7">
+                        <TextBlock Text="Joints" FontWeight="SemiBold" FontSize="11.5" />
+                    </Border>
+                    <ListBox BorderThickness="0" Background="Transparent"
+                             ItemsSource="{Binding Joints}" SelectedItem="{Binding SelectedJoint}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Name}" />
+                                    <TextBlock Margin="8,0,0,0" Foreground="{DynamicResource MutedBrush}"
+                                               FontSize="11" Text="{Binding Type}" />
+                                    <TextBlock Margin="8,0,0,0" Foreground="#D9822B"
+                                               FontSize="11" Text="⚠"
+                                               Visibility="{Binding HasValidationMessage, Converter={StaticResource BoolToVis}}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- Selected joint editor -->
+            <Border Grid.Column="1" Margin="6,0,0,0" BorderThickness="1"
+                    BorderBrush="{DynamicResource LineBrush}" CornerRadius="6"
+                    DataContext="{Binding SelectedJoint}">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Background="{DynamicResource Panel2Brush}"
+                            BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1" Padding="11,7">
+                        <TextBlock FontWeight="SemiBold" FontSize="11.5"
+                                   Text="{Binding Name, StringFormat='Joint · {0}', FallbackValue='No joint selected'}" />
+                    </Border>
+                    <StackPanel Margin="11,9">
+                        <DockPanel Margin="0,3">
+                            <TextBlock Foreground="{DynamicResource MutedBrush}" Text="Parent → Child" />
+                            <TextBlock Style="{DynamicResource Mono}" HorizontalAlignment="Right"
+                                       Text="{Binding ParentLink, StringFormat='{}{0} →'}" />
+                            <TextBlock Style="{DynamicResource Mono}" HorizontalAlignment="Right" Margin="4,0,0,0"
+                                       Text="{Binding ChildLink}" />
+                        </DockPanel>
+
+                        <TextBlock Margin="0,8,0,0" Style="{DynamicResource FieldLabel}" Text="TYPE" />
+                        <ComboBox ItemsSource="{Binding JointTypeOptions}" SelectedItem="{Binding Type}" />
+
+                        <TextBlock Margin="0,8,0,0" Style="{DynamicResource FieldLabel}" Text="COMMAND INTERFACE" />
+                        <ComboBox ItemsSource="{Binding InterfaceOptions}" SelectedItem="{Binding Interface}" />
+
+                        <StackPanel Visibility="{Binding HasLimits, Converter={StaticResource BoolToVis}}">
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                    <TextBlock Style="{DynamicResource FieldLabel}" Text="LOWER LIMIT" />
+                                    <TextBox Text="{Binding LimitLower, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                    <TextBlock Style="{DynamicResource FieldLabel}" Text="UPPER LIMIT" />
+                                    <TextBox Text="{Binding LimitUpper, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" />
+                                </StackPanel>
+                            </Grid>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                    <TextBlock Style="{DynamicResource FieldLabel}" Text="EFFORT" />
+                                    <TextBox Text="{Binding LimitEffort, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                    <TextBlock Style="{DynamicResource FieldLabel}" Text="VELOCITY" />
+                                    <TextBox Text="{Binding LimitVelocity, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Margin="0,8,0,0" Foreground="#D9822B" FontSize="11.5"
+                                       TextWrapping="Wrap" Text="{Binding ValidationMessage}"
+                                       Visibility="{Binding HasValidationMessage, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</UserControl>
