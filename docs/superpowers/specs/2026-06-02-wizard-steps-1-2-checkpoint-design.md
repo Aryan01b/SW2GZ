@@ -77,7 +77,11 @@ calls `ShowStep(config.LastStep)`. Reopening the assembly and clicking SW2GZ res
 and the existing generic placeholder for steps 3–5.
 
 - **Step 1 — Mode:** three radio buttons (`swControlType_Option`), mutually exclusive,
-  handled in `OnOptionCheck(int Id)` → sets `config.Mode`.
+  handled in `OnOptionCheck(int Id)` → sets `config.Mode`. This choice defines which
+  files/folders the export later generates:
+  - "Robot package (URDF/Xacro)" → `ExportMode.RobotPackage`
+  - "Gz asset (SDF model)" → `ExportMode.SdfModel`
+  - "Gz world (SDF world)" → `ExportMode.SdfWorld`
 - **Step 2 — Output:**
   - folder textbox (`swControlType_Textbox`) + "Browse…" button (`swControlType_Button`)
     opening `System.Windows.Forms.FolderBrowserDialog`;
@@ -96,6 +100,16 @@ to fit Step 2's ~10 controls. Fixed IDs (header, nav) unchanged.
 - **Edit:** `URDFExport/Sw2gzExportPmp.cs` (controls, handlers, load/save wiring, ctor
   takes `ModelDoc2`), `SW/SwAddin.cs` (`LaunchWizard` passes the assembly `ModelDoc2`).
 - **Tests:** `Sw2gzExportConfig` round-trip serialization (pure, no COM).
+
+## 6a. Architecture decision (2026-06-02)
+
+The pure-C# MVVM layer (`UI/ViewModels/WizardViewModel` + step VMs, `UI/Services/*`)
+has **no view wired to it** (nothing instantiates `WizardViewModel`). Decision: the
+**native PMP (`Sw2gzExportPmp`) is the sole UI** going forward. Step 1/2 + checkpoint are
+built **self-contained** on `Sw2gzExportConfig` (above), NOT bound to the MVVM VMs.
+Retiring/deleting the unused MVVM layer is tracked as a separate follow-up (out of scope
+here). Metadata fields (author/email/license) therefore live on `Sw2gzExportConfig`, not
+on `OutputStepViewModel`.
 
 ## 7. Out of scope
 
