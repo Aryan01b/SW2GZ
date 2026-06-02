@@ -357,6 +357,9 @@
     <Compile Include="URDFExport\CSV\ContextToColumns.cs" />
     <Compile Include="URDFExport\CSV\CSVImportExport.cs" />
     <Compile Include="URDFExport\ConfigurationSerialization.cs" />
+    <Compile Include="URDFExport\Sw2gzExportConfig.cs" />
+    <Compile Include="URDFExport\Sw2gzConfigCodec.cs" />
+    <Compile Include="URDFExport\Sw2gzConfigSerialization.cs" />
     <Compile Include="URDFExport\ExportHelper.cs" />
     <Compile Include="URDFExport\Sw2gzPipeline.cs" />
     <Compile Include="URDFExport\ExportHelperExtension.cs" />
