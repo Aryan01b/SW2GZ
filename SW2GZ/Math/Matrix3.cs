@@ -128,8 +128,11 @@ namespace SW2GZ.Math
             // emitted text matches the prior inlined formula byte-for-byte
             // (e.g. identity rotation yields "0", never "-0").
             double sinp = -M31 + 0.0;
+            // |sinp| >= 1 ⇒ gimbal lock; clamp pitch to ±π/2 with the sign of sinp.
+            // (System.Math.CopySign is .NET Core 3.0+ only — the net48 add-in build
+            // needs this explicit form; sinp magnitude is >= 1 here so it is never -0.)
             double pitch = System.Math.Abs(sinp) >= 1
-                ? System.Math.CopySign(System.Math.PI / 2, sinp)
+                ? (sinp < 0 ? -(System.Math.PI / 2) : System.Math.PI / 2)
                 : System.Math.Asin(sinp);
 
             double yaw = System.Math.Atan2(M21, M11);
