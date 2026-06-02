@@ -271,7 +271,8 @@ namespace SW2GZ.SW
         public void AddCommandMgr()
         {
             const string title = "SW2GZ";
-            const string toolTip = "SW2GZ — Export to ROS 2 / Gazebo";
+            const string buttonName = "Create Model";
+            const string toolTip = "Create Model";
             const string hint = "Generate a simulation-ready ROS 2 package (URDF, ros2_control, Gazebo, sensors) from this assembly.";
 
             int errs = 0;
@@ -302,7 +303,7 @@ namespace SW2GZ.SW
                 grp.MainIconList = images;   // command-group glyph
 
                 int cmdIndex = grp.AddCommandItem2(
-                    "SW2GZ", -1, hint, toolTip, 0,
+                    buttonName, -1, hint, toolTip, 0,
                     "LaunchWizard", "WizardEnable", sw2gzWizardUserID,
                     (int)swCommandItemType_e.swToolbarItem);
                 if (cmdIndex < 0)
