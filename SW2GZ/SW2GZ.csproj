@@ -449,6 +449,7 @@
     <Compile Include="Build\LinkBuilder.cs" />
     <Compile Include="Build\MateSpec.cs" />
     <Compile Include="Build\JointBuilder.cs" />
+    <Compile Include="Build\JointGraphBuilder.cs" />
     <Compile Include="Write\Mesh\StlWriter.cs" />
     <Compile Include="Write\Mesh\DaeWriter.cs" />
     <Compile Include="Gz\SdfModelInput.cs" />
@@ -509,6 +510,7 @@
     <Compile Include="UI\Services\Sw\SwViewportSelectionService.cs" />
     <Compile Include="UI\Services\Sw\SwThemeService.cs" />
     <Compile Include="UI\Services\Sw\Sw2gzPipelineExportRunner.cs" />
+    <Compile Include="UI\Services\Sw\WizardModelComposer.cs" />
     <!-- P8 — WPF wizard code-behind + converters (net48-only; requires Visual Studio markup build). -->
     <Compile Include="UI\Wizard\WizardConverters.cs" />
     <Compile Include="UI\Wizard\WizardWindow.xaml.cs">
