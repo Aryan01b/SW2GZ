@@ -34,6 +34,7 @@ using System;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidWorks.Interop.swpublished;
+using SW2GZ.Ros2;
 using SW2GZ.Utilities;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -50,6 +51,12 @@ namespace SW2GZ.URDFExport
 
         private readonly SldWorks swApp;
 
+        // The active assembly document (target of the checkpoint save/load).
+        private readonly ModelDoc2 model;
+
+        // Live wizard state — loaded on open, saved on each Next.
+        private Sw2gzExportConfig config = new Sw2gzExportConfig();
+
         // PMP infrastructure.
         private readonly PropertyManagerPage2 PMPage;
 
@@ -58,6 +65,11 @@ namespace SW2GZ.URDFExport
         private PropertyManagerPageLabel PMLabelHeader;
         private PropertyManagerPageButton PMButtonBack;
         private PropertyManagerPageButton PMButtonNext;
+
+        // Step 1 (Mode) radio buttons, indexed by ExportMode order.
+        private PropertyManagerPageOption PMOptRobotPackage;
+        private PropertyManagerPageOption PMOptSdfModel;
+        private PropertyManagerPageOption PMOptSdfWorld;
 
         // Step model — placeholder headings + descriptions only (no real controls).
         private static readonly string[] StepNames =
@@ -86,21 +98,27 @@ namespace SW2GZ.URDFExport
         private const int ButtonBackID = 4;
         private const int ButtonNextID = 5;
 
-        // Step controls start well above the fixed IDs (10 IDs of headroom per step).
+        // Step controls start well above the fixed IDs (20 IDs of headroom per step).
         private const int StepIdBase = 100;
 
-        private int StepGroupId(int step) => StepIdBase + step * 10;
-        private int StepHeadingId(int step) => StepIdBase + step * 10 + 1;
-        private int StepDescId(int step) => StepIdBase + step * 10 + 2;
+        private int StepGroupId(int step) => StepIdBase + step * 20;
+        private int StepHeadingId(int step) => StepIdBase + step * 20 + 1;
+        private int StepDescId(int step) => StepIdBase + step * 20 + 2;
+
+        // Step 1 (Mode) option IDs.
+        private const int OptRobotPackageID = StepIdBase + 0 * 20 + 3;
+        private const int OptSdfModelID     = StepIdBase + 0 * 20 + 4;
+        private const int OptSdfWorldID     = StepIdBase + 0 * 20 + 5;
 
         private int StepCount => StepNames.Length;
 
         // Index of the current step (0-based).
         private int currentStep;
 
-        public Sw2gzExportPmp(SldWorks swApp)
+        public Sw2gzExportPmp(SldWorks swApp, ModelDoc2 model)
         {
             this.swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
+            this.model = model ?? throw new ArgumentNullException(nameof(model));
             this.currentStep = 0;
 
             int longerrors = 0;
@@ -174,10 +192,19 @@ namespace SW2GZ.URDFExport
                     (short)swPropertyManagerPageControlType_e.swControlType_Label,
                     StepNames[step], (short)leftEdge, visibleEnabled, "");
 
-                stepGroup.AddControl2(
-                    StepDescId(step),
-                    (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                    StepDescriptions[step], (short)indent, visibleEnabled, "");
+                switch (step)
+                {
+                    case 0:
+                        BuildModeStep(stepGroup, indent, visibleEnabled);
+                        break;
+                    default:
+                        // Generic placeholder for steps not yet implemented.
+                        stepGroup.AddControl2(
+                            StepDescId(step),
+                            (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                            StepDescriptions[step], (short)indent, visibleEnabled, "");
+                        break;
+                }
             }
 
             // ── Navigation group: Back / Next buttons ─────────────────────────
@@ -197,8 +224,44 @@ namespace SW2GZ.URDFExport
                 "Next >", 0, visibleEnabled, "Go to the next step");
             ((IPropertyManagerPageControl)PMButtonNext).Width = 95;
 
+            // Reflect any loaded checkpoint onto the controls.
+            SeedModeControls();
+
             // Seed the UI on the first step.
             ShowStep(0);
+        }
+
+        // Step 1 — three mutually-exclusive radio buttons selecting the export
+        // mode. SolidWorks treats a contiguous run of option controls in one
+        // group as mutually exclusive; OnOptionCheck mirrors the pick into config.
+        private void BuildModeStep(PropertyManagerPageGroup group, int indent, int visibleEnabled)
+        {
+            PMOptRobotPackage = (PropertyManagerPageOption)group.AddControl2(
+                OptRobotPackageID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Option,
+                "Robot package (URDF/Xacro)", (short)indent, visibleEnabled,
+                "Generate a ROS 2 robot package with URDF/Xacro");
+
+            PMOptSdfModel = (PropertyManagerPageOption)group.AddControl2(
+                OptSdfModelID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Option,
+                "Gz asset (SDF model)", (short)indent, visibleEnabled,
+                "Generate a standalone Gazebo SDF model");
+
+            PMOptSdfWorld = (PropertyManagerPageOption)group.AddControl2(
+                OptSdfWorldID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Option,
+                "Gz world (SDF world)", (short)indent, visibleEnabled,
+                "Generate a Gazebo SDF world containing the model");
+        }
+
+        // Reflects config.Mode onto the radio buttons' Checked state.
+        private void SeedModeControls()
+        {
+            if (PMOptRobotPackage == null) return;
+            PMOptRobotPackage.Checked = config.Mode == ExportMode.RobotPackage;
+            PMOptSdfModel.Checked = config.Mode == ExportMode.SdfModel;
+            PMOptSdfWorld.Checked = config.Mode == ExportMode.SdfWorld;
         }
 
         // ───────────────────────────── navigation ────────────────────────────
@@ -213,7 +276,10 @@ namespace SW2GZ.URDFExport
 
             for (int i = 0; i < StepCount; i++)
             {
-                ((IPropertyManagerPageControl)PMStepGroups[i]).Visible = (i == currentStep);
+                // Group boxes expose Visible directly on IPropertyManagerPageGroup;
+                // they do NOT support IPropertyManagerPageControl (that's leaf controls
+                // only), so casting a group to it throws E_NOINTERFACE.
+                PMStepGroups[i].Visible = (i == currentStep);
             }
 
             PMLabelHeader.Caption =
@@ -316,7 +382,16 @@ namespace SW2GZ.URDFExport
         void IPropertyManagerPage2Handler9.OnListboxRMBUp(int Id, int PosX, int PosY) { }
         void IPropertyManagerPage2Handler9.OnGroupCheck(int Id, bool Checked) { }
         void IPropertyManagerPage2Handler9.OnGroupExpand(int Id, bool Expanded) { }
-        void IPropertyManagerPage2Handler9.OnOptionCheck(int Id) { }
+        void IPropertyManagerPage2Handler9.OnOptionCheck(int Id)
+        {
+            switch (Id)
+            {
+                case OptRobotPackageID: config.Mode = ExportMode.RobotPackage; break;
+                case OptSdfModelID:     config.Mode = ExportMode.SdfModel; break;
+                case OptSdfWorldID:     config.Mode = ExportMode.SdfWorld; break;
+                default: break;
+            }
+        }
         void IPropertyManagerPage2Handler9.OnPopupMenuItem(int Id) { }
         void IPropertyManagerPage2Handler9.OnPopupMenuItemUpdate(int Id, ref int retval) { }
         void IPropertyManagerPage2Handler9.OnSliderPositionChanged(int Id, double Value) { }
