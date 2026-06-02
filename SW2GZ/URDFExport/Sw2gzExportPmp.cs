@@ -525,14 +525,17 @@ namespace SW2GZ.URDFExport
         {
             int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
 
-            const int treeHeight = 170;
+            // Size the tree to the link count so small robots don't show a big empty
+            // box and large ones still scroll within a sensible cap.
+            int rows = config.Links != null ? config.Links.Count : 1;
+            int treeHeight = System.Math.Min(260, System.Math.Max(90, rows * 20 + 30));
             linkTree = new LinkTreeView { Height = treeHeight, Visible = true };
             linkTree.ActiveLinkChanged += (s, l) =>
             {
                 activeLink = l;
                 if (activeLink != null) UpdateMassReadout(activeLink);
                 UpdateValidationLabel();
-                if (PMPickFunnel != null) PMPickFunnel.SetSelectionFocus();
+                LoadLinkSelection(activeLink);   // show + highlight this link's parts
             };
             linkTree.LinksChanged += (s, e) => UpdateValidationLabel();
 
@@ -585,18 +588,52 @@ namespace SW2GZ.URDFExport
             return b;
         }
 
-        // Pick funnel: every component now in the box is assigned to the active link
-        // (moved off any other link), the box is cleared, and the tree rebuilt.
+        // The parts box is a live mirror of the active link's components: it shows
+        // (and viewport-highlights) what's assigned, and editing it reassigns. When
+        // the box and the link already agree (e.g. after a programmatic reselect),
+        // nothing happens — that guard breaks the select<->event feedback loop.
         private void OnFunnelChanged()
         {
             if (activeLink == null || linkTree == null) return;
-            foreach (string id in ReadSelectionBoxNames())
-                LinkHierarchy.AssignComponent(config.Links, activeLink.Name, id);
-            model.ClearSelection2(true);
-            linkTree.Rebuild();
+            List<string> box = ReadSelectionBoxNames();
+            if (SameSet(box, activeLink.ComponentIds)) return;
+
+            // Move any newly-added component off whatever link previously held it.
+            foreach (string id in box)
+                foreach (LinkDef l in config.Links)
+                    if (l != activeLink) l.ComponentIds.Remove(id);
+            activeLink.ComponentIds = box;   // box is the source of truth (adds + removes)
+
+            linkTree.Rebuild();              // refreshes [N parts] + colors; re-selects active
             UpdateMassReadout(activeLink);
             UpdateValidationLabel();
+        }
+
+        // Selects the active link's components in the viewport (into the parts box,
+        // under our mark) so they are visible + highlighted when the link is chosen.
+        private void LoadLinkSelection(LinkDef link)
+        {
+            if (link == null) return;
+            model.ClearSelection2(true);
+            ISelectionMgr selMgr = (ISelectionMgr)model.SelectionManager;
+            SelectData sd = selMgr.CreateSelectData();
+            sd.Mark = LinkSelectionMark;
+            object[] comps = (object[])((AssemblyDoc)model).GetComponents(true);
+            if (comps != null)
+                foreach (object o in comps)
+                {
+                    var c = (Component2)o;
+                    if (link.ComponentIds.Contains(c.Name2)) c.Select4(true, sd, false);
+                }
             if (PMPickFunnel != null) PMPickFunnel.SetSelectionFocus();
+        }
+
+        private static bool SameSet(List<string> a, List<string> b)
+        {
+            if (a.Count != b.Count) return false;
+            var set = new HashSet<string>(a);
+            foreach (string x in b) if (!set.Contains(x)) return false;
+            return true;
         }
 
         private void AddLink()
