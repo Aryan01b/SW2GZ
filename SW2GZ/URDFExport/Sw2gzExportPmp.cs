@@ -995,10 +995,14 @@ namespace SW2GZ.URDFExport
             }
             else
             {
-                // Finish — no backend wired yet this increment; still persist state.
+                // Finish — for now the wizard only SAVES the basic robot data (links +
+                // joints) into the assembly checkpoint. ROS 2 / Gz (modular xacro)
+                // export is a later increment, driven from this saved data.
                 SaveCheckpoint(currentStep);
-                logger.Info("SW2GZ export shell Finish pressed (no backend wired yet)");
-                swApp.SendMsgToUser("Export is not wired up yet — this is the navigation shell.");
+                logger.Info("SW2GZ export shell Finish pressed — basic data saved to the assembly checkpoint");
+                swApp.SendMsgToUser(
+                    "Saved. The link tree and joints are stored in this assembly and reload " +
+                    "next time you open the SW2GZ panel. (Export is not generated yet.)");
                 PMPage.Close(true);
             }
         }
