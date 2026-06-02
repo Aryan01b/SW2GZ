@@ -48,7 +48,6 @@
     <Compile Include="..\SW2GZ\Build\QuickHull3D.cs"         Link="Sources\Build\QuickHull3D.cs" />
     <Compile Include="..\SW2GZ\Build\Urdf\UrdfLink.cs"       Link="Sources\Build\Urdf\UrdfLink.cs" />
     <Compile Include="..\SW2GZ\Build\Urdf\UrdfJoint.cs"      Link="Sources\Build\Urdf\UrdfJoint.cs" />
-    <Compile Include="..\SW2GZ\Build\Urdf\UrdfRobot.cs"      Link="Sources\Build\Urdf\UrdfRobot.cs" />
     <Compile Include="..\SW2GZ\Build\Model\MaterialDef.cs"        Link="Sources\Build\Model\MaterialDef.cs" />
     <Compile Include="..\SW2GZ\Build\Model\SensorDef.cs"          Link="Sources\Build\Model\SensorDef.cs" />
     <Compile Include="..\SW2GZ\Build\Model\SensorKind.cs"         Link="Sources\Build\Model\SensorKind.cs" />
@@ -92,9 +91,6 @@
     <Compile Include="..\SW2GZ\Validate\MeshFileChecker.cs" Link="Sources\Validate\MeshFileChecker.cs" />
     <Compile Include="..\SW2GZ\Validate\OutputValidator.cs" Link="Sources\Validate\OutputValidator.cs" />
     <Compile Include="..\SW2GZ\Validate\RobotModelValidator.cs" Link="Sources\Validate\RobotModelValidator.cs" />
-    <Compile Include="..\SW2GZ\SwSurface\Abstractions\IUnitsContext.cs" Link="Sources\SwSurface\Abstractions\IUnitsContext.cs" />
-    <Compile Include="..\SW2GZ\SwSurface\IdentityUnitsContext.cs" Link="Sources\SwSurface\IdentityUnitsContext.cs" />
-    <Compile Include="..\SW2GZ\Build\UnitsScaler.cs" Link="Sources\Build\UnitsScaler.cs" />
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\IMassProperties.cs" Link="Sources\SwSurface\Abstractions\IMassProperties.cs" />
     <Compile Include="..\SW2GZ\SwSurface\SolidWorksMassProperties.cs" Link="Sources\SwSurface\SolidWorksMassProperties.cs" />
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\LinkSpec.cs" Link="Sources\SwSurface\Abstractions\LinkSpec.cs" />

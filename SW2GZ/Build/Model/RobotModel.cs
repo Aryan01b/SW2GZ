@@ -2,9 +2,7 @@
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
 P1 — RobotModel keystone: the single immutable domain aggregate built
-once by RobotModelBuilder and consumed by every serializer. Supersedes
-the legacy UrdfRobot record (which is kept around for back-compat with
-older callers).
+once by RobotModelBuilder and consumed by every serializer.
 
 Shape (per docs/superpowers/specs/2026-06-01-robust-exporter-architecture.md §3.1):
   RobotModel

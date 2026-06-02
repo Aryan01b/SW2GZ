@@ -428,7 +428,6 @@
     <Compile Include="Build\QuickHull3D.cs" />
     <Compile Include="Build\Urdf\UrdfLink.cs" />
     <Compile Include="Build\Urdf\UrdfJoint.cs" />
-    <Compile Include="Build\Urdf\UrdfRobot.cs" />
     <Compile Include="Build\Model\MaterialDef.cs" />
     <Compile Include="Build\Model\SensorDef.cs" />
     <Compile Include="Build\Model\SensorKind.cs" />
@@ -475,9 +474,6 @@
     <Compile Include="Validate\MeshFileChecker.cs" />
     <Compile Include="Validate\OutputValidator.cs" />
     <Compile Include="Validate\RobotModelValidator.cs" />
-    <Compile Include="SwSurface\Abstractions\IUnitsContext.cs" />
-    <Compile Include="SwSurface\IdentityUnitsContext.cs" />
-    <Compile Include="Build\UnitsScaler.cs" />
     <Compile Include="SwSurface\Abstractions\IMassProperties.cs" />
     <Compile Include="SwSurface\SolidWorksMassProperties.cs" />
     <Compile Include="SwSurface\Abstractions\LinkSpec.cs" />

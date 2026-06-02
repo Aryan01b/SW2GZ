@@ -7,31 +7,24 @@ inc/ros2_control.xacro (owned by Ros2ControlWriter, T11), and inc/gz.xacro
 emits placeholder copies of those include files — the caller must invoke
 the dedicated writers and Ros2ControlWriter/GzPluginTags own their inc/* file.
 
-v1 also passed through empty-name <material name=""/> tags which produced
-xacro warnings. T15 strips any such tag from the urdfBodyXml before emission.
+UrdfSerializer no longer emits empty-name <material name=""/> tags (material
+names are sanitized to non-empty and the material element is only written when
+MaterialName != null), so the body XML is passed through verbatim.
 */
 using System;
 using System.Security;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace SW2GZ.Ros2
 {
     public static class XacroWriter
     {
-        // Matches <material name="" .../> and <material name="   " ...> (self-closing or open)
-        private static readonly Regex EmptyNameMaterial = new Regex(
-            @"<material\s+name=""\s*""\s*/>(\s*\r?\n)?",
-            RegexOptions.Compiled);
-
         public static string Write(string robotName, string urdfBodyXml)
         {
             if (string.IsNullOrWhiteSpace(robotName))
                 throw new ArgumentException("robotName must not be null or whitespace.", nameof(robotName));
             if (urdfBodyXml == null)
                 throw new ArgumentNullException(nameof(urdfBodyXml));
-
-            string filteredBody = EmptyNameMaterial.Replace(urdfBodyXml, string.Empty);
 
             var sb = new StringBuilder();
             sb.AppendLine("<?xml version=\"1.0\"?>");
@@ -42,7 +35,7 @@ namespace SW2GZ.Ros2
             sb.AppendLine("  <xacro:include filename=\"inc/materials.xacro\"/>");
             sb.AppendLine("  <xacro:include filename=\"inc/ros2_control.xacro\"/>");
             sb.AppendLine("  <xacro:include filename=\"inc/gz.xacro\"/>");
-            sb.AppendLine(filteredBody);
+            sb.AppendLine(urdfBodyXml);
             sb.AppendLine("</robot>");
             return sb.ToString();
         }

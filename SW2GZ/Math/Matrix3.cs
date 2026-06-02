@@ -110,6 +110,32 @@ namespace SW2GZ.Math
                 2.0 * (xz - wy),             2.0 * (yz + wx),             1.0 - 2.0 * (xx + yy));
         }
 
+        // Extract (roll, pitch, yaw) from this rotation matrix using the ZYX
+        // Tait-Bryan convention (intrinsic Z-Y-X / extrinsic X-Y-Z) with a single
+        // gimbal-lock guard at pitch = ±90°. This is the single source of truth
+        // for quaternion→rpy: callers compose FromQuaternion(q).ToRpy(). The
+        // formula is algebraically identical to the classic quaternion→rpy used by
+        // SDF/URDF pose emission:
+        //   roll  = atan2(2(wx+yz), 1-2(xx+yy))  ≡ atan2(M32, M33)
+        //   pitch = asin(2(wy-xz))               ≡ asin(-M31)
+        //   yaw   = atan2(2(wz+xy), 1-2(yy+zz))  ≡ atan2(M21, M11)
+        public (double Roll, double Pitch, double Yaw) ToRpy()
+        {
+            double roll = System.Math.Atan2(M32, M33);
+
+            // sinp ≡ 2(wy - zx) from the classic quaternion formula. Written as
+            // -M31 here; adding 0.0 collapses IEEE negative zero to +0.0 so the
+            // emitted text matches the prior inlined formula byte-for-byte
+            // (e.g. identity rotation yields "0", never "-0").
+            double sinp = -M31 + 0.0;
+            double pitch = System.Math.Abs(sinp) >= 1
+                ? System.Math.CopySign(System.Math.PI / 2, sinp)
+                : System.Math.Asin(sinp);
+
+            double yaw = System.Math.Atan2(M21, M11);
+            return (roll, pitch, yaw);
+        }
+
         // Returns true iff R Rᵀ is within `tolerance` of the 3x3 identity
         // (per-entry absolute deviation does not exceed tolerance) AND the
         // determinant is positive — rejecting reflections (det ≈ -1) as well

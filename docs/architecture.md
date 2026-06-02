@@ -77,7 +77,6 @@ The roadmap unifies these onto a single `RobotModel` and deletes the legacy path
 | SW boundary | `SwSurface/Abstractions/*`, `SwSurface/SolidWorks*.cs` | DI seams; COM behind `#if SW_INTEROP` |
 | Domain | `Build/*`, `Math/*` | pure POCO, no SW types |
 | Domain aggregate | `Build/RobotModelBuilder.cs`, `Build/Model/*` (`RobotModel`, `MaterialDef`, `SensorDef`, …) | immutable aggregate consumed by all serializers |
-| Units | [`Build/UnitsScaler.cs`](../SW2GZ/Build/UnitsScaler.cs) | SI scaler (schema only; pipeline wiring deferred to P3-units) |
 | Collision | [`Build/QuickHull3D.cs`](../SW2GZ/Build/QuickHull3D.cs) | real convex hull (replaces AABB-only); AABB retained as `ColliderStrategy.Aabb` fallback |
 | Writers | `Ros2/*`, `Gz/*`, `Write/Mesh/*` | stateless statics |
 | URDF serializer | [`Write/Urdf/UrdfSerializer.cs`](../SW2GZ/Write/Urdf/UrdfSerializer.cs) | RobotModel → URDF/Xacro (supersedes pipeline string-concat) |

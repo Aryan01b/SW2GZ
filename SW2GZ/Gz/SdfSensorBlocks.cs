@@ -223,23 +223,10 @@ namespace SW2GZ.Gz
                 p.X, p.Y, p.Z, r, pt, y);
         }
 
-        // Standard quaternion -> (roll, pitch, yaw) with gimbal-lock guard.
+        // Quaternion -> (roll, pitch, yaw). Single source of truth: convert to a
+        // rotation matrix and extract rpy via Matrix3.ToRpy() (ZYX Tait-Bryan with
+        // gimbal-lock guard). Replaces the previously inlined formula.
         internal static (double R, double P, double Y) QuatToRpy(Quaternion q)
-        {
-            double sinr_cosp = 2 * (q.W * q.X + q.Y * q.Z);
-            double cosr_cosp = 1 - 2 * (q.X * q.X + q.Y * q.Y);
-            double roll = System.Math.Atan2(sinr_cosp, cosr_cosp);
-
-            double sinp = 2 * (q.W * q.Y - q.Z * q.X);
-            double pitch = System.Math.Abs(sinp) >= 1
-                ? System.Math.CopySign(System.Math.PI / 2, sinp)
-                : System.Math.Asin(sinp);
-
-            double siny_cosp = 2 * (q.W * q.Z + q.X * q.Y);
-            double cosy_cosp = 1 - 2 * (q.Y * q.Y + q.Z * q.Z);
-            double yaw = System.Math.Atan2(siny_cosp, cosy_cosp);
-
-            return (roll, pitch, yaw);
-        }
+            => SW2GZ.Math.Matrix3.FromQuaternion(q).ToRpy();
     }
 }

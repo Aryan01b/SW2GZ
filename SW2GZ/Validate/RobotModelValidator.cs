@@ -66,33 +66,33 @@ namespace SW2GZ.Validate
         private static void CheckLinkNameUniqueness(RobotModel model, List<ValidationIssue> issues)
         {
             if (model.Links == null) return;
-            var counts = new Dictionary<string, int>();
-            foreach (ModelLink ml in model.Links)
-            {
-                string name = ml?.Link?.Name ?? string.Empty;
-                counts.TryGetValue(name, out int n);
-                counts[name] = n + 1;
-            }
-            foreach (KeyValuePair<string, int> kv in counts)
-            {
-                if (kv.Value > 1)
-                {
-                    issues.Add(new ValidationIssue(
-                        IssueSeverity.Error, "P9.E.LINK_NAME_DUPE",
-                        $"Link name '{kv.Key}' appears {kv.Value} times",
-                        "RobotModel.Links"));
-                }
-            }
+            ReportDuplicates(model.Links, ml => ml?.Link?.Name ?? string.Empty,
+                "P9.E.LINK_NAME_DUPE", "Link", "RobotModel.Links", issues);
         }
 
         // V3 — Joint.Name must be unique.
         private static void CheckJointNameUniqueness(RobotModel model, List<ValidationIssue> issues)
         {
             if (model.Joints == null) return;
+            ReportDuplicates(model.Joints, j => j?.Name ?? string.Empty,
+                "P9.E.JOINT_NAME_DUPE", "Joint", "RobotModel.Joints", issues);
+        }
+
+        // Shared uniqueness check: count items by extracted name, then emit one
+        // error per name that appears more than once. Used by V2 (links) and V3
+        // (joints). Message/issue-code shape is preserved per caller.
+        private static void ReportDuplicates<T>(
+            IReadOnlyList<T> items,
+            System.Func<T, string> nameOf,
+            string issueCode,
+            string entityLabel,
+            string whereLabel,
+            List<ValidationIssue> issues)
+        {
             var counts = new Dictionary<string, int>();
-            foreach (UrdfJoint j in model.Joints)
+            foreach (T item in items)
             {
-                string name = j?.Name ?? string.Empty;
+                string name = nameOf(item);
                 counts.TryGetValue(name, out int n);
                 counts[name] = n + 1;
             }
@@ -101,9 +101,9 @@ namespace SW2GZ.Validate
                 if (kv.Value > 1)
                 {
                     issues.Add(new ValidationIssue(
-                        IssueSeverity.Error, "P9.E.JOINT_NAME_DUPE",
-                        $"Joint name '{kv.Key}' appears {kv.Value} times",
-                        "RobotModel.Joints"));
+                        IssueSeverity.Error, issueCode,
+                        $"{entityLabel} name '{kv.Key}' appears {kv.Value} times",
+                        whereLabel));
                 }
             }
         }

@@ -48,25 +48,19 @@ namespace SW2GZ.Writers.Tests
             Assert.Contains("<joint name=\"j1\" type=\"revolute\"/>", xml);
         }
 
+        // Fix 3: the empty-name <material> stripping regex was removed as dead code.
+        // UrdfSerializer no longer emits empty-name materials (names are sanitized
+        // to non-empty and the element is only written when MaterialName != null),
+        // so the body XML is now passed through verbatim. The writer must NOT alter
+        // material tags in the body.
         [Fact]
-        public void Write_StripsEmptyNameMaterialTags_Minor()
+        public void Write_PassesMaterialTagsThroughVerbatim()
         {
             var body =
                 "<link name=\"l\"/>\n" +
-                "<material name=\"\"/>\n" +
                 "<material name=\"silver\"/>\n";
             var xml = XacroWriter.Write("r", body);
-            Assert.DoesNotContain("<material name=\"\"/>", xml);
             Assert.Contains("<material name=\"silver\"/>", xml);
-        }
-
-        [Fact]
-        public void Write_StripsEmptyNameMaterialTags_WithWhitespace()
-        {
-            var body = "<material name=\"   \"/>\n<material name=\"ok\"/>\n";
-            var xml = XacroWriter.Write("r", body);
-            Assert.DoesNotContain("name=\"   \"", xml);
-            Assert.Contains("<material name=\"ok\"/>", xml);
         }
 
         [Fact]
