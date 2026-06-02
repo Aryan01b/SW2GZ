@@ -101,6 +101,27 @@
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\IAppearanceSource.cs" Link="Sources\SwSurface\Abstractions\IAppearanceSource.cs" />
     <Compile Include="..\SW2GZ\SwSurface\DefaultAppearanceSource.cs" Link="Sources\SwSurface\DefaultAppearanceSource.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzPipeline.cs"            Link="Sources\URDFExport\Sw2gzPipeline.cs" />
+    <!-- P8 — pure-C# MVVM layer (proves net-portability of the VM/services). -->
+    <Compile Include="..\SW2GZ\UI\Mvvm\ObservableObject.cs"           Link="Sources\UI\Mvvm\ObservableObject.cs" />
+    <Compile Include="..\SW2GZ\UI\Mvvm\RelayCommand.cs"               Link="Sources\UI\Mvvm\RelayCommand.cs" />
+    <Compile Include="..\SW2GZ\UI\Services\IFolderBrowserService.cs"  Link="Sources\UI\Services\IFolderBrowserService.cs" />
+    <Compile Include="..\SW2GZ\UI\Services\IViewportSelectionService.cs" Link="Sources\UI\Services\IViewportSelectionService.cs" />
+    <Compile Include="..\SW2GZ\UI\Services\IThemeService.cs"          Link="Sources\UI\Services\IThemeService.cs" />
+    <Compile Include="..\SW2GZ\UI\Services\IExportRunner.cs"          Link="Sources\UI\Services\IExportRunner.cs" />
+    <Compile Include="..\SW2GZ\UI\Services\NullFolderBrowserService.cs" Link="Sources\UI\Services\NullFolderBrowserService.cs" />
+    <Compile Include="..\SW2GZ\UI\Services\NullViewportSelectionService.cs" Link="Sources\UI\Services\NullViewportSelectionService.cs" />
+    <Compile Include="..\SW2GZ\UI\Services\NullThemeService.cs"       Link="Sources\UI\Services\NullThemeService.cs" />
+    <Compile Include="..\SW2GZ\UI\Services\NullExportRunner.cs"       Link="Sources\UI\Services\NullExportRunner.cs" />
+    <Compile Include="..\SW2GZ\UI\ViewModels\Ros2Distro.cs"          Link="Sources\UI\ViewModels\Ros2Distro.cs" />
+    <Compile Include="..\SW2GZ\UI\ViewModels\LinkDto.cs"             Link="Sources\UI\ViewModels\LinkDto.cs" />
+    <Compile Include="..\SW2GZ\UI\ViewModels\StepViewModelBase.cs"   Link="Sources\UI\ViewModels\StepViewModelBase.cs" />
+    <Compile Include="..\SW2GZ\UI\ViewModels\ModeStepViewModel.cs"   Link="Sources\UI\ViewModels\ModeStepViewModel.cs" />
+    <Compile Include="..\SW2GZ\UI\ViewModels\TargetsStepViewModel.cs" Link="Sources\UI\ViewModels\TargetsStepViewModel.cs" />
+    <Compile Include="..\SW2GZ\UI\ViewModels\OutputStepViewModel.cs" Link="Sources\UI\ViewModels\OutputStepViewModel.cs" />
+    <Compile Include="..\SW2GZ\UI\ViewModels\LinkViewModel.cs"       Link="Sources\UI\ViewModels\LinkViewModel.cs" />
+    <Compile Include="..\SW2GZ\UI\ViewModels\LinksStepViewModel.cs"  Link="Sources\UI\ViewModels\LinksStepViewModel.cs" />
+    <Compile Include="..\SW2GZ\UI\ViewModels\ReviewStepViewModel.cs" Link="Sources\UI\ViewModels\ReviewStepViewModel.cs" />
+    <Compile Include="..\SW2GZ\UI\ViewModels\WizardViewModel.cs"     Link="Sources\UI\ViewModels\WizardViewModel.cs" />
   </ItemGroup>
 
   <!-- Test/Writers/*.cs and Test/Golden/*.cs are auto-included by the SDK
