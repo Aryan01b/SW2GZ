@@ -24,7 +24,12 @@ using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidWorks.Interop.swpublished;
 using SolidWorksTools;
+using SW2GZ.Build.Model;
+using SW2GZ.SwSurface;
 using SW2GZ.UI;
+using SW2GZ.UI.Services.Sw;
+using SW2GZ.UI.ViewModels;
+using SW2GZ.UI.Wizard;
 using SW2GZ.URDFExport;
 using SW2GZ.Utilities;
 using System;
@@ -63,6 +68,13 @@ namespace SW2GZ.SW
         public const int mainItemID2 = 1;
         public const int mainItemID3 = 2;
         public const int flyoutGroupID = 91;
+
+        // SW2GZ ribbon command group (distinct from flyoutGroupID).
+        public const int sw2gzCmdGroupID = 92;
+        public const int sw2gzWizardCmdID = 0;
+        // Stable user-ID handed to AddCommandItem2; SolidWorks persists toolbar
+        // docking state against it, so it must not collide with other groups.
+        private const int sw2gzWizardUserID = 920;
 
         #region Event Handler Variables
 
@@ -240,34 +252,98 @@ namespace SW2GZ.SW
 
         #region UI Methods
 
+        // Icon list reused by both the toolbar and the command-group glyph. These
+        // are the same ROS-logo sprites the legacy menu item shipped; SolidWorks
+        // wants an array of square PNGs of increasing size and picks the best fit.
+        private static string[] Sw2gzIconList()
+        {
+            const string dir = "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\";
+            return new[]
+            {
+                dir + "ros_logo_20x20.png",
+                dir + "ros_logo_32x32.png",
+                dir + "ros_logo_40x40.png",
+                dir + "ros_logo_64x64.png",
+                dir + "ros_logo_96x96.png",
+                dir + "ros_logo_128x128.png",
+            };
+        }
+
         public void AddCommandMgr()
         {
-            // Do not use AddMenuItem5 here despite the obselete warning, AddMenuItem5 doesn't work
-            string[] images = {
-                "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\ros_logo_20x20.png",
-                "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\ros_logo_32x32.png",
-                "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\ros_logo_40x40.png",
-                "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\ros_logo_64x64.png",
-                "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\ros_logo_96x96.png",
-                "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\ros_logo_128x128.png",
-            };
-            int ret = SwApp.AddMenuItem5((int)swDocumentTypes_e.swDocASSEMBLY, add_in_id_, "Export as URDF@&Tools",
-                -1, "AssemblyURDFExporter", "", "Export assembly as URDF file", images);
-            if (ret < 0)
+            const string title = "SW2GZ";
+            const string toolTip = "Export to ROS 2 / Gz Sim";
+            const string hint = "Export the active assembly to a ROS 2 package (URDF, ros2_control, Gz sim, sensors)";
+
+            int errs = 0;
+            ICommandGroup grp = CmdMgr.CreateCommandGroup2(
+                sw2gzCmdGroupID, title, toolTip, hint, -1, false, ref errs);
+            if (grp == null)
             {
-                logger.Error("Failure to add menu item 'Export as URDF' to menu 'Tools'");
-                return;
+                logger.Error("Failed to create SW2GZ command group (error code " + errs + ")");
             }
-            logger.Info("Adding Assembly export to file menu");
-            ret = SwApp.AddMenuItem5((int)swDocumentTypes_e.swDocPART, add_in_id_, "Export as URDF@&Tools",
-                -1, "PartURDFExporter", "", "Export part as URDF file", images);
-            if (ret < 0)
+            else
             {
-                logger.Error("Failure to add menu item 'Export as URDF' to menu 'Tools'");
-                return;
+                string[] images = Sw2gzIconList();
+                grp.IconList = images;       // toolbar button icons
+                grp.MainIconList = images;   // command-group glyph
+
+                int cmdIndex = grp.AddCommandItem2(
+                    "Export to ROS 2 / Gz", -1, hint, toolTip, 0,
+                    "LaunchWizard", "WizardEnable", sw2gzWizardUserID,
+                    (int)(swCommandItemType_e.swMenuItem | swCommandItemType_e.swToolbarItem));
+                if (cmdIndex < 0)
+                {
+                    logger.Error("Failed to add SW2GZ wizard command item to the command group");
+                }
+
+                grp.HasToolbar = true;
+                grp.HasMenu = true;
+                grp.Activate();
+
+                // Place the button on a dedicated CommandManager ribbon tab for
+                // assembly documents. Best-effort: if any step fails we still have
+                // the toolbar + menu + Tools fallback below.
+                try
+                {
+                    int cmdId = grp.get_CommandID(cmdIndex);
+                    ICommandTab tab = CmdMgr.GetCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
+                    if (tab == null)
+                    {
+                        tab = CmdMgr.AddCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
+                    }
+                    if (tab != null)
+                    {
+                        ICommandTabBox box = tab.AddCommandTabBox();
+                        int[] cmdIds = { cmdId };
+                        int[] textTypes = { (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow };
+                        box.AddCommands(cmdIds, textTypes);
+                        logger.Info("Added SW2GZ command tab for assembly documents");
+                    }
+                }
+                catch (Exception e)
+                {
+                    // Tab placement is the most fragile part of the COM surface;
+                    // toolbar + menu + Tools fallback still expose the command.
+                    logger.Warn("SW2GZ ribbon tab placement failed (toolbar/menu still available)", e);
+                }
+
+                logger.Info("SW2GZ command group activated");
             }
 
-            logger.Info("Adding Part export to file menu");
+            // Fallback: a single Tools-menu entry so the wizard is always reachable
+            // even if the ribbon tab needs in-session tuning. Replaces the retired
+            // (and throwing) "Export as URDF" part/assembly menu items.
+            int ret = SwApp.AddMenuItem5((int)swDocumentTypes_e.swDocASSEMBLY, add_in_id_, "SW2GZ…@&Tools",
+                -1, "LaunchWizard", "", hint, Sw2gzIconList());
+            if (ret < 0)
+            {
+                logger.Error("Failure to add Tools menu item 'SW2GZ'");
+            }
+            else
+            {
+                logger.Info("Added SW2GZ Tools menu fallback entry");
+            }
         }
 
         public int ToolbarEnableMethod()
@@ -276,10 +352,12 @@ namespace SW2GZ.SW
         }
         public void RemoveCommandMgr()
         {
-            SwApp.RemoveMenu((int)swDocumentTypes_e.swDocASSEMBLY, "Export as URDF@&File", "");
-            logger.Info("Removing assembly export from file menu");
-            SwApp.RemoveMenu((int)swDocumentTypes_e.swDocPART, "Export as URDF@&File", "");
-            logger.Info("Removing part export from file menu");
+            // Symmetric with AddCommandMgr: remove the Tools fallback then the group.
+            SwApp.RemoveMenu((int)swDocumentTypes_e.swDocASSEMBLY, "SW2GZ…@&Tools", "");
+            logger.Info("Removing SW2GZ Tools menu entry");
+
+            CmdMgr.RemoveCommandGroup(sw2gzCmdGroupID);
+            logger.Info("Removing SW2GZ command group");
         }
 
         #endregion UI Methods
@@ -344,65 +422,104 @@ namespace SW2GZ.SW
             }
         }
 
-        public void SetupPartExporter()
-        {
-            logger.Info("Part export called");
-            ModelDoc2 modeldoc = SwApp.ActiveDoc;
-            if ((modeldoc.Extension.NeedsRebuild2 == 0) ||
-                MessageBox.Show("Save and rebuild document?",
-                "The SW to URDF exporter requires saving before continuing",
-                MessageBoxButtons.YesNo) == DialogResult.Yes)
-            {
-                if (modeldoc.Extension.NeedsRebuild2 != 0)
-                {
-                    int options = (int)swSaveAsOptions_e.swSaveAsOptions_SaveReferenced |
-                        (int)swSaveAsOptions_e.swSaveAsOptions_Silent;
-                    logger.Info("Saving part");
-                    modeldoc.Save3(options, 0, 0);
-                }
-
-                PartExportForm exportForm = new PartExportForm((SldWorks)SwApp);
-                logger.Info("Showing part");
-                exportForm.Show();
-            }
-        }
-
-        public void PartURDFExporter()
+        // The new SW2GZ wizard entry point. Composes a preview RobotModel from the
+        // active assembly and shows the WPF wizard, wired to the SW-backed services
+        // so Browse / Assign-geometry / Finish all work in-session. Invoked by name
+        // (reflection) from both the ribbon button and the Tools fallback, so it
+        // must stay public.
+        public void LaunchWizard()
         {
             try
             {
-                SetupPartExporter();
+                ModelDoc2 modeldoc = SwApp.ActiveDoc;
+                if (modeldoc == null ||
+                    modeldoc.GetType() != (int)swDocumentTypes_e.swDocASSEMBLY)
+                {
+                    SwApp.SendMsgToUser("Open an assembly first, then launch SW2GZ.");
+                    return;
+                }
+
+                // Save/rebuild guard — mirror the legacy assembly exporter so the
+                // mass/tessellation reads operate on an up-to-date model.
+                bool needsSave = modeldoc.GetSaveFlag() ||
+                    modeldoc.Extension.NeedsRebuild2 !=
+                        (int)swModelRebuildStatus_e.swModelRebuildStatus_FullyRebuilt;
+                if (needsSave)
+                {
+                    int options = (int)swSaveAsOptions_e.swSaveAsOptions_SaveReferenced |
+                        (int)swSaveAsOptions_e.swSaveAsOptions_Silent;
+                    logger.Info("Saving assembly before launching SW2GZ wizard");
+                    modeldoc.Save3(options, 0, 0);
+                }
+
+                // SW boundary services — same construction ExportHelper uses.
+                var assemblyDoc = (AssemblyDoc)modeldoc;
+                var mass = new SolidWorksMassProperties((SldWorks)SwApp, assemblyDoc);
+                var walker = new SolidWorksAssemblyWalker(assemblyDoc);
+                var tess = new SolidWorksMeshTessellator((SldWorks)SwApp, assemblyDoc);
+                var appearance = new DefaultAppearanceSource();
+
+                string title = modeldoc.GetTitle();
+                if (string.IsNullOrWhiteSpace(title))
+                    title = "robot";
+
+                var composer = new WizardModelComposer(mass, walker, tess, appearance);
+                var meta = new RobotMeta(title, null, null, null, CoordinateConvention.Identity);
+                WizardPreview preview = composer.Compose(meta);
+
+                // Build the wizard VM from the preview + the SW-backed services so
+                // Browse / Assign-geometry / Finish all operate on the live model.
+                var vm = new WizardViewModel(
+                    new WinFormsFolderBrowserService(),
+                    new SwViewportSelectionService((SldWorks)SwApp),
+                    new SwThemeService((SldWorks)SwApp),
+                    new Sw2gzPipelineExportRunner(mass, walker, tess, appearance),
+                    preview.Links,
+                    preview.JointCount,
+                    preview.Model,
+                    preview.Joints);
+
+                // Ensure a WPF Application exists for resource resolution; a single
+                // ShowDialog works even without one, but the wizard pulls merged
+                // resource dictionaries so an Application keeps them resolvable.
+                if (System.Windows.Application.Current == null)
+                {
+                    var app = new System.Windows.Application
+                    {
+                        ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown,
+                    };
+                }
+
+                var window = new WizardWindow(vm);
+                try
+                {
+                    var helper = new System.Windows.Interop.WindowInteropHelper(window);
+                    helper.Owner = (IntPtr)SwApp.IFrameObject().GetHWnd();
+                }
+                catch (Exception ownerEx)
+                {
+                    // Non-fatal: the dialog just won't be owned by the SW main window.
+                    logger.Warn("Could not set SW2GZ wizard owner window", ownerEx);
+                }
+
+                window.ShowDialog();
             }
             catch (Exception e)
             {
-                logger.Error("Excoption caught setting up export form", e);
-                MessageBox.Show("An exception occured setting up the export form, please email " +
-                    " your maintainer with the log file found at " + Logger.GetFileName());
+                logger.Error("An exception was caught launching the SW2GZ wizard", e);
+                MessageBox.Show("There was a problem launching the SW2GZ wizard: \n\"" +
+                    e.Message + "\"\nEmail your maintainer with the log file found at " +
+                    Logger.GetFileName());
             }
         }
 
-        public void FlyoutCallback()
+        // Enable-state callback for the ribbon/menu command: enabled only when the
+        // active document is an assembly (the wizard targets assemblies).
+        public int WizardEnable()
         {
-            FlyoutGroup flyGroup = CmdMgr.GetFlyoutGroup(flyoutGroupID);
-            flyGroup.RemoveAllCommandItems();
-
-            flyGroup.AddCommandItem(
-                DateTime.Now.ToLongTimeString(), "test", 0, "FlyoutCommandItem1", "FlyoutEnableCommandItem1");
-        }
-
-        public int FlyoutEnable()
-        {
-            return 1;
-        }
-
-        public void FlyoutCommandItem1()
-        {
-            SwApp.SendMsgToUser("Flyout command 1");
-        }
-
-        public int FlyoutEnableCommandItem1()
-        {
-            return 1;
+            ModelDoc2 modeldoc = SwApp.ActiveDoc;
+            return (modeldoc != null &&
+                    modeldoc.GetType() == (int)swDocumentTypes_e.swDocASSEMBLY) ? 1 : 0;
         }
 
         #endregion UI Callbacks
