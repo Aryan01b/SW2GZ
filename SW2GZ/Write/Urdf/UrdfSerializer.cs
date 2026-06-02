@@ -197,16 +197,15 @@ namespace SW2GZ.Write.Urdf
             sb.AppendLine($"    <parent link=\"{parentEsc}\"/>");
             sb.AppendLine($"    <child link=\"{childEsc}\"/>");
 
-            // TODO P2: convert j.Origin.Rotation (quaternion) to rpy; identity-only here.
-            // Origin: position + rpy. Quaternion → rpy conversion stays in
-            // P2 (the joint-graph pass); for now we emit position with rpy
-            // "0 0 0" if rotation is identity, matching the link inertial
-            // origin's behavior. If rotation is non-identity we still emit
-            // "0 0 0" rpy as a P2 TODO — explicit so callers see the gap.
+            // Origin: position + rpy. Quaternion → rpy via the single source of
+            // truth (Matrix3.FromQuaternion(q).ToRpy(), ZYX Tait-Bryan). ToRpy
+            // collapses IEEE -0 to +0, so an identity rotation emits "0 0 0"
+            // byte-identically to the prior hard-coded path.
             var pos = j.Origin.Position;
+            var (roll, pitch, yaw) = Matrix3.FromQuaternion(j.Origin.Rotation).ToRpy();
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
-                "    <origin xyz=\"{0} {1} {2}\" rpy=\"0 0 0\"/>",
-                pos.X, pos.Y, pos.Z));
+                "    <origin xyz=\"{0} {1} {2}\" rpy=\"{3} {4} {5}\"/>",
+                pos.X, pos.Y, pos.Z, roll, pitch, yaw));
 
             // Axis. URDF requires <axis> for revolute/continuous/prismatic;
             // we emit unconditionally for simplicity (harmless on fixed joints

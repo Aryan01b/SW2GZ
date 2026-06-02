@@ -49,6 +49,7 @@ namespace SW2GZ.Integration.Tests
             {
                 new LinkSpec("base_link", new[] { "/p/base.SLDPRT" }),
             });
+            walker.Setup(w => w.WalkMates()).Returns(System.Array.Empty<SW2GZ.Build.MateSpec>());
 
             var tess = new Mock<IMeshTessellator>();
             tess.Setup(t => t.Tessellate(It.IsAny<string>(), It.IsAny<TessellationLod>()))

@@ -6,6 +6,7 @@ using System.IO;
 using System.Numerics;
 using Moq;
 using SW2GZ.Build;
+using SW2GZ.Build.Urdf;
 using SW2GZ.Exceptions;
 using SW2GZ.Math;
 using SW2GZ.SwSurface.Abstractions;
@@ -43,6 +44,7 @@ namespace SW2GZ.Integration.Tests
                 new LinkSpec("base_link", new[] { "/p/base.SLDPRT" }),
                 new LinkSpec("arm1",      new[] { "/p/arm1.SLDPRT" }),
             });
+            walker.Setup(w => w.WalkMates()).Returns(Array.Empty<MateSpec>());
 
             var tess = new Mock<IMeshTessellator>();
             tess.Setup(t => t.Tessellate(It.IsAny<string>(), It.IsAny<TessellationLod>()))
@@ -89,6 +91,7 @@ namespace SW2GZ.Integration.Tests
 
             var walker = new Mock<IAssemblyWalker>();
             walker.Setup(w => w.WalkActive()).Returns(new[] { new LinkSpec("bad", new[] { "/p/bad" }) });
+            walker.Setup(w => w.WalkMates()).Returns(Array.Empty<MateSpec>());
 
             var tess = new Mock<IMeshTessellator>();
 
@@ -107,6 +110,7 @@ namespace SW2GZ.Integration.Tests
             mass.Setup(m => m.Get(It.IsAny<string>())).Returns(new MassProps(1.0, Vector3.Zero, Matrix3.Identity));
             var walker = new Mock<IAssemblyWalker>();
             walker.Setup(w => w.WalkActive()).Returns(new[] { new LinkSpec("base", new[] { "/p/b.SLDPRT" }) });
+            walker.Setup(w => w.WalkMates()).Returns(Array.Empty<MateSpec>());
             var tess = new Mock<IMeshTessellator>();
             tess.Setup(t => t.Tessellate(It.IsAny<string>(), It.IsAny<TessellationLod>())).Returns(TinyMesh());
 
@@ -119,6 +123,50 @@ namespace SW2GZ.Integration.Tests
                 // sanitized to "bad_name"; v2.0 layout = <tmp>/bad_name_ws/src/bad_name/
                 Assert.True(Directory.Exists(Path.Combine(tmp, "bad_name_ws", "src", "bad_name")));
                 Assert.False(Directory.Exists(Path.Combine(tmp, "Bad-Name_ws")));
+            }
+            finally { if (Directory.Exists(tmp)) Directory.Delete(tmp, true); }
+        }
+
+        [Fact]
+        public void Run_RevoluteMate_EmitsJointInUrdfAndControllersYaml()
+        {
+            var mass = new Mock<IMassProperties>();
+            mass.Setup(m => m.Get(It.IsAny<string>()))
+                .Returns(new MassProps(1.0, Vector3.Zero, Matrix3.Identity));
+
+            var walker = new Mock<IAssemblyWalker>();
+            walker.Setup(w => w.WalkActive()).Returns(new[]
+            {
+                new LinkSpec("base_link", new[] { "/p/base.SLDPRT" }),
+                new LinkSpec("arm1",      new[] { "/p/arm1.SLDPRT" }),
+            });
+            walker.Setup(w => w.WalkMates()).Returns(new[]
+            {
+                new MateSpec("shoulder", MateKind.Revolute, Pose.Identity, Vector3.UnitZ,
+                    -1.0, 1.0, 10, 1.0, UrdfCmdInterface.Position, "base_link", "arm1"),
+            });
+
+            var tess = new Mock<IMeshTessellator>();
+            tess.Setup(t => t.Tessellate(It.IsAny<string>(), It.IsAny<TessellationLod>()))
+                .Returns(TinyMesh());
+
+            var tmp = Path.Combine(Path.GetTempPath(), "sw2gz_pipe_" + Guid.NewGuid());
+            try
+            {
+                var report = new Sw2gzPipeline(mass.Object, walker.Object, tess.Object)
+                    .Run(tmp, "joint_pkg", "A", "a@b", "MIT");
+                Assert.False(report.HasErrors,
+                    string.Join("; ", System.Linq.Enumerable.Select(report.Errors, e => e.Code + " " + e.Message)));
+
+                string root = Path.Combine(tmp, "joint_pkg_ws", "src", "joint_pkg");
+
+                string urdf = File.ReadAllText(Path.Combine(root, "urdf", "joint_pkg.urdf.xacro"));
+                Assert.Contains("<joint name=\"shoulder\" type=\"revolute\">", urdf);
+                Assert.Contains("<parent link=\"base_link\"/>", urdf);
+                Assert.Contains("<child link=\"arm1\"/>", urdf);
+
+                string controllers = File.ReadAllText(Path.Combine(root, "config", "controllers.yaml"));
+                Assert.Contains("shoulder", controllers);
             }
             finally { if (Directory.Exists(tmp)) Directory.Delete(tmp, true); }
         }

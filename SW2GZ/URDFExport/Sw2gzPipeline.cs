@@ -117,9 +117,20 @@ namespace SW2GZ.URDFExport
                 linksWithPaths.Add((link, primaryPath));
             }
 
-            // ── Step 4: Joints (deferred to v2.1) ────────────────────────────
-            // Pipeline emits empty joints list for v2.0.
-            var joints = new List<UrdfJoint>();
+            // ── Step 4: Joints (P2) ──────────────────────────────────────────
+            // Walk the assembly mates and assemble the joint tree. WalkMates may
+            // return an empty list (no mates / skeleton walker) — joints then stay
+            // empty, identical to the pre-P2 behaviour (links export at origin).
+            IReadOnlyList<MateSpec> mates = _walker.WalkMates();
+            var (graphJoints, _root, jointWarnings) = JointGraphBuilder.Build(links, mates);
+            var joints = new List<UrdfJoint>(graphJoints);
+
+            // JointGraphBuilder warnings are non-fatal — collect them as
+            // ValidationIssue warnings to merge into the final report below.
+            var jointIssues = new List<SW2GZ.Validate.ValidationIssue>();
+            foreach (string w in jointWarnings)
+                jointIssues.Add(new SW2GZ.Validate.ValidationIssue(
+                    SW2GZ.Validate.IssueSeverity.Warning, "P2.W.JOINT", w, "JointGraphBuilder"));
 
             // Build the immutable RobotModel keystone (P1) BEFORE any I/O begins,
             // so the P9 pre-write validator runs without creating output dirs.
@@ -241,7 +252,7 @@ namespace SW2GZ.URDFExport
                 SW2GZ.Validate.ValidationReport postWrite =
                     new SW2GZ.Validate.OutputValidator().Run(root, pkg);
                 return new SW2GZ.Validate.ValidationReport(
-                    preWrite.Warnings.Concat(postWrite.Issues).ToList());
+                    preWrite.Warnings.Concat(jointIssues).Concat(postWrite.Issues).ToList());
             }
             catch
             {
