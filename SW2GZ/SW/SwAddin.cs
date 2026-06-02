@@ -24,12 +24,6 @@ using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidWorks.Interop.swpublished;
 using SolidWorksTools;
-using SW2GZ.Build.Model;
-using SW2GZ.SwSurface;
-using SW2GZ.UI;
-using SW2GZ.UI.Services.Sw;
-using SW2GZ.UI.ViewModels;
-using SW2GZ.UI.Wizard;
 using SW2GZ.URDFExport;
 using SW2GZ.Utilities;
 using System;
@@ -294,21 +288,23 @@ namespace SW2GZ.SW
                 grp.MainIconList = images;   // command-group glyph
 
                 int cmdIndex = grp.AddCommandItem2(
-                    "Export to ROS 2 / Gz", -1, hint, toolTip, 0,
+                    "SW2GZ", -1, hint, toolTip, 0,
                     "LaunchWizard", "WizardEnable", sw2gzWizardUserID,
-                    (int)(swCommandItemType_e.swMenuItem | swCommandItemType_e.swToolbarItem));
+                    (int)swCommandItemType_e.swToolbarItem);
                 if (cmdIndex < 0)
                 {
-                    logger.Error("Failed to add SW2GZ wizard command item to the command group");
+                    logger.Error("Failed to add SW2GZ command item to the command group");
                 }
 
+                // Exactly ONE entry: the ribbon/toolbar button. HasMenu=false so the
+                // command group does NOT auto-create a duplicate Tools-menu item.
                 grp.HasToolbar = true;
-                grp.HasMenu = true;
+                grp.HasMenu = false;
                 grp.Activate();
 
                 // Place the button on a dedicated CommandManager ribbon tab for
                 // assembly documents. Best-effort: if any step fails we still have
-                // the toolbar + menu + Tools fallback below.
+                // the toolbar button.
                 try
                 {
                     int cmdId = grp.get_CommandID(cmdIndex);
@@ -329,25 +325,11 @@ namespace SW2GZ.SW
                 catch (Exception e)
                 {
                     // Tab placement is the most fragile part of the COM surface;
-                    // toolbar + menu + Tools fallback still expose the command.
-                    logger.Warn("SW2GZ ribbon tab placement failed (toolbar/menu still available)", e);
+                    // the toolbar button still exposes the command.
+                    logger.Warn("SW2GZ ribbon tab placement failed (toolbar button still available)", e);
                 }
 
                 logger.Info("SW2GZ command group activated");
-            }
-
-            // Fallback: a single Tools-menu entry so the wizard is always reachable
-            // even if the ribbon tab needs in-session tuning. Replaces the retired
-            // (and throwing) "Export as URDF" part/assembly menu items.
-            int ret = SwApp.AddMenuItem5((int)swDocumentTypes_e.swDocASSEMBLY, add_in_id_, "SW2GZ…@&Tools",
-                -1, "LaunchWizard", "", hint, Sw2gzIconList());
-            if (ret < 0)
-            {
-                logger.Error("Failure to add Tools menu item 'SW2GZ'");
-            }
-            else
-            {
-                logger.Info("Added SW2GZ Tools menu fallback entry");
             }
         }
 
@@ -357,10 +339,8 @@ namespace SW2GZ.SW
         }
         public void RemoveCommandMgr()
         {
-            // Symmetric with AddCommandMgr: remove the Tools fallback then the group.
-            SwApp.RemoveMenu((int)swDocumentTypes_e.swDocASSEMBLY, "SW2GZ…@&Tools", "");
-            logger.Info("Removing SW2GZ Tools menu entry");
-
+            // Symmetric with AddCommandMgr: only the command group is created, so
+            // only the command group is removed (single ribbon/toolbar button).
             CmdMgr.RemoveCommandGroup(sw2gzCmdGroupID);
             logger.Info("Removing SW2GZ command group");
         }
@@ -427,11 +407,9 @@ namespace SW2GZ.SW
             }
         }
 
-        // The new SW2GZ wizard entry point. Composes a preview RobotModel from the
-        // active assembly and shows the WPF wizard, wired to the SW-backed services
-        // so Browse / Assign-geometry / Finish all work in-session. Invoked by name
-        // (reflection) from both the ribbon button and the Tools fallback, so it
-        // must stay public.
+        // The SW2GZ entry point. Opens the native PropertyManagerPage export shell
+        // (left panel) so the 3D viewport stays live. Invoked by name (reflection)
+        // from the ribbon/toolbar button, so it must stay public.
         public void LaunchWizard()
         {
             try
@@ -440,147 +418,17 @@ namespace SW2GZ.SW
                 if (modeldoc == null ||
                     modeldoc.GetType() != (int)swDocumentTypes_e.swDocASSEMBLY)
                 {
-                    SwApp.SendMsgToUser("Open an assembly first, then launch SW2GZ.");
+                    SwApp.SendMsgToUser("Open an assembly first.");
                     return;
                 }
 
-                // Save/rebuild guard — mirror the legacy assembly exporter so the
-                // mass/tessellation reads operate on an up-to-date model.
-                bool needsSave = modeldoc.GetSaveFlag() ||
-                    modeldoc.Extension.NeedsRebuild2 !=
-                        (int)swModelRebuildStatus_e.swModelRebuildStatus_FullyRebuilt;
-                if (needsSave)
-                {
-                    int options = (int)swSaveAsOptions_e.swSaveAsOptions_SaveReferenced |
-                        (int)swSaveAsOptions_e.swSaveAsOptions_Silent;
-                    logger.Info("Saving assembly before launching SW2GZ wizard");
-                    modeldoc.Save3(options, 0, 0);
-                }
-
-                // ── FLOW: native geometry panel FIRST, then the modeless wizard ──
-                // Geometry is assigned in a native left-side PropertyManagerPage so
-                // the 3D viewport stays live (the old modal ShowDialog froze it).
-                // The PMP writes into a shared GeometryAssignment seeded with the
-                // top-level link names; on PMP close we open the WPF wizard
-                // (MODELESS, owned to the SW frame) seeded from that assignment.
-                var assemblyDoc = (AssemblyDoc)modeldoc;
-                var walker = new SolidWorksAssemblyWalker(assemblyDoc);
-
-                System.Collections.Generic.IReadOnlyList<
-                    SW2GZ.SwSurface.Abstractions.LinkSpec> links = walker.WalkActive();
-                var linkNames = new System.Collections.Generic.List<string>();
-                foreach (var spec in links)
-                    linkNames.Add(spec.Name);
-
-                var assignment = new GeometryAssignment(linkNames);
-
-                // PMP-first; the continuation shows the wizard once geometry is set.
-                var pmp = new GeometryPropertyManager(
-                    (SldWorks)SwApp, modeldoc, assignment,
-                    onClosed: () => ShowWizard(modeldoc, assemblyDoc, assignment));
+                var pmp = new Sw2gzExportPmp((SldWorks)SwApp);
                 pmp.Show();
             }
             catch (Exception e)
             {
-                logger.Error("An exception was caught launching the SW2GZ wizard", e);
-                MessageBox.Show("There was a problem launching the SW2GZ wizard: \n\"" +
-                    e.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
-            }
-        }
-
-        // Builds the WPF wizard from the active assembly and shows it MODELESS so
-        // the 3D viewport stays interactive. Seeds the Links step from the geometry
-        // already assigned in the native PropertyManagerPage. Invoked as the
-        // GeometryPropertyManager's onClosed continuation.
-        private void ShowWizard(
-            ModelDoc2 modeldoc, AssemblyDoc assemblyDoc, GeometryAssignment assignment)
-        {
-            try
-            {
-                // SW boundary services — same construction ExportHelper uses.
-                var mass = new SolidWorksMassProperties((SldWorks)SwApp, assemblyDoc);
-                var walker = new SolidWorksAssemblyWalker(assemblyDoc);
-                var tess = new SolidWorksMeshTessellator((SldWorks)SwApp, assemblyDoc);
-                var appearance = new DefaultAppearanceSource();
-
-                string title = modeldoc.GetTitle();
-                if (string.IsNullOrWhiteSpace(title))
-                    title = "robot";
-
-                // Smart defaults for the wizard's Output step, seeded from the
-                // active assembly. Package name = the doc title without its
-                // extension (GetTitle may carry ".SLDASM"). Output folder = the
-                // assembly's own folder when saved, else MyDocuments.
-                string defaultPackageName =
-                    System.IO.Path.GetFileNameWithoutExtension(title);
-                if (string.IsNullOrWhiteSpace(defaultPackageName))
-                    defaultPackageName = title;
-
-                string defaultOutputFolder = null;
-                string docPath = modeldoc.GetPathName();
-                if (!string.IsNullOrWhiteSpace(docPath))
-                    defaultOutputFolder = System.IO.Path.GetDirectoryName(docPath);
-                if (string.IsNullOrWhiteSpace(defaultOutputFolder))
-                    defaultOutputFolder = System.Environment.GetFolderPath(
-                        System.Environment.SpecialFolder.MyDocuments);
-
-                var composer = new WizardModelComposer(mass, walker, tess, appearance);
-                var meta = new RobotMeta(
-                    defaultPackageName, null, null, null, CoordinateConvention.Identity);
-                WizardPreview preview = composer.Compose(meta);
-
-                // Build the wizard VM from the preview + the SW-backed services so
-                // Browse / Assign-geometry / Finish all operate on the live model.
-                var vm = new WizardViewModel(
-                    new WinFormsFolderBrowserService(),
-                    new SwViewportSelectionService((SldWorks)SwApp),
-                    new SwThemeService((SldWorks)SwApp),
-                    new Sw2gzPipelineExportRunner(mass, walker, tess, appearance),
-                    preview.Links,
-                    preview.JointCount,
-                    preview.Model,
-                    preview.Joints,
-                    defaultPackageName,
-                    defaultOutputFolder);
-
-                // Seed the Links step from the geometry assigned in the native PMP.
-                // GeometryAssignment -> a plain tuple list (no COM) the VM consumes.
-                var geomState = new System.Collections.Generic.List<(string, bool, int)>();
-                foreach (LinkGeometry link in assignment.Links)
-                    geomState.Add((link.LinkName, link.HasGeometry, link.SelectedBodyNames.Count));
-                vm.LinksStep.ApplyGeometry(geomState);
-
-                // Ensure a WPF Application exists for resource resolution; the
-                // wizard pulls merged resource dictionaries so an Application keeps
-                // them resolvable.
-                if (System.Windows.Application.Current == null)
-                {
-                    var app = new System.Windows.Application
-                    {
-                        ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown,
-                    };
-                }
-
-                var window = new WizardWindow(vm);
-                try
-                {
-                    var helper = new System.Windows.Interop.WindowInteropHelper(window);
-                    helper.Owner = (IntPtr)SwApp.IFrameObject().GetHWnd();
-                }
-                catch (Exception ownerEx)
-                {
-                    // Non-fatal: the window just won't be owned by the SW main window.
-                    logger.Warn("Could not set SW2GZ wizard owner window", ownerEx);
-                }
-
-                // MODELESS — keep the 3D viewport interactive while the wizard is up.
-                window.Show();
-            }
-            catch (Exception e)
-            {
-                logger.Error("An exception was caught showing the SW2GZ wizard", e);
-                MessageBox.Show("There was a problem showing the SW2GZ wizard: \n\"" +
+                logger.Error("An exception was caught launching the SW2GZ export panel", e);
+                MessageBox.Show("There was a problem launching the SW2GZ export panel: \n\"" +
                     e.Message + "\"\nEmail your maintainer with the log file found at " +
                     Logger.GetFileName());
             }
