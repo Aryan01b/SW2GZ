@@ -401,6 +401,7 @@
     <Compile Include="URDF\Texture.cs" />
     <Compile Include="URDF\URDFAttribute.cs" />
     <Compile Include="URDFExport\ExportPropertyManager.cs" />
+    <Compile Include="URDFExport\GeometryPropertyManager.cs" />
     <Compile Include="URDF\URDFElement.cs" />
     <Compile Include="URDF\URDFWriter.cs" />
     <Compile Include="URDF\Visual.cs" />
