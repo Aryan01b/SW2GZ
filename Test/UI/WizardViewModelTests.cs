@@ -42,10 +42,40 @@ namespace SW2GZ.Test.UI
         }
 
         [Fact]
-        public void HasFiveSteps()
+        public void HasTenSteps()
         {
             var wizard = new WizardViewModel();
-            Assert.Equal(5, wizard.StepCount);
+            Assert.Equal(10, wizard.StepCount);
+        }
+
+        [Fact]
+        public void StepOrderMatchesPlannedSequence()
+        {
+            var wizard = new WizardViewModel();
+            Assert.Same(wizard.ModeStep, wizard.Steps[0]);
+            Assert.Same(wizard.TargetsStep, wizard.Steps[1]);
+            Assert.Same(wizard.OutputStep, wizard.Steps[2]);
+            Assert.Same(wizard.LinksStep, wizard.Steps[3]);
+            Assert.Same(wizard.JointsStep, wizard.Steps[4]);
+            Assert.Same(wizard.CollisionStep, wizard.Steps[5]);
+            Assert.Same(wizard.MaterialsStep, wizard.Steps[6]);
+            Assert.Same(wizard.SensorsStep, wizard.Steps[7]);
+            Assert.Same(wizard.ControllersStep, wizard.Steps[8]);
+            Assert.Same(wizard.ReviewStep, wizard.Steps[9]);
+        }
+
+        [Fact]
+        public void NextWalksAllTenStepsToReview()
+        {
+            var wizard = BuildAdvanceableWizard();
+            for (int i = 0; i < 9; i++)
+            {
+                Assert.True(wizard.NextCommand.CanExecute(null), $"blocked at step {i}");
+                wizard.NextCommand.Execute(null);
+            }
+            Assert.Equal(9, wizard.CurrentStepIndex);
+            Assert.Same(wizard.ReviewStep, wizard.CurrentStep);
+            Assert.True(wizard.IsLastStep);
         }
 
         [Fact]
@@ -108,12 +138,12 @@ namespace SW2GZ.Test.UI
         public void ProgressAndCounterReflectCurrentStep()
         {
             var wizard = BuildAdvanceableWizard();
-            Assert.Equal(1.0 / 5.0, wizard.Progress, 5);
-            Assert.Equal("Step 1 of 5", wizard.StepCounter);
+            Assert.Equal(1.0 / 10.0, wizard.Progress, 5);
+            Assert.Equal("Step 1 of 10", wizard.StepCounter);
 
             wizard.NextCommand.Execute(null);
-            Assert.Equal(2.0 / 5.0, wizard.Progress, 5);
-            Assert.Equal("Step 2 of 5", wizard.StepCounter);
+            Assert.Equal(2.0 / 10.0, wizard.Progress, 5);
+            Assert.Equal("Step 2 of 10", wizard.StepCounter);
         }
 
         [Fact]
@@ -135,13 +165,23 @@ namespace SW2GZ.Test.UI
         public void IsLastStepTrueOnReview()
         {
             var wizard = BuildAdvanceableWizard();
-            wizard.NextCommand.Execute(null); // 1
-            wizard.NextCommand.Execute(null); // 2
-            wizard.NextCommand.Execute(null); // 3
-            wizard.NextCommand.Execute(null); // 4 (Review)
-            Assert.Equal(4, wizard.CurrentStepIndex);
+            for (int i = 0; i < 9; i++)
+                wizard.NextCommand.Execute(null); // walk to Review (index 9)
+            Assert.Equal(9, wizard.CurrentStepIndex);
             Assert.True(wizard.IsLastStep);
             Assert.False(wizard.NextCommand.CanExecute(null)); // last step: no next
+        }
+
+        [Fact]
+        public void ReviewReachableOnlyAfterTheChain()
+        {
+            // Output step blank ⇒ chain blocks at index 2, Review unreachable.
+            var wizard = new WizardViewModel();
+            wizard.NextCommand.Execute(null); // 0 -> 1
+            wizard.NextCommand.Execute(null); // 1 -> 2 (Jazzy supported)
+            Assert.Equal(2, wizard.CurrentStepIndex);
+            Assert.False(wizard.NextCommand.CanExecute(null));
+            Assert.NotSame(wizard.ReviewStep, wizard.CurrentStep);
         }
     }
 }
