@@ -35,5 +35,9 @@ namespace SW2GZ.URDFExport
 
         // Step 3 — link definitions (name + assigned component ids + base flag).
         [DataMember] public List<LinkDef> Links { get; set; } = new List<LinkDef>();
+
+        // Step 4 — joint definitions, one per non-root link edge. Seeded from the
+        // link tree (JointSeeder) and editable in the Joints step.
+        [DataMember] public List<JointDef> Joints { get; set; } = new List<JointDef>();
     }
 }

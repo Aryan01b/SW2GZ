@@ -67,6 +67,35 @@ namespace SW2GZ.Test.URDFExport
         }
 
         [Fact]
+        public void RoundTrip_PreservesJoints()
+        {
+            var config = new Sw2gzExportConfig();
+            config.Joints.Add(new SW2GZ.Build.Model.JointDef
+            {
+                Name = "wheel_left_joint",
+                ParentLink = "base_link",
+                ChildLink = "wheel_left",
+                Type = SW2GZ.Build.Urdf.UrdfJointType.Continuous,
+                Axis = SW2GZ.Build.Model.JointAxisPreset.PlusY,
+                LimitEffort = 50,
+                LimitVelocity = 3,
+                Interface = SW2GZ.Build.Urdf.UrdfCmdInterface.Velocity,
+            });
+
+            string xml = Sw2gzConfigCodec.ToXmlString(config);
+            Sw2gzExportConfig restored = Sw2gzConfigCodec.FromXmlString(xml);
+
+            Assert.Single(restored.Joints);
+            Assert.Equal("wheel_left_joint", restored.Joints[0].Name);
+            Assert.Equal("base_link", restored.Joints[0].ParentLink);
+            Assert.Equal("wheel_left", restored.Joints[0].ChildLink);
+            Assert.Equal(SW2GZ.Build.Urdf.UrdfJointType.Continuous, restored.Joints[0].Type);
+            Assert.Equal(SW2GZ.Build.Model.JointAxisPreset.PlusY, restored.Joints[0].Axis);
+            Assert.Equal(50, restored.Joints[0].LimitEffort);
+            Assert.Equal(SW2GZ.Build.Urdf.UrdfCmdInterface.Velocity, restored.Joints[0].Interface);
+        }
+
+        [Fact]
         public void RoundTrip_PreservesLinks()
         {
             var config = new Sw2gzExportConfig();

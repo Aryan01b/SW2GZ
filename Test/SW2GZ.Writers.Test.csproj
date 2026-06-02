@@ -76,6 +76,10 @@
     <Compile Include="..\SW2GZ\Build\MateSpec.cs"             Link="Sources\Build\MateSpec.cs" />
     <Compile Include="..\SW2GZ\Build\JointBuilder.cs"         Link="Sources\Build\JointBuilder.cs" />
     <Compile Include="..\SW2GZ\Build\JointGraphBuilder.cs"    Link="Sources\Build\JointGraphBuilder.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\JointDef.cs"       Link="Sources\Build\Model\JointDef.cs" />
+    <Compile Include="..\SW2GZ\Build\JointSeeder.cs"          Link="Sources\Build\JointSeeder.cs" />
+    <Compile Include="..\SW2GZ\Build\JointDefConverter.cs"    Link="Sources\Build\JointDefConverter.cs" />
+    <Compile Include="..\SW2GZ\Build\JointDefValidator.cs"    Link="Sources\Build\JointDefValidator.cs" />
     <Compile Include="..\SW2GZ\Write\Mesh\StlWriter.cs"        Link="Sources\Write\Mesh\StlWriter.cs" />
     <Compile Include="..\SW2GZ\Write\Mesh\DaeWriter.cs"        Link="Sources\Write\Mesh\DaeWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfModelInput.cs"          Link="Sources\Gz\SdfModelInput.cs" />

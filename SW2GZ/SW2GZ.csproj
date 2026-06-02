@@ -460,6 +460,10 @@
     <Compile Include="Build\MateSpec.cs" />
     <Compile Include="Build\JointBuilder.cs" />
     <Compile Include="Build\JointGraphBuilder.cs" />
+    <Compile Include="Build\Model\JointDef.cs" />
+    <Compile Include="Build\JointSeeder.cs" />
+    <Compile Include="Build\JointDefConverter.cs" />
+    <Compile Include="Build\JointDefValidator.cs" />
     <Compile Include="Write\Mesh\StlWriter.cs" />
     <Compile Include="Write\Mesh\DaeWriter.cs" />
     <Compile Include="Gz\SdfModelInput.cs" />

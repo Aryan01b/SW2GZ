@@ -36,12 +36,14 @@ using SolidWorks.Interop.swconst;
 using SolidWorks.Interop.swpublished;
 using SW2GZ.Build;
 using SW2GZ.Build.Model;
+using SW2GZ.Build.Urdf;
 using SW2GZ.Ros2;
 using SW2GZ.SwSurface;
 using SW2GZ.SwSurface.Abstractions;
 using SW2GZ.UI;
 using SW2GZ.Utilities;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -99,6 +101,31 @@ namespace SW2GZ.URDFExport
         private const int LinkSelectionMark = 3;
         private IMassProperties massProps;                  // combined-mass readout
         private readonly List<string> allComponentIds = new List<string>();
+
+        // Step 4 (Joints) controls — combobox selector + per-joint editors. Limits
+        // are plain textboxes (parsed as doubles) to reuse the proven textbox path.
+        private PropertyManagerPageCombobox PMComboJointSel;
+        private PropertyManagerPageLabel PMLabelJointEdge;
+        private PropertyManagerPageCombobox PMComboJointType;
+        private PropertyManagerPageCombobox PMComboJointAxis;
+        private PropertyManagerPageTextbox PMTextLimitLower;
+        private PropertyManagerPageTextbox PMTextLimitUpper;
+        private PropertyManagerPageTextbox PMTextLimitEffort;
+        private PropertyManagerPageTextbox PMTextLimitVelocity;
+        private PropertyManagerPageCombobox PMComboJointInterface;
+        private PropertyManagerPageLabel PMLabelJointValidation;
+
+        // Index of the joint currently shown in the editor (-1 = none).
+        private int activeJointIndex = -1;
+
+        // Combobox item orders mirror the enum declaration orders so a combobox
+        // index casts straight to/from the enum value.
+        private static readonly string[] JointTypeChoices =
+            { "Fixed", "Revolute", "Continuous", "Prismatic" };
+        private static readonly string[] JointAxisChoices =
+            { "None", "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
+        private static readonly string[] JointInterfaceChoices =
+            { "Position", "Velocity", "Effort" };
 
         // SPDX license choices for the optional License dropdown. First entry is
         // blank ("none"); the combo is editable so a custom id can be typed.
@@ -168,6 +195,27 @@ namespace SW2GZ.URDFExport
         private const int ButtonRemoveLinkID    = StepIdBase + 2 * 20 + 5;
         private const int LabelLinkMassID       = StepIdBase + 2 * 20 + 6;
         private const int LabelLinkValidationID = StepIdBase + 2 * 20 + 7;
+
+        // Step 4 (Joints) control IDs (step index 3 → base 160).
+        private const int ComboJointSelID        = StepIdBase + 3 * 20 + 2;
+        private const int LabelJointEdgeID        = StepIdBase + 3 * 20 + 3;
+        private const int ComboJointTypeID        = StepIdBase + 3 * 20 + 4;
+        private const int ComboJointAxisID        = StepIdBase + 3 * 20 + 5;
+        private const int TextLimitLowerID        = StepIdBase + 3 * 20 + 6;
+        private const int TextLimitUpperID        = StepIdBase + 3 * 20 + 7;
+        private const int TextLimitEffortID       = StepIdBase + 3 * 20 + 8;
+        private const int TextLimitVelocityID     = StepIdBase + 3 * 20 + 9;
+        private const int ComboJointInterfaceID   = StepIdBase + 3 * 20 + 10;
+        private const int LabelJointValidationID  = StepIdBase + 3 * 20 + 11;
+        // Caption labels for the joint editor fields (within the same 20-ID block).
+        private const int LabelJointInstrID       = StepIdBase + 3 * 20 + 12;
+        private const int LabelJointTypeCapID     = StepIdBase + 3 * 20 + 13;
+        private const int LabelJointAxisCapID     = StepIdBase + 3 * 20 + 14;
+        private const int LabelLimitLowerCapID    = StepIdBase + 3 * 20 + 15;
+        private const int LabelLimitUpperCapID    = StepIdBase + 3 * 20 + 16;
+        private const int LabelLimitEffortCapID   = StepIdBase + 3 * 20 + 17;
+        private const int LabelLimitVelocityCapID = StepIdBase + 3 * 20 + 18;
+        private const int LabelJointInterfaceCapID = StepIdBase + 3 * 20 + 19;
 
         private int StepCount => StepNames.Length;
 
@@ -263,6 +311,9 @@ namespace SW2GZ.URDFExport
                         break;
                     case 2:
                         BuildLinksStep(stepGroup, leftEdge, indent, visibleEnabled);
+                        break;
+                    case 3:
+                        BuildJointsStep(stepGroup, leftEdge, indent, visibleEnabled);
                         break;
                     default:
                         // Generic placeholder for steps not yet implemented.
@@ -741,6 +792,142 @@ namespace SW2GZ.URDFExport
             }
         }
 
+        // ───────────────────────────── step 4: joints ────────────────────────
+
+        // Step 4 — one joint per non-root link (the edge to its parent). A
+        // combobox selects the joint; the fields below edit its type, axis,
+        // limits and command interface. Editing is optional (Fixed is a valid
+        // default), so this step never blocks Next — issues are advisory.
+        private void BuildJointsStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
+        {
+            int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
+
+            AddFieldLabel(group, LabelJointInstrID,
+                "Every non-base link has one joint to its parent. Pick a joint, then set " +
+                "its type, axis and limits. Joints default to Fixed (rigid).",
+                leftEdge, labelOpts);
+
+            PMComboJointSel = (PropertyManagerPageCombobox)group.AddControl2(
+                ComboJointSelID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
+                "", (short)leftEdge, visibleEnabled, "Select a joint to edit");
+
+            PMLabelJointEdge = AddFieldLabel(group, LabelJointEdgeID, "", leftEdge, labelOpts);
+
+            AddFieldLabel(group, LabelJointTypeCapID, "Type", leftEdge, labelOpts);
+            PMComboJointType = (PropertyManagerPageCombobox)group.AddControl2(
+                ComboJointTypeID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
+                "", (short)indent, visibleEnabled, "Joint type");
+            PMComboJointType.AddItems(JointTypeChoices);
+
+            AddFieldLabel(group, LabelJointAxisCapID, "Axis", leftEdge, labelOpts);
+            PMComboJointAxis = (PropertyManagerPageCombobox)group.AddControl2(
+                ComboJointAxisID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
+                "", (short)indent, visibleEnabled, "Rotation/translation axis (link-local frame)");
+            PMComboJointAxis.AddItems(JointAxisChoices);
+
+            AddFieldLabel(group, LabelLimitLowerCapID, "Lower limit", leftEdge, labelOpts);
+            PMTextLimitLower = (PropertyManagerPageTextbox)group.AddControl2(
+                TextLimitLowerID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "", (short)indent, visibleEnabled, "Lower limit (rad or m); blank = none");
+
+            AddFieldLabel(group, LabelLimitUpperCapID, "Upper limit", leftEdge, labelOpts);
+            PMTextLimitUpper = (PropertyManagerPageTextbox)group.AddControl2(
+                TextLimitUpperID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "", (short)indent, visibleEnabled, "Upper limit (rad or m); blank = none");
+
+            AddFieldLabel(group, LabelLimitEffortCapID, "Effort", leftEdge, labelOpts);
+            PMTextLimitEffort = (PropertyManagerPageTextbox)group.AddControl2(
+                TextLimitEffortID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "", (short)indent, visibleEnabled, "Max effort (N·m or N)");
+
+            AddFieldLabel(group, LabelLimitVelocityCapID, "Velocity", leftEdge, labelOpts);
+            PMTextLimitVelocity = (PropertyManagerPageTextbox)group.AddControl2(
+                TextLimitVelocityID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "", (short)indent, visibleEnabled, "Max velocity (rad/s or m/s)");
+
+            AddFieldLabel(group, LabelJointInterfaceCapID, "Command interface", leftEdge, labelOpts);
+            PMComboJointInterface = (PropertyManagerPageCombobox)group.AddControl2(
+                ComboJointInterfaceID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
+                "", (short)indent, visibleEnabled, "ros2_control command interface");
+            PMComboJointInterface.AddItems(JointInterfaceChoices);
+
+            PMLabelJointValidation = AddFieldLabel(group, LabelJointValidationID, "", leftEdge, labelOpts);
+        }
+
+        // Re-derives the joint list from the (possibly re-shaped) link tree,
+        // preserving the user's per-joint edits, then clamps the active index.
+        private void SyncJoints()
+        {
+            config.Joints = JointSeeder.Sync(config.Links, config.Joints);
+            if (config.Joints.Count == 0) activeJointIndex = -1;
+            else if (activeJointIndex < 0 || activeJointIndex >= config.Joints.Count) activeJointIndex = 0;
+        }
+
+        // Fills the joint selector combobox and loads the active joint's fields.
+        private void PopulateJointSelector()
+        {
+            if (PMComboJointSel == null) return;
+            PMComboJointSel.Clear();
+            foreach (JointDef j in config.Joints) PMComboJointSel.AddItems(j.Name);
+            if (config.Joints.Count > 0)
+                PMComboJointSel.CurrentSelection = (short)(activeJointIndex < 0 ? 0 : activeJointIndex);
+            LoadJointFields();
+        }
+
+        private JointDef ActiveJoint() =>
+            activeJointIndex >= 0 && activeJointIndex < config.Joints.Count
+                ? config.Joints[activeJointIndex] : null;
+
+        // Reflects the active joint onto the editor controls.
+        private void LoadJointFields()
+        {
+            JointDef j = ActiveJoint();
+            if (PMLabelJointEdge != null)
+                PMLabelJointEdge.Caption = j != null
+                    ? j.ParentLink + "  →  " + j.ChildLink
+                    : "No joints yet — define a link tree in the previous step.";
+            if (j == null) { UpdateJointValidationLabel(); return; }
+
+            if (PMComboJointType != null) PMComboJointType.CurrentSelection = (short)(int)j.Type;
+            if (PMComboJointAxis != null) PMComboJointAxis.CurrentSelection = (short)(int)j.Axis;
+            if (PMComboJointInterface != null) PMComboJointInterface.CurrentSelection = (short)(int)j.Interface;
+            if (PMTextLimitLower != null)
+                PMTextLimitLower.Text = j.LimitLower.HasValue ? j.LimitLower.Value.ToString(CultureInfo.InvariantCulture) : "";
+            if (PMTextLimitUpper != null)
+                PMTextLimitUpper.Text = j.LimitUpper.HasValue ? j.LimitUpper.Value.ToString(CultureInfo.InvariantCulture) : "";
+            if (PMTextLimitEffort != null)
+                PMTextLimitEffort.Text = j.LimitEffort.ToString(CultureInfo.InvariantCulture);
+            if (PMTextLimitVelocity != null)
+                PMTextLimitVelocity.Text = j.LimitVelocity.ToString(CultureInfo.InvariantCulture);
+
+            UpdateJointValidationLabel();
+        }
+
+        private void UpdateJointValidationLabel()
+        {
+            if (PMLabelJointValidation == null) return;
+            List<string> w = JointDefValidator.Validate(config.Joints);
+            PMLabelJointValidation.Caption = w.Count == 0
+                ? "Joints OK."
+                : w.Count + " note(s): " + w[0];
+        }
+
+        private static double? ParseNullableDouble(string s) =>
+            double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out double v)
+                ? v : (double?)null;
+
+        private static double ParseDoubleOr(string s, double fallback) =>
+            double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out double v)
+                ? v : fallback;
+
         // ───────────────────────────── navigation ────────────────────────────
 
         // Shows only the requested step's group, hides the rest, and refreshes the
@@ -769,6 +956,14 @@ namespace SW2GZ.URDFExport
             // Next becomes "Finish" on the last step.
             bool isLast = currentStep == StepCount - 1;
             PMButtonNext.Caption = isLast ? "Finish" : "Next >";
+
+            // Entering Joints: re-derive joints from the link tree (preserving
+            // edits) and refresh the editor.
+            if (currentStep == 3)
+            {
+                SyncJoints();
+                PopulateJointSelector();
+            }
         }
 
         private void GoBack()
@@ -922,6 +1117,30 @@ namespace SW2GZ.URDFExport
                 case TextPackageNameID:  config.PackageName = Text ?? ""; break;
                 case TextAuthorID:       config.Author = Text ?? ""; break;
                 case TextEmailID:        config.Email = Text ?? ""; break;
+                case TextLimitLowerID:
+                {
+                    JointDef j = ActiveJoint();
+                    if (j != null) { j.LimitLower = ParseNullableDouble(Text); UpdateJointValidationLabel(); }
+                    break;
+                }
+                case TextLimitUpperID:
+                {
+                    JointDef j = ActiveJoint();
+                    if (j != null) { j.LimitUpper = ParseNullableDouble(Text); UpdateJointValidationLabel(); }
+                    break;
+                }
+                case TextLimitEffortID:
+                {
+                    JointDef j = ActiveJoint();
+                    if (j != null) j.LimitEffort = ParseDoubleOr(Text, j.LimitEffort);
+                    break;
+                }
+                case TextLimitVelocityID:
+                {
+                    JointDef j = ActiveJoint();
+                    if (j != null) j.LimitVelocity = ParseDoubleOr(Text, j.LimitVelocity);
+                    break;
+                }
                 default: break;
             }
         }
@@ -948,6 +1167,34 @@ namespace SW2GZ.URDFExport
             if (Id == TextLicenseID)
             {
                 config.License = PMComboLicense.get_ItemText((short)Item) ?? "";
+                return;
+            }
+
+            switch (Id)
+            {
+                case ComboJointSelID:
+                    activeJointIndex = Item;
+                    LoadJointFields();
+                    break;
+                case ComboJointTypeID:
+                {
+                    JointDef j = ActiveJoint();
+                    if (j != null) { j.Type = (UrdfJointType)Item; UpdateJointValidationLabel(); }
+                    break;
+                }
+                case ComboJointAxisID:
+                {
+                    JointDef j = ActiveJoint();
+                    if (j != null) { j.Axis = (JointAxisPreset)Item; UpdateJointValidationLabel(); }
+                    break;
+                }
+                case ComboJointInterfaceID:
+                {
+                    JointDef j = ActiveJoint();
+                    if (j != null) { j.Interface = (UrdfCmdInterface)Item; UpdateJointValidationLabel(); }
+                    break;
+                }
+                default: break;
             }
         }
         void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item) { }
