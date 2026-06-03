@@ -22,9 +22,14 @@ namespace SW2GZ.URDFExport
             var walker = new WizardAssemblyWalker((AssemblyDoc)model, config.Links, config.Joints);
             var appearances = new DefaultAppearanceSource();
 
+            // Drive the export from the assembly's persisted stack selection
+            // (Stacks). Defensive default: an older config that somehow carries a
+            // null profile falls back to the full stack rather than throwing.
+            SW2GZ.Ros2.StackProfile profile = config.Stacks ?? SW2GZ.Ros2.StackProfile.Default();
+
             return new Sw2gzPipeline(mass, walker, tess, appearances).Run(
                 config.OutputFolder, config.PackageName, config.Author, config.Email, config.License,
-                System.Array.Empty<SensorDef>(), modelOnly: true);
+                System.Array.Empty<SensorDef>(), profile);
         }
 
         public static string WorkspacePath(string outputFolder, string packageName) =>
