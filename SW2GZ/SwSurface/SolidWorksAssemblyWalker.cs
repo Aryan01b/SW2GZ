@@ -280,6 +280,7 @@ namespace SW2GZ.SwSurface
                     case swMateType_e.swMateANGLE:      kind = hasLimit ? MateKind.Revolute : MateKind.Fixed; break;
                     case swMateType_e.swMateDISTANCE:   kind = hasLimit ? MateKind.Prismatic : MateKind.Fixed; break;
                     case swMateType_e.swMateSLOT:       kind = MateKind.Prismatic;  break;
+                    case swMateType_e.swMateCOINCIDENT: kind = BothEntitiesPlanarFaces(mate) ? MateKind.Planar : MateKind.Fixed; break;
                     default:                            kind = MateKind.Fixed;      break;
                 }
 
@@ -454,6 +455,29 @@ namespace SW2GZ.SwSurface
                 finally { Marshal.ReleaseComObject(ent); }
             }
             return new Vector3(0, 0, 1);
+        }
+
+        // True when the mate couples two planar faces (a face-coincident mate),
+        // i.e. the references slide in-plane and rotate about the shared normal —
+        // URDF planar-joint semantics. Uses Face2.GetSurface().IsPlane().
+        private static bool BothEntitiesPlanarFaces(Mate2 mate)
+        {
+            int entCount = mate.GetMateEntityCount();
+            int planarFaces = 0;
+            for (int i = 0; i < entCount; i++)
+            {
+                MateEntity2 ent = mate.MateEntity(i);
+                if (ent == null) continue;
+                try
+                {
+                    var face = ent.Reference as Face2;
+                    if (face == null) continue;
+                    var surf = face.GetSurface() as Surface;
+                    if (surf != null && surf.IsPlane()) planarFaces++;
+                }
+                finally { Marshal.ReleaseComObject(ent); }
+            }
+            return planarFaces >= 2;
         }
 
         // Applies a component's rotation (Transform2 / MathTransform 3x3 block) to a
