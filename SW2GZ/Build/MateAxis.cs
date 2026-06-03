@@ -16,5 +16,7 @@ namespace SW2GZ.Build
         string ComponentA,
         string ComponentB,
         Vector3 Axis,
-        MateKind Kind);
+        MateKind Kind,
+        double? LimitLower = null,
+        double? LimitUpper = null);
 }

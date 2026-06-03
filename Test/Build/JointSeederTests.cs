@@ -124,6 +124,41 @@ namespace SW2GZ.Test.Build
         }
 
         [Fact]
+        public void NewJoint_TakesLimitsFromMate()
+        {
+            var links = new List<LinkDef> { L("base", ""), L("wheel", "base") };
+            var mates = new List<MateAxis>
+            {
+                new MateAxis("base_c", "wheel_c", new Vector3(0, 0, 1), MateKind.Revolute, -0.5, 1.2),
+            };
+
+            JointDef j = Assert.Single(JointSeeder.Sync(links, null, mates));
+
+            Assert.Equal(-0.5, j.LimitLower);
+            Assert.Equal(1.2, j.LimitUpper);
+        }
+
+        [Fact]
+        public void AxisAndLimitsMergeAcrossMates()
+        {
+            // One mate gives the rotation axis (revolute), a separate limit mate
+            // gives the range — both apply to the same joint.
+            var links = new List<LinkDef> { L("base", ""), L("wheel", "base") };
+            var mates = new List<MateAxis>
+            {
+                new MateAxis("base_c", "wheel_c", new Vector3(0, 1, 0), MateKind.Revolute),
+                new MateAxis("base_c", "wheel_c", Vector3.Zero, MateKind.Fixed, -1.0, 1.0),
+            };
+
+            JointDef j = Assert.Single(JointSeeder.Sync(links, null, mates));
+
+            Assert.Equal(UrdfJointType.Revolute, j.Type);
+            Assert.Equal(1.0, j.AxisY, 5);
+            Assert.Equal(-1.0, j.LimitLower);
+            Assert.Equal(1.0, j.LimitUpper);
+        }
+
+        [Fact]
         public void NoMatchingMate_StaysFixedNone()
         {
             var links = new List<LinkDef> { L("base", ""), L("wheel", "base") };

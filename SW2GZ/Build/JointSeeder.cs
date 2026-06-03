@@ -30,10 +30,9 @@ namespace SW2GZ.Build
                     if (!string.IsNullOrEmpty(j.ChildLink) && !byChild.ContainsKey(j.ChildLink))
                         byChild[j.ChildLink] = j;
 
-            // Mate-derived (axis direction, type) keyed by the edge's child link
+            // Mate-derived (axis, type, limits) keyed by the edge's child link
             // name. Only applied to newly-seeded joints — never overrides an edit.
-            Dictionary<string, (Vector3 Axis, UrdfJointType Type)> mateByChild =
-                BuildMateByChild(links, mateAxes);
+            Dictionary<string, MateDerived> mateByChild = BuildMateByChild(links, mateAxes);
 
             // A link is a root when its parent is empty or names a link that
             // doesn't exist (same rule as LinkHierarchy.Roots). Roots get no joint.
@@ -60,10 +59,12 @@ namespace SW2GZ.Build
                         ParentLink = parent,
                         ChildLink = l.Name,
                     };
-                    if (mateByChild.TryGetValue(l.Name, out var derived))
+                    if (mateByChild.TryGetValue(l.Name, out MateDerived derived))
                     {
                         fresh.Type = derived.Type;
-                        fresh.SetAxis(derived.Axis);   // cache the mate direction
+                        if (derived.Axis != Vector3.Zero) fresh.SetAxis(derived.Axis);
+                        if (derived.Lower.HasValue) fresh.LimitLower = derived.Lower;
+                        if (derived.Upper.HasValue) fresh.LimitUpper = derived.Upper;
                     }
                     result.Add(fresh);
                 }
@@ -72,12 +73,23 @@ namespace SW2GZ.Build
             return result;
         }
 
+        // Per-edge aggregate of what the mates tell us about a joint.
+        private struct MateDerived
+        {
+            public Vector3 Axis;
+            public UrdfJointType Type;
+            public double? Lower;
+            public double? Upper;
+        }
+
         // Resolves each mate's two components to their owning links, identifies the
-        // child end of that tree edge, and records the axis direction + mapped type.
-        private static Dictionary<string, (Vector3, UrdfJointType)> BuildMateByChild(
+        // child end of that tree edge, and aggregates axis/type/limits. A joint may
+        // be defined by several mates (e.g. a concentric mate for the axis plus a
+        // limit-angle mate for the range), so entries merge across mates per child.
+        private static Dictionary<string, MateDerived> BuildMateByChild(
             IReadOnlyList<LinkDef> links, IReadOnlyList<MateAxis> mateAxes)
         {
-            var map = new Dictionary<string, (Vector3, UrdfJointType)>();
+            var map = new Dictionary<string, MateDerived>();
             if (mateAxes == null) return map;
 
             // component id -> owning link name
@@ -103,7 +115,12 @@ namespace SW2GZ.Build
                 else if (byName.TryGetValue(lb, out LinkDef db) && db.ParentName == la) child = lb;
                 if (child == null) continue;
 
-                map[child] = (ma.Axis, MapKind(ma.Kind));
+                map.TryGetValue(child, out MateDerived cur);
+                UrdfJointType k = MapKind(ma.Kind);
+                if (k != UrdfJointType.Fixed) { cur.Type = k; cur.Axis = ma.Axis; }
+                if (ma.LimitLower.HasValue) cur.Lower = ma.LimitLower;
+                if (ma.LimitUpper.HasValue) cur.Upper = ma.LimitUpper;
+                map[child] = cur;
             }
 
             return map;

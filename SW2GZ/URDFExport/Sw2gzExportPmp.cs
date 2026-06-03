@@ -110,14 +110,15 @@ namespace SW2GZ.URDFExport
         private PropertyManagerPageLabel PMLabelJointCounter;
         private PropertyManagerPageLabel PMLabelJointEdge;
         private PropertyManagerPageCombobox PMComboJointType;
+        private PropertyManagerPageLabel PMLabelSecAxis;
         private PropertyManagerPageLabel PMLabelAxisCap;
         private PropertyManagerPageSelectionbox PMSelAxisRef;
-        private PropertyManagerPageButton PMButtonGenAxis;
         private PropertyManagerPageLabel PMLabelAxisInfo;
+        private PropertyManagerPageLabel PMLabelSecLimits;
         private PropertyManagerPageLabel PMLabelLowerCap;
-        private PropertyManagerPageTextbox PMTextLimitLower;
+        private PropertyManagerPageNumberbox PMNumLower;
         private PropertyManagerPageLabel PMLabelUpperCap;
-        private PropertyManagerPageTextbox PMTextLimitUpper;
+        private PropertyManagerPageNumberbox PMNumUpper;
         private PropertyManagerPageLabel PMLabelJointValidation;
 
         // Selection-box mark for the reference-axis picker (distinct from the
@@ -209,7 +210,7 @@ namespace SW2GZ.URDFExport
         private const int TextLimitLowerID        = StepIdBase + 3 * 20 + 6;
         private const int TextLimitUpperID        = StepIdBase + 3 * 20 + 7;
         private const int LabelJointCounterID     = StepIdBase + 3 * 20 + 8;
-        private const int ButtonGenAxisID         = StepIdBase + 3 * 20 + 9;
+        private const int LabelSecAxisID          = StepIdBase + 3 * 20 + 9;
         private const int LabelAxisInfoID         = StepIdBase + 3 * 20 + 10;
         private const int LabelJointValidationID  = StepIdBase + 3 * 20 + 11;
         // Caption labels for the joint editor fields (within the same 20-ID block).
@@ -218,6 +219,7 @@ namespace SW2GZ.URDFExport
         private const int LabelJointAxisCapID     = StepIdBase + 3 * 20 + 14;
         private const int LabelLimitLowerCapID    = StepIdBase + 3 * 20 + 15;
         private const int LabelLimitUpperCapID    = StepIdBase + 3 * 20 + 16;
+        private const int LabelSecLimitsID        = StepIdBase + 3 * 20 + 17;
 
         private int StepCount => StepNames.Length;
 
@@ -805,16 +807,16 @@ namespace SW2GZ.URDFExport
             int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
 
             AddFieldLabel(group, LabelJointInstrID,
-                "One joint per non-base link. Type is read from the mates. Pick a joint " +
-                "from the list, then select or generate its reference axis.",
+                "Pick a joint from the list. Type and limits come from the mates; " +
+                "set the axis by selecting the geometry it turns/slides about.",
                 leftEdge, labelOpts);
 
-            // The full joint list — every joint visible at once; click one to edit.
+            // ── Joints list ──────────────────────────────────────────────────
             PMListJoints = (PropertyManagerPageListbox)group.AddControl2(
                 ListJointsID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
-                "All joints", (short)leftEdge, visibleEnabled, "All joints — click one to edit it");
-            ((IPropertyManagerPageListbox)PMListJoints).Height = 110;
+                "", (short)leftEdge, visibleEnabled, "All joints — click one to edit it");
+            ((IPropertyManagerPageListbox)PMListJoints).Height = 96;
 
             PMLabelJointCounter = AddFieldLabel(group, LabelJointCounterID, "", leftEdge, labelOpts);
             PMLabelJointEdge = AddFieldLabel(group, LabelJointEdgeID, "", leftEdge, labelOpts);
@@ -826,42 +828,52 @@ namespace SW2GZ.URDFExport
                 "", (short)indent, visibleEnabled, "Joint type (seeded from the mate)");
             PMComboJointType.AddItems(JointTypeChoices);
 
-            // Axis = a SolidWorks reference axis: select one, or generate it from
-            // the mate between the two links.
-            PMLabelAxisCap = AddFieldLabel(group, LabelJointAxisCapID, "Reference axis", leftEdge, labelOpts);
+            // ── Axis section ─────────────────────────────────────────────────
+            PMLabelSecAxis = AddFieldLabel(group, LabelSecAxisID, "— Axis —", leftEdge, labelOpts);
+            PMLabelAxisCap = AddFieldLabel(group, LabelJointAxisCapID,
+                "Select a cylindrical face, a circular/linear edge, or an axis:",
+                leftEdge, labelOpts);
             PMSelAxisRef = (PropertyManagerPageSelectionbox)group.AddControl2(
                 SelAxisRefID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Selectionbox,
-                "Reference axis", (short)indent, visibleEnabled,
-                "Select a reference axis for this joint");
-            var axisFilters = new swSelectType_e[] { swSelectType_e.swSelDATUMAXES };
+                "", (short)indent, visibleEnabled,
+                "Select the geometry that defines this joint's axis");
+            var axisFilters = new swSelectType_e[]
+            {
+                swSelectType_e.swSelFACES, swSelectType_e.swSelEDGES, swSelectType_e.swSelDATUMAXES,
+            };
             PMSelAxisRef.SingleEntityOnly = true;
             PMSelAxisRef.Height = 22;
             PMSelAxisRef.Mark = AxisRefMark;
             PMSelAxisRef.SetSelectionFilters((object)axisFilters);
 
-            PMButtonGenAxis = (PropertyManagerPageButton)group.AddControl2(
-                ButtonGenAxisID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Generate axis from mate", (short)indent, visibleEnabled,
-                "Create a reference axis from the mate between these two links");
-            ((IPropertyManagerPageControl)PMButtonGenAxis).Width = 170;
-
             PMLabelAxisInfo = AddFieldLabel(group, LabelAxisInfoID, "", leftEdge, labelOpts);
 
-            PMLabelLowerCap = AddFieldLabel(group, LabelLimitLowerCapID, "Lower limit", leftEdge, labelOpts);
-            PMTextLimitLower = (PropertyManagerPageTextbox)group.AddControl2(
+            // ── Limits section ───────────────────────────────────────────────
+            PMLabelSecLimits = AddFieldLabel(group, LabelSecLimitsID, "— Limits —", leftEdge, labelOpts);
+            PMLabelLowerCap = AddFieldLabel(group, LabelLimitLowerCapID, "Lower", leftEdge, labelOpts);
+            PMNumLower = (PropertyManagerPageNumberbox)group.AddControl2(
                 TextLimitLowerID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
-                "", (short)indent, visibleEnabled, "Lower limit (rad or m); blank = none");
+                (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
+                "", (short)indent, visibleEnabled, "Lower limit (rad for revolute, m for prismatic)");
+            ConfigureLimitBox(PMNumLower);
 
-            PMLabelUpperCap = AddFieldLabel(group, LabelLimitUpperCapID, "Upper limit", leftEdge, labelOpts);
-            PMTextLimitUpper = (PropertyManagerPageTextbox)group.AddControl2(
+            PMLabelUpperCap = AddFieldLabel(group, LabelLimitUpperCapID, "Upper", leftEdge, labelOpts);
+            PMNumUpper = (PropertyManagerPageNumberbox)group.AddControl2(
                 TextLimitUpperID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
-                "", (short)indent, visibleEnabled, "Upper limit (rad or m); blank = none");
+                (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
+                "", (short)indent, visibleEnabled, "Upper limit (rad for revolute, m for prismatic)");
+            ConfigureLimitBox(PMNumUpper);
 
             PMLabelJointValidation = AddFieldLabel(group, LabelJointValidationID, "", leftEdge, labelOpts);
+        }
+
+        // Sets a scrollable numeric range on a limit numberbox.
+        private static void ConfigureLimitBox(PropertyManagerPageNumberbox box)
+        {
+            box.SetRange2(
+                (int)swNumberboxUnitType_e.swNumberBox_UnitlessDouble,
+                -1.0e6, 1.0e6, true, 0.05, 0.5, 0.01);
         }
 
         // Re-derives the joint list from the (possibly re-shaped) link tree, with
@@ -923,10 +935,8 @@ namespace SW2GZ.URDFExport
             if (j == null) { UpdateJointFieldVisibility(); UpdateJointValidationLabel(); return; }
 
             if (PMComboJointType != null) PMComboJointType.CurrentSelection = (short)(int)j.Type;
-            if (PMTextLimitLower != null)
-                PMTextLimitLower.Text = j.LimitLower.HasValue ? j.LimitLower.Value.ToString(CultureInfo.InvariantCulture) : "";
-            if (PMTextLimitUpper != null)
-                PMTextLimitUpper.Text = j.LimitUpper.HasValue ? j.LimitUpper.Value.ToString(CultureInfo.InvariantCulture) : "";
+            if (PMNumLower != null) PMNumLower.Value = j.LimitLower ?? 0.0;
+            if (PMNumUpper != null) PMNumUpper.Value = j.LimitUpper ?? 0.0;
 
             UpdateAxisInfoLabel();
             UpdateJointFieldVisibility();
@@ -946,14 +956,15 @@ namespace SW2GZ.URDFExport
             bool limited = j != null &&
                 (j.Type == UrdfJointType.Revolute || j.Type == UrdfJointType.Prismatic);
 
+            Vis(PMLabelSecAxis, moving);
             Vis(PMLabelAxisCap, moving);
             Vis(PMSelAxisRef, moving);
-            Vis(PMButtonGenAxis, moving);
             Vis(PMLabelAxisInfo, moving);
+            Vis(PMLabelSecLimits, limited);
             Vis(PMLabelLowerCap, limited);
-            Vis(PMTextLimitLower, limited);
+            Vis(PMNumLower, limited);
             Vis(PMLabelUpperCap, limited);
-            Vis(PMTextLimitUpper, limited);
+            Vis(PMNumUpper, limited);
         }
 
         private static void Vis(object ctrl, bool visible)
@@ -969,7 +980,7 @@ namespace SW2GZ.URDFExport
             JointDef j = ActiveJoint();
             if (j == null || !j.HasAxis)
             {
-                PMLabelAxisInfo.Caption = "Axis: none — select or generate one.";
+                PMLabelAxisInfo.Caption = "Axis: none — select the geometry it turns/slides about.";
                 return;
             }
             string nm = string.IsNullOrEmpty(j.AxisRef) ? "(from mate)" : j.AxisRef;
@@ -979,44 +990,9 @@ namespace SW2GZ.URDFExport
                 j.AxisZ.ToString("0.##", CultureInfo.InvariantCulture) + ")";
         }
 
-        // Generate button — creates a SolidWorks reference axis from the mate
-        // between the active joint's two links and assigns it.
-        private void GenerateAxisForActiveJoint()
-        {
-            JointDef j = ActiveJoint();
-            if (j == null) return;
-            HashSet<string> aIds = ComponentIdsForLink(j.ParentLink);
-            HashSet<string> bIds = ComponentIdsForLink(j.ChildLink);
-            if (aIds.Count == 0 || bIds.Count == 0)
-            {
-                swApp.SendMsgToUser("These links have no components to find a mate from.");
-                return;
-            }
-            try
-            {
-                var res = new SolidWorksAssemblyWalker((AssemblyDoc)model).GenerateAxisFromMate(aIds, bIds);
-                if (res.Ok)
-                {
-                    j.AxisRef = res.Name ?? string.Empty;
-                    j.SetAxis(res.Dir);
-                    UpdateAxisInfoLabel();
-                    UpdateJointValidationLabel();
-                }
-                else
-                {
-                    swApp.SendMsgToUser(
-                        "Could not generate an axis from the mate between these links. " +
-                        "Select a reference axis instead.");
-                }
-            }
-            catch (Exception e)
-            {
-                logger.Error("Generating the joint axis failed", e);
-                swApp.SendMsgToUser("Generating the axis failed — see the log file.");
-            }
-        }
-
-        // Reference-axis selection box changed — read the picked axis and assign it.
+        // Axis selection box changed — derive the axis direction from the picked
+        // geometry (cylindrical face → its axis; circular/linear edge → its
+        // direction; datum axis → itself), transformed into the assembly frame.
         private void OnAxisRefSelected()
         {
             JointDef j = ActiveJoint();
@@ -1026,12 +1002,65 @@ namespace SW2GZ.URDFExport
                 ISelectionMgr selMgr = (ISelectionMgr)model.SelectionManager;
                 if (selMgr.GetSelectedObjectCount2(AxisRefMark) < 1) return;
                 object obj = selMgr.GetSelectedObject6(1, AxisRefMark);
-                var feat = obj as Feature;
-                RefAxis ax = feat != null ? feat.GetSpecificFeature2() as RefAxis : obj as RefAxis;
-                string name = feat != null ? feat.Name : "selected axis";
-                Vector3 dir = new Vector3(0, 0, 1);
-                if (ax != null && ax.GetRefAxisParams() is double[] p && p.Length >= 6)
-                    dir = new Vector3((float)(p[3] - p[0]), (float)(p[4] - p[1]), (float)(p[5] - p[2]));
+                int selType = selMgr.GetSelectedObjectType3(1, AxisRefMark);
+
+                Vector3 local = new Vector3(0, 0, 1);
+                bool ok = false;
+                string name = "selection";
+
+                switch ((swSelectType_e)selType)
+                {
+                    case swSelectType_e.swSelDATUMAXES:
+                    {
+                        var feat = obj as Feature;
+                        RefAxis ax = feat != null ? feat.GetSpecificFeature2() as RefAxis : obj as RefAxis;
+                        if (ax != null && ax.GetRefAxisParams() is double[] p && p.Length >= 6)
+                        {
+                            local = new Vector3((float)(p[3] - p[0]), (float)(p[4] - p[1]), (float)(p[5] - p[2]));
+                            ok = true;
+                            name = feat != null ? feat.Name : "axis";
+                        }
+                        break;
+                    }
+                    case swSelectType_e.swSelFACES:
+                    {
+                        var surf = (obj as Face2)?.GetSurface() as Surface;
+                        if (surf != null && surf.IsCylinder() && surf.CylinderParams is double[] cp && cp.Length >= 6)
+                        {
+                            local = new Vector3((float)cp[3], (float)cp[4], (float)cp[5]);
+                            ok = true;
+                            name = "cylindrical face";
+                        }
+                        break;
+                    }
+                    case swSelectType_e.swSelEDGES:
+                    {
+                        var curve = (obj as Edge)?.GetCurve() as Curve;
+                        if (curve != null && curve.IsCircle() && curve.CircleParams is double[] ci && ci.Length >= 6)
+                        {
+                            local = new Vector3((float)ci[3], (float)ci[4], (float)ci[5]);
+                            ok = true; name = "circular edge";
+                        }
+                        else if (curve != null && curve.IsLine() && curve.LineParams is double[] li && li.Length >= 6)
+                        {
+                            local = new Vector3((float)li[3], (float)li[4], (float)li[5]);
+                            ok = true; name = "linear edge";
+                        }
+                        break;
+                    }
+                }
+
+                if (!ok)
+                {
+                    swApp.SendMsgToUser(
+                        "Select a cylindrical face, a circular or linear edge, or a reference axis.");
+                    return;
+                }
+
+                // Convert the part-local direction into the assembly frame.
+                var comp = selMgr.GetSelectedObjectsComponent4(1, AxisRefMark) as Component2;
+                Vector3 dir = comp != null ? RotateByComponentXform(comp, local) : local;
+
                 j.AxisRef = name;
                 j.SetAxis(dir);
                 UpdateAxisInfoLabel();
@@ -1039,8 +1068,19 @@ namespace SW2GZ.URDFExport
             }
             catch (Exception e)
             {
-                logger.Warn("Could not read the selected reference axis", e);
+                logger.Warn("Could not read the selected axis geometry", e);
             }
+        }
+
+        // Applies a component's rotation (Transform2 3x3 block) to a direction.
+        private static Vector3 RotateByComponentXform(Component2 comp, Vector3 v)
+        {
+            MathTransform x = comp.Transform2;
+            if (x == null || !(x.ArrayData is double[] d) || d.Length < 9) return v;
+            return new Vector3(
+                (float)(d[0] * v.X + d[1] * v.Y + d[2] * v.Z),
+                (float)(d[3] * v.X + d[4] * v.Y + d[5] * v.Z),
+                (float)(d[6] * v.X + d[7] * v.Y + d[8] * v.Z));
         }
 
         // Highlights the active joint's mate reference geometry in the viewport so
@@ -1085,10 +1125,6 @@ namespace SW2GZ.URDFExport
                 ? "Joints OK."
                 : w.Count + " note(s): " + w[0];
         }
-
-        private static double? ParseNullableDouble(string s) =>
-            double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out double v)
-                ? v : (double?)null;
 
         // ───────────────────────────── navigation ────────────────────────────
 
@@ -1232,7 +1268,6 @@ namespace SW2GZ.URDFExport
                     case ButtonBrowseID: BrowseForOutputFolder(); break;
                     case ButtonAddLinkID: AddLink(); break;
                     case ButtonRemoveLinkID: RemoveLink(); break;
-                    case ButtonGenAxisID: GenerateAxisForActiveJoint(); break;
                     default: break;
                 }
             }
@@ -1290,18 +1325,6 @@ namespace SW2GZ.URDFExport
                 case TextPackageNameID:  config.PackageName = Text ?? ""; break;
                 case TextAuthorID:       config.Author = Text ?? ""; break;
                 case TextEmailID:        config.Email = Text ?? ""; break;
-                case TextLimitLowerID:
-                {
-                    JointDef j = ActiveJoint();
-                    if (j != null) { j.LimitLower = ParseNullableDouble(Text); UpdateJointValidationLabel(); }
-                    break;
-                }
-                case TextLimitUpperID:
-                {
-                    JointDef j = ActiveJoint();
-                    if (j != null) { j.LimitUpper = ParseNullableDouble(Text); UpdateJointValidationLabel(); }
-                    break;
-                }
                 default: break;
             }
         }
@@ -1313,7 +1336,13 @@ namespace SW2GZ.URDFExport
         }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutCreated(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutDestroyed(int Id) { }
-        void IPropertyManagerPage2Handler9.OnNumberboxChanged(int Id, double Value) { }
+        void IPropertyManagerPage2Handler9.OnNumberboxChanged(int Id, double Value)
+        {
+            JointDef j = ActiveJoint();
+            if (j == null) return;
+            if (Id == TextLimitLowerID) { j.LimitLower = Value; UpdateJointValidationLabel(); }
+            else if (Id == TextLimitUpperID) { j.LimitUpper = Value; UpdateJointValidationLabel(); }
+        }
         void IPropertyManagerPage2Handler9.OnNumberBoxTrackingCompleted(int Id, double Value) { }
         void IPropertyManagerPage2Handler9.OnCheckboxCheck(int Id, bool Checked) { }
         void IPropertyManagerPage2Handler9.OnComboboxEditChanged(int Id, string Text)
