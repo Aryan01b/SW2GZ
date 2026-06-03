@@ -149,5 +149,22 @@ namespace SW2GZ.Test.URDFExport
             var config = new Sw2gzExportConfig();
             Assert.Equal(SW2GZ.Ros2.ActuationBackend.Ros2Control, config.Stacks.Actuation);
         }
+
+        [Fact]
+        public void Deserialize_LegacyXmlWithoutStacks_DefaultsToFullStack()
+        {
+            // Simulates a config saved before the Stacks field existed: the <Stacks>
+            // element is absent. DataContractSerializer skips ctor/initializers, so this
+            // is the case that must still yield a non-null full-stack default.
+            string legacyXml =
+                "<Sw2gzExportConfig xmlns=\"\" xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">" +
+                "<PackageName>legacy_bot</PackageName></Sw2gzExportConfig>";
+
+            Sw2gzExportConfig restored = Sw2gzConfigCodec.FromXmlString(legacyXml);
+
+            Assert.NotNull(restored.Stacks);
+            Assert.Equal(SW2GZ.Ros2.ActuationBackend.Ros2Control, restored.Stacks.Actuation);
+            Assert.True(restored.Stacks.GzSim);
+        }
     }
 }

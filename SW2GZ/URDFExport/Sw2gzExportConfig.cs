@@ -41,8 +41,20 @@ namespace SW2GZ.URDFExport
         [DataMember] public List<JointDef> Joints { get; set; } = new List<JointDef>();
 
         // Stacks — à-la-carte ROS 2 / Gazebo stack selection for this assembly.
-        // Defaults to the full stack (Default()) so a config saved before this
-        // field existed deserializes to the same full-stack export as before.
+        // The full-stack default for legacy configs (saved before this field
+        // existed) is guaranteed by the [OnDeserializing] hook below, NOT this
+        // initializer: DataContractSerializer builds instances via
+        // GetUninitializedObject and never runs initializers. The initializer
+        // here only covers the `new Sw2gzExportConfig()` constructor path.
         [DataMember] public StackProfile Stacks { get; set; } = StackProfile.Default();
+
+        // DataContractSerializer constructs instances via GetUninitializedObject,
+        // which skips field/property initializers. Without this hook a config
+        // saved before the Stacks field existed would deserialize Stacks = null
+        // (→ NRE on first read). Seed the full-stack default here so legacy
+        // assemblies resume exactly as before; a present <Stacks> element in the
+        // XML overwrites this during member population.
+        [OnDeserializing]
+        private void OnDeserializing(StreamingContext context) => Stacks = StackProfile.Default();
     }
 }
