@@ -233,5 +233,98 @@ namespace SW2GZ.Integration.Tests
             }
             finally { if (Directory.Exists(tmp)) Directory.Delete(tmp, true); }
         }
+
+        [Fact]
+        public void Run_SdfModel_EmitsGzModelDirEmptyWorldSpawnLaunch_IgnoringActuation()
+        {
+            var mass = new Mock<IMassProperties>();
+            mass.Setup(m => m.Get(It.IsAny<string>()))
+                .Returns(new MassProps(1.0, Vector3.Zero, Matrix3.Identity));
+            var walker = new Mock<IAssemblyWalker>();
+            walker.Setup(w => w.WalkActive()).Returns(new[]
+            {
+                new LinkSpec("base_link", new[] { "/p/base.SLDPRT" }),
+                new LinkSpec("arm1",      new[] { "/p/arm1.SLDPRT" }),
+            });
+            walker.Setup(w => w.WalkMates()).Returns(new[]
+            {
+                new MateSpec("shoulder", MateKind.Revolute, Pose.Identity, Vector3.UnitZ,
+                    -1.0, 1.0, 0, 0, UrdfCmdInterface.Position, "base_link", "arm1"),
+            });
+            var tess = new Mock<IMeshTessellator>();
+            tess.Setup(t => t.Tessellate(It.IsAny<string>(), It.IsAny<TessellationLod>())).Returns(TinyMesh());
+
+            var tmp = Path.Combine(Path.GetTempPath(), "sw2gz_asset_" + Guid.NewGuid());
+            try
+            {
+                // StackProfile.Default() = full ros2_control stack — the gz ExportMode must
+                // override/ignore it (no control files in a gz model package).
+                var report = new Sw2gzPipeline(mass.Object, walker.Object, tess.Object)
+                    .Run(tmp, "model_pkg", "A", "a@b", "MIT",
+                         Array.Empty<SW2GZ.Build.Model.SensorDef>(),
+                         SW2GZ.Ros2.StackProfile.Default(), SW2GZ.Ros2.ExportMode.SdfModel);
+                Assert.False(report.HasErrors,
+                    string.Join("; ", System.Linq.Enumerable.Select(report.Errors, e => e.Code + " " + e.Message)));
+
+                string root = Path.Combine(tmp, "model_pkg_ws", "src", "model_pkg");
+                Assert.True(File.Exists(Path.Combine(root, "models", "model_pkg", "model.config")));
+                Assert.True(File.Exists(Path.Combine(root, "models", "model_pkg", "model.sdf")));
+                Assert.True(File.Exists(Path.Combine(root, "models", "model_pkg", "meshes", "base_link.dae")));
+                Assert.True(File.Exists(Path.Combine(root, "worlds", "empty.sdf")));
+                Assert.True(File.Exists(Path.Combine(root, "launch", "model_pkg.launch.py")));
+
+                string sdf = File.ReadAllText(Path.Combine(root, "models", "model_pkg", "model.sdf"));
+                Assert.Contains("<model name=\"model_pkg\">", sdf);
+                Assert.Contains("model://model_pkg/meshes/base_link.dae", sdf);
+                Assert.Contains("<joint name=\"shoulder\" type=\"revolute\">", sdf);
+
+                // No URDF / control artifacts, even though StackProfile.Default() was passed.
+                Assert.False(Directory.Exists(Path.Combine(root, "urdf")));
+                Assert.False(File.Exists(Path.Combine(root, "config", "controllers.yaml")));
+                Assert.False(File.Exists(Path.Combine(root, "config", "ros_gz_bridge.yaml")));
+
+                string launch = File.ReadAllText(Path.Combine(root, "launch", "model_pkg.launch.py"));
+                Assert.Contains("'create'", launch);
+                Assert.DoesNotContain("gz_ros2_control", launch);
+            }
+            finally { if (Directory.Exists(tmp)) Directory.Delete(tmp, true); }
+        }
+
+        [Fact]
+        public void Run_SdfWorld_EmitsWorldThatIncludesModel()
+        {
+            var mass = new Mock<IMassProperties>();
+            mass.Setup(m => m.Get(It.IsAny<string>()))
+                .Returns(new MassProps(1.0, Vector3.Zero, Matrix3.Identity));
+            var walker = new Mock<IAssemblyWalker>();
+            walker.Setup(w => w.WalkActive()).Returns(new[] { new LinkSpec("base_link", new[] { "/p/base.SLDPRT" }) });
+            walker.Setup(w => w.WalkMates()).Returns(Array.Empty<MateSpec>());
+            var tess = new Mock<IMeshTessellator>();
+            tess.Setup(t => t.Tessellate(It.IsAny<string>(), It.IsAny<TessellationLod>())).Returns(TinyMesh());
+
+            var tmp = Path.Combine(Path.GetTempPath(), "sw2gz_world_" + Guid.NewGuid());
+            try
+            {
+                var report = new Sw2gzPipeline(mass.Object, walker.Object, tess.Object)
+                    .Run(tmp, "world_pkg", "A", "a@b", "MIT",
+                         Array.Empty<SW2GZ.Build.Model.SensorDef>(),
+                         SW2GZ.Ros2.StackProfile.Default(), SW2GZ.Ros2.ExportMode.SdfWorld);
+                Assert.False(report.HasErrors);
+
+                string root = Path.Combine(tmp, "world_pkg_ws", "src", "world_pkg");
+                Assert.True(File.Exists(Path.Combine(root, "models", "world_pkg", "model.sdf")));
+                Assert.True(File.Exists(Path.Combine(root, "worlds", "world_pkg.sdf")));
+                Assert.True(File.Exists(Path.Combine(root, "launch", "world_pkg.launch.py")));
+
+                string world = File.ReadAllText(Path.Combine(root, "worlds", "world_pkg.sdf"));
+                Assert.Contains("<include>", world);
+                Assert.Contains("<uri>model://world_pkg</uri>", world);
+
+                string launch = File.ReadAllText(Path.Combine(root, "launch", "world_pkg.launch.py"));
+                Assert.Contains("world_pkg.sdf", launch);
+                Assert.DoesNotContain("'create'", launch);
+            }
+            finally { if (Directory.Exists(tmp)) Directory.Delete(tmp, true); }
+        }
     }
 }
