@@ -54,8 +54,11 @@ namespace SW2GZ.Build
 
                 if (byChild.TryGetValue(l.Name, out JointDef keep))
                 {
-                    keep.ParentLink = parent;   // reflect re-parenting; keep edits
+                    // Keep the mate assignment, but track the tree: name + parent
+                    // follow the (possibly renamed/re-parented) links.
+                    keep.ParentLink = parent;
                     keep.ChildLink = l.Name;
+                    keep.Name = JointName(parent, l.Name);
                     result.Add(keep);
                 }
                 else

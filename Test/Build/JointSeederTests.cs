@@ -29,19 +29,19 @@ namespace SW2GZ.Test.Build
         }
 
         [Fact]
-        public void PreservesAssignmentsOnResync()
+        public void PreservesAssignmentsButNameTracksTree()
         {
             var links = new List<LinkDef> { L("base", ""), L("wheel", "base") };
             var existing = new List<JointDef>
             {
-                new JointDef { Name = "drive", ParentLink = "base", ChildLink = "wheel",
+                new JointDef { Name = "stale_name", ParentLink = "base", ChildLink = "wheel",
                                Type = UrdfJointType.Revolute, MateName = "Concentric1", AxisY = 1 },
             };
 
             JointDef j = Assert.Single(JointSeeder.Sync(links, existing));
 
-            Assert.Equal("drive", j.Name);                // user name kept
-            Assert.Equal(UrdfJointType.Revolute, j.Type);
+            Assert.Equal("base_wheel_joint", j.Name);     // name follows the tree
+            Assert.Equal(UrdfJointType.Revolute, j.Type); // assignment preserved
             Assert.Equal("Concentric1", j.MateName);
         }
 

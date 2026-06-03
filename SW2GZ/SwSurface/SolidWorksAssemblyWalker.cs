@@ -289,6 +289,76 @@ namespace SW2GZ.SwSurface
             finally { Marshal.ReleaseComObject(mate); }
         }
 
+        // P9 — selects a mate's reference geometry in the viewport by mate feature
+        // name, so the user can verify the mate they assigned to a joint. COM-only.
+        public bool HighlightMate(string mateName)
+        {
+            if (string.IsNullOrEmpty(mateName)) return false;
+            var model = (IModelDoc2)_doc;
+            model.ClearSelection2(true);
+
+            bool selected = false;
+            Feature feat = (Feature)model.FirstFeature();
+            try
+            {
+                while (feat != null && !selected)
+                {
+                    if (feat.GetTypeName2() == "MateGroup")
+                    {
+                        Feature sub = (Feature)feat.GetFirstSubFeature();
+                        try
+                        {
+                            while (sub != null && !selected)
+                            {
+                                if (sub.Name == mateName) selected = SelectMateReferences(sub);
+                                Feature nextSub = (Feature)sub.GetNextSubFeature();
+                                Marshal.ReleaseComObject(sub);
+                                sub = nextSub;
+                            }
+                        }
+                        finally { if (sub != null) Marshal.ReleaseComObject(sub); }
+                    }
+
+                    Feature next = (Feature)feat.GetNextFeature();
+                    Marshal.ReleaseComObject(feat);
+                    feat = next;
+                }
+            }
+            finally { if (feat != null) Marshal.ReleaseComObject(feat); }
+
+            return selected;
+        }
+
+        private static bool SelectMateReferences(Feature feat)
+        {
+            object specific = feat.GetSpecificFeature2();
+            var mate = specific as Mate2;
+            if (mate == null) { if (specific != null) Marshal.ReleaseComObject(specific); return false; }
+
+            try
+            {
+                bool any = false;
+                int n = mate.GetMateEntityCount();
+                for (int i = 0; i < n; i++)
+                {
+                    MateEntity2 ent = mate.MateEntity(i);
+                    if (ent == null) continue;
+                    try
+                    {
+                        object refGeom = ent.Reference;
+                        if (refGeom is Entity sel)
+                        {
+                            try { if (sel.Select4(true, null)) any = true; } catch { }
+                        }
+                        if (refGeom != null) Marshal.ReleaseComObject(refGeom);
+                    }
+                    finally { Marshal.ReleaseComObject(ent); }
+                }
+                return any;
+            }
+            finally { Marshal.ReleaseComObject(mate); }
+        }
+
         // Builds a MateAxis from one mate feature (raw top-level component ids +
         // axis + kind). No-op for non-mate features. Releases every COM RCW.
         private static void TryAddMateAxis(Feature feat, List<MateAxis> sink)
