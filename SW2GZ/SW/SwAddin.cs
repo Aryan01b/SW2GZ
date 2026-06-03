@@ -63,9 +63,8 @@ namespace SW2GZ.SW
         public const int mainItemID1 = 0;
         public const int mainItemID2 = 1;
         public const int mainItemID3 = 2;
-        public const int flyoutGroupID = 91;
 
-        // SW2GZ ribbon command group (distinct from flyoutGroupID).
+        // SW2GZ ribbon command group.
         public const int sw2gzCmdGroupID = 92;
         public const int sw2gzWizardCmdID = 0;
         // Stable user-ID handed to AddCommandItem2; SolidWorks persists toolbar
