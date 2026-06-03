@@ -254,12 +254,19 @@ namespace SW2GZ.SW
         // the best fit. The PNGs ship next to the DLL (csproj copies them into an
         // images\ subfolder of the output) so they resolve regardless of where
         // the add-in is installed — computed from the assembly's own location.
-        private static string[] Sw2gzIconList()
+        private static string ImagesDir()
         {
-            string dir = System.IO.Path.Combine(
+            return System.IO.Path.Combine(
                 System.IO.Path.GetDirectoryName(
                     System.Reflection.Assembly.GetExecutingAssembly().Location),
                 "images");
+        }
+
+        // Single-glyph set (the isometric cube) — used for the command-group
+        // glyph (MainIconList).
+        private static string[] Sw2gzIconList()
+        {
+            string dir = ImagesDir();
             return new[]
             {
                 System.IO.Path.Combine(dir, "sw2gz_20.png"),
@@ -268,6 +275,24 @@ namespace SW2GZ.SW
                 System.IO.Path.Combine(dir, "sw2gz_64.png"),
                 System.IO.Path.Combine(dir, "sw2gz_96.png"),
                 System.IO.Path.Combine(dir, "sw2gz_128.png"),
+            };
+        }
+
+        // Sprite-strip set — each PNG lays both button glyphs out horizontally
+        // (column 0 = Create Model cube, column 1 = Export). This is what
+        // ICommandGroup.IconList wants; AddCommandItem2's image index selects
+        // the column.
+        private static string[] Sw2gzStripIconList()
+        {
+            string dir = ImagesDir();
+            return new[]
+            {
+                System.IO.Path.Combine(dir, "sw2gz_strip_20.png"),
+                System.IO.Path.Combine(dir, "sw2gz_strip_32.png"),
+                System.IO.Path.Combine(dir, "sw2gz_strip_40.png"),
+                System.IO.Path.Combine(dir, "sw2gz_strip_64.png"),
+                System.IO.Path.Combine(dir, "sw2gz_strip_96.png"),
+                System.IO.Path.Combine(dir, "sw2gz_strip_128.png"),
             };
         }
 
@@ -301,10 +326,10 @@ namespace SW2GZ.SW
             }
             else
             {
-                string[] images = Sw2gzIconList();
-                grp.IconList = images;       // toolbar button icons
-                grp.MainIconList = images;   // command-group glyph
+                grp.IconList = Sw2gzStripIconList();  // per-button glyphs (strip)
+                grp.MainIconList = Sw2gzIconList();    // command-group glyph (cube)
 
+                // Image index 0 = cube column of the strip.
                 int cmdIndex = grp.AddCommandItem2(
                     buttonName, -1, hint, toolTip, 0,
                     "LaunchWizard", "WizardEnable", sw2gzWizardUserID,
@@ -314,8 +339,9 @@ namespace SW2GZ.SW
                     logger.Error("Failed to add SW2GZ command item to the command group");
                 }
 
+                // Image index 1 = export (cube + arrow) column of the strip.
                 int exportIndex = grp.AddCommandItem2(
-                    "Export", -1, "Export the saved model to a ROS 2 / Gz package", "Export", 0,
+                    "Export", -1, "Export the saved model to a ROS 2 / Gz package", "Export", 1,
                     "LaunchExport", "WizardEnable", sw2gzExportUserID,
                     (int)swCommandItemType_e.swToolbarItem);
                 if (exportIndex < 0)
