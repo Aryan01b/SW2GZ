@@ -37,6 +37,10 @@ modes — are next.)
   glyphs are drawn from scratch in `scripts\GenerateIcons.ps1` (GDI+, no source
   asset, fully original). Export success now uses an information icon, not the
   caution triangle.
+- **Joint types** — added URDF `planar` (from a coincident planar-face mate,
+  axis = plane normal) and `floating` joint types. An unassigned joint now
+  defaults to **floating** (6-DOF) instead of fixed; assign a LOCK mate for a
+  rigid weld. (Mimic deferred; ball is SDF-only — future gz-asset/world modes.)
 
 ### Added — pipeline groundwork (P1–P9)
 - **P1**: `RobotModel` immutable aggregate (`Build/Model/`) + `RobotModelBuilder` + `UrdfSerializer` replaces inline string-concat in pipeline
