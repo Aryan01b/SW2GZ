@@ -105,5 +105,31 @@ namespace SW2GZ.Writers.Tests
         {
             Assert.Throws<System.ArgumentException>(() => SdfWorldWriter.Write(new SdfWorldInput("  ")));
         }
+
+        [Fact]
+        public void WriteWithModel_IncludesModelByUri()
+        {
+            var sdf = SdfWorldWriter.WriteWithModel(new SdfWorldInput("my_world"), "my_asset");
+            Assert.Contains("<world name=\"my_world\">", sdf);
+            Assert.Contains("<include>", sdf);
+            Assert.Contains("<uri>model://my_asset</uri>", sdf);
+            Assert.Contains("<name>my_asset</name>", sdf);
+        }
+
+        [Fact]
+        public void WriteWithModel_KeepsGroundSunPhysics()
+        {
+            var sdf = SdfWorldWriter.WriteWithModel(new SdfWorldInput("w"), "m");
+            Assert.Contains("ground_plane", sdf);
+            Assert.Contains("<light", sdf);
+            Assert.Contains("<physics", sdf);
+        }
+
+        [Fact]
+        public void WriteWithModel_NullModelName_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(
+                () => SdfWorldWriter.WriteWithModel(new SdfWorldInput("w"), "  "));
+        }
     }
 }

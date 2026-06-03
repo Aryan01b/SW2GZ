@@ -56,5 +56,25 @@ namespace SW2GZ.Gz
             sb.AppendLine("</sdf>");
             return sb.ToString();
         }
+
+        public static string WriteWithModel(SdfWorldInput input, string modelName)
+        {
+            if (input == null) throw new ArgumentNullException(nameof(input));
+            if (string.IsNullOrWhiteSpace(input.WorldName))
+                throw new ArgumentException("WorldName must not be null or whitespace.", nameof(input));
+            if (string.IsNullOrWhiteSpace(modelName))
+                throw new ArgumentException("modelName must not be null or whitespace.", nameof(modelName));
+
+            string baseWorld = Write(input);                  // ground + sun + physics, no model
+            string nameEsc = SecurityElement.Escape(modelName);
+            string nl = Environment.NewLine;
+            string include =
+                "    <include>" + nl +
+                $"      <uri>model://{nameEsc}</uri>" + nl +
+                $"      <name>{nameEsc}</name>" + nl +
+                "    </include>" + nl;
+            // Splice the include immediately before the closing </world>.
+            return baseWorld.Replace("  </world>", include + "  </world>");
+        }
     }
 }
