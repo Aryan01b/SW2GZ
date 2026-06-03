@@ -114,6 +114,9 @@ namespace SW2GZ.URDFExport
         private PropertyManagerPageLabel PMLabelDetailType;
         private PropertyManagerPageLabel PMLabelDetailLimits;
 
+        // Step 5 (Review) — a read-only summary listbox.
+        private PropertyManagerPageListbox PMListReview;
+
         // Index of the joint currently selected in the list (-1 = none).
         private int activeJointIndex = -1;
 
@@ -199,6 +202,10 @@ namespace SW2GZ.URDFExport
         private const int LabelDetailMateID       = StepIdBase + 3 * 20 + 8;
         private const int LabelDetailTypeID        = StepIdBase + 3 * 20 + 9;
         private const int LabelDetailLimitsID     = StepIdBase + 3 * 20 + 10;
+
+        // Step 5 (Review) control IDs (step index 4 → base 180).
+        private const int LabelReviewInstrID      = StepIdBase + 4 * 20 + 2;
+        private const int ListReviewID            = StepIdBase + 4 * 20 + 3;
 
         private int StepCount => StepNames.Length;
 
@@ -297,6 +304,9 @@ namespace SW2GZ.URDFExport
                         break;
                     case 3:
                         BuildJointsStep(stepGroup, leftEdge, indent, visibleEnabled);
+                        break;
+                    case 4:
+                        BuildReviewStep(stepGroup, leftEdge, indent, visibleEnabled);
                         break;
                     default:
                         // Generic placeholder for steps not yet implemented.
@@ -926,6 +936,75 @@ namespace SW2GZ.URDFExport
             PopulateJointList();   // refresh row tag + details (+ highlight)
         }
 
+        // ───────────────────────────── step 5: review ────────────────────────
+
+        private void BuildReviewStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
+        {
+            int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
+            AddFieldLabel(group, LabelReviewInstrID,
+                "Review the model below, then Finish to export the ROS 2 / Gz package.",
+                leftEdge, labelOpts);
+            PMListReview = (PropertyManagerPageListbox)group.AddControl2(
+                ListReviewID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
+                "", (short)leftEdge, visibleEnabled, "Model summary");
+            ((IPropertyManagerPageListbox)PMListReview).Height = 240;
+        }
+
+        // Fills the review summary: metadata, links and joints.
+        private void EnterReviewStep()
+        {
+            if (PMListReview == null) return;
+            PMListReview.Clear();
+
+            string pkg = PackageNameSanitizer.Sanitize(config.PackageName ?? "").Value;
+            PMListReview.AddItems("Mode:  " + ModeText(config.Mode));
+            PMListReview.AddItems("Output:  " +
+                (string.IsNullOrEmpty(config.OutputFolder) ? "(not set)" : config.OutputFolder));
+            string pkgLine = "Package:  " + pkg;
+            if (!string.Equals(pkg, config.PackageName))
+                pkgLine += "   (from \"" + (config.PackageName ?? "") + "\")";
+            PMListReview.AddItems(pkgLine);
+            PMListReview.AddItems("Author:  " +
+                (string.IsNullOrEmpty(config.Author) ? "—" : config.Author) +
+                (string.IsNullOrEmpty(config.Email) ? "" : "  <" + config.Email + ">") +
+                (string.IsNullOrEmpty(config.License) ? "" : "   License: " + config.License));
+            PMListReview.AddItems("");
+
+            var links = config.Links ?? new List<LinkDef>();
+            PMListReview.AddItems("Links (" + links.Count + "):");
+            foreach (LinkDef l in links)
+            {
+                string rel = string.IsNullOrEmpty(l.ParentName) ? "(base)" : "← " + l.ParentName;
+                int parts = l.ComponentIds != null ? l.ComponentIds.Count : 0;
+                PMListReview.AddItems("   " + l.Name + "   " + rel +
+                    "   [" + parts + " part" + (parts == 1 ? "" : "s") + "]");
+            }
+            PMListReview.AddItems("");
+
+            var joints = config.Joints ?? new List<JointDef>();
+            PMListReview.AddItems("Joints (" + joints.Count + "):");
+            foreach (JointDef j in joints)
+            {
+                string mate = string.IsNullOrEmpty(j.MateName) ? "(no mate)" : "[" + j.MateName + "]";
+                string lim = (j.LimitLower.HasValue || j.LimitUpper.HasValue)
+                    ? "  limits [" + Fmt(j.LimitLower) + ", " + Fmt(j.LimitUpper) + "]" : "";
+                PMListReview.AddItems("   " + j.Name + "   " + j.ParentLink + "→" + j.ChildLink +
+                    "   " + j.Type + "   " + mate + lim);
+            }
+        }
+
+        private static string ModeText(ExportMode m)
+        {
+            switch (m)
+            {
+                case ExportMode.RobotPackage: return "Robot package (URDF/Xacro)";
+                case ExportMode.SdfModel:     return "Gz asset (SDF model)";
+                case ExportMode.SdfWorld:     return "Gz world (SDF world)";
+                default:                      return m.ToString();
+            }
+        }
+
         // ───────────────────────────── navigation ────────────────────────────
 
         // Shows only the requested step's group, hides the rest, and refreshes the
@@ -957,6 +1036,7 @@ namespace SW2GZ.URDFExport
 
             // Entering Joints: seed (if empty), refresh the lists + combos.
             if (currentStep == 3) EnterJointsStep();
+            else if (currentStep == 4) EnterReviewStep();
         }
 
         private void GoBack()
