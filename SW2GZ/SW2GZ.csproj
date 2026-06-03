@@ -417,6 +417,7 @@
     <Compile Include="Versioning\VersionInfo.cs" />
     <Compile Include="Ros2\TargetProfile.cs" />
     <Compile Include="Ros2\StackProfile.cs" />
+    <Compile Include="Ros2\StackRibbonGate.cs" />
     <Compile Include="Ros2\StackFlyoutModel.cs" />
     <Compile Include="Ros2\PackageXmlV3Writer.cs" />
     <Compile Include="Ros2\AmentCMakeWriter.cs" />
