@@ -27,9 +27,12 @@ namespace SW2GZ.URDFExport
             // null profile falls back to the full stack rather than throwing.
             SW2GZ.Ros2.StackProfile profile = config.Stacks ?? SW2GZ.Ros2.StackProfile.Default();
 
+            // ExportMode (config.Mode) selects the artifact — Robot Package vs
+            // gz asset/world; the StackProfile selects which stacks emit. gz
+            // modes ignore the actuation backend (no ros2_control).
             return new Sw2gzPipeline(mass, walker, tess, appearances).Run(
                 config.OutputFolder, config.PackageName, config.Author, config.Email, config.License,
-                System.Array.Empty<SensorDef>(), profile);
+                System.Array.Empty<SensorDef>(), profile, config.Mode);
         }
 
         public static string WorkspacePath(string outputFolder, string packageName) =>

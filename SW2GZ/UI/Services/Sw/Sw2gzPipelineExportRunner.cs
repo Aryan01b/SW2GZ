@@ -68,9 +68,13 @@ namespace SW2GZ.UI.Services.Sw
 
             RobotMeta meta = model.Meta;
             var pipeline = new Sw2gzPipeline(_mass, _walker, _tess, _appearances);
+            // Thread the wizard's selected ExportMode into the pipeline so the
+            // chosen artifact (Robot Package / gz asset / gz world) is emitted.
+            // StackProfile.Default() = full stack for Robot Package; gz modes
+            // ignore the actuation backend.
             SW2GZ.Validate.ValidationReport report = pipeline.Run(
                 outputDir, meta.PackageName, meta.Author, meta.Email, meta.License,
-                model.Sensors);
+                model.Sensors, StackProfile.Default(), mode);
 
             var messages = report.Issues.Select(i => i.Message).ToList();
             return new ExportResult(!report.HasErrors, report.Errors.Count(), messages);
