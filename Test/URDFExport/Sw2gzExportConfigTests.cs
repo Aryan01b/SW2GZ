@@ -76,7 +76,7 @@ namespace SW2GZ.Test.URDFExport
                 ParentLink = "base_link",
                 ChildLink = "wheel_left",
                 Type = SW2GZ.Build.Urdf.UrdfJointType.Revolute,
-                AxisRef = "Axis1",
+                MateName = "Concentric1",
                 AxisX = 0, AxisY = 1, AxisZ = 0,
                 LimitLower = -1.5,
                 LimitUpper = 1.5,
@@ -90,7 +90,7 @@ namespace SW2GZ.Test.URDFExport
             Assert.Equal("base_link", restored.Joints[0].ParentLink);
             Assert.Equal("wheel_left", restored.Joints[0].ChildLink);
             Assert.Equal(SW2GZ.Build.Urdf.UrdfJointType.Revolute, restored.Joints[0].Type);
-            Assert.Equal("Axis1", restored.Joints[0].AxisRef);
+            Assert.Equal("Concentric1", restored.Joints[0].MateName);
             Assert.Equal(1.0, restored.Joints[0].AxisY, 5);
             Assert.Equal(-1.5, restored.Joints[0].LimitLower);
             Assert.Equal(1.5, restored.Joints[0].LimitUpper);

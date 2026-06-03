@@ -195,7 +195,100 @@ namespace SW2GZ.SwSurface
 #endif
         }
 
+        // P9 — lists every mate in the assembly as a MateInfo (name + implied joint
+        // type + best-effort axis + limit range) for the Joints step's mate list.
+        // The user assigns one of these to a joint. COM-only.
+        public IReadOnlyList<MateInfo> WalkAllMates()
+        {
 #if SW_INTEROP
+            if (_doc == null)
+#endif
+                throw new System.NotImplementedException(
+                    "SolidWorksAssemblyWalker.WalkAllMates() requires a live SldWorks session.");
+
+#if SW_INTEROP
+            var mates = new List<MateInfo>();
+            var modelDoc = (IModelDoc2)_doc;
+
+            Feature feat = (Feature)modelDoc.FirstFeature();
+            try
+            {
+                while (feat != null)
+                {
+                    if (feat.GetTypeName2() == "MateGroup")
+                    {
+                        Feature sub = (Feature)feat.GetFirstSubFeature();
+                        try
+                        {
+                            while (sub != null)
+                            {
+                                TryAddMateInfo(sub, mates);
+                                Feature nextSub = (Feature)sub.GetNextSubFeature();
+                                Marshal.ReleaseComObject(sub);
+                                sub = nextSub;
+                            }
+                        }
+                        finally { if (sub != null) Marshal.ReleaseComObject(sub); }
+                    }
+                    else
+                    {
+                        TryAddMateInfo(feat, mates);
+                    }
+
+                    Feature next = (Feature)feat.GetNextFeature();
+                    Marshal.ReleaseComObject(feat);
+                    feat = next;
+                }
+            }
+            finally { if (feat != null) Marshal.ReleaseComObject(feat); }
+
+            return mates.AsReadOnly();
+#endif
+        }
+
+#if SW_INTEROP
+        private static void TryAddMateInfo(Feature feat, List<MateInfo> sink)
+        {
+            object specific = feat.GetSpecificFeature2();
+            var mate = specific as Mate2;
+            if (mate == null)
+            {
+                if (specific != null) Marshal.ReleaseComObject(specific);
+                return;
+            }
+
+            try
+            {
+                // Limit range, if this is a limit mate.
+                double? lower = null, upper = null;
+                bool hasLimit = false;
+                try
+                {
+                    double max = mate.MaximumVariation, min = mate.MinimumVariation;
+                    if (System.Math.Abs(max) > 1e-9 || System.Math.Abs(min) > 1e-9)
+                    {
+                        lower = min; upper = max; hasLimit = true;
+                    }
+                }
+                catch { }
+
+                MateKind kind;
+                switch ((swMateType_e)mate.Type)
+                {
+                    case swMateType_e.swMateLOCK:       kind = MateKind.Fixed;      break;
+                    case swMateType_e.swMateCONCENTRIC: kind = hasLimit ? MateKind.Revolute : MateKind.Continuous; break;
+                    case swMateType_e.swMateANGLE:      kind = hasLimit ? MateKind.Revolute : MateKind.Fixed; break;
+                    case swMateType_e.swMateDISTANCE:   kind = hasLimit ? MateKind.Prismatic : MateKind.Fixed; break;
+                    case swMateType_e.swMateSLOT:       kind = MateKind.Prismatic;  break;
+                    default:                            kind = MateKind.Fixed;      break;
+                }
+
+                Vector3 axis = kind == MateKind.Fixed ? new Vector3(0, 0, 1) : MateAxisDirection(mate);
+                sink.Add(new MateInfo(feat.Name, kind, axis, lower, upper));
+            }
+            finally { Marshal.ReleaseComObject(mate); }
+        }
+
         // Builds a MateAxis from one mate feature (raw top-level component ids +
         // axis + kind). No-op for non-mate features. Releases every COM RCW.
         private static void TryAddMateAxis(Feature feat, List<MateAxis> sink)

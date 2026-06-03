@@ -107,31 +107,20 @@ namespace SW2GZ.URDFExport
         // A selector + Prev/Next + "Joint i of N" let the user walk every joint so
         // none is missed. Limits are plain textboxes (reuse the proven textbox path).
         private PropertyManagerPageListbox PMListJoints;
-        private PropertyManagerPageLabel PMLabelJointCounter;
-        private PropertyManagerPageLabel PMLabelJointEdge;
-        private PropertyManagerPageCombobox PMComboJointType;
-        private PropertyManagerPageLabel PMLabelSecAxis;
-        private PropertyManagerPageLabel PMLabelAxisCap;
-        private PropertyManagerPageSelectionbox PMSelAxisRef;
-        private PropertyManagerPageLabel PMLabelAxisInfo;
-        private PropertyManagerPageLabel PMLabelSecLimits;
-        private PropertyManagerPageLabel PMLabelLowerCap;
-        private PropertyManagerPageNumberbox PMNumLower;
-        private PropertyManagerPageLabel PMLabelUpperCap;
-        private PropertyManagerPageNumberbox PMNumUpper;
-        private PropertyManagerPageLabel PMLabelJointValidation;
+        private PropertyManagerPageCombobox PMComboParent;
+        private PropertyManagerPageCombobox PMComboChild;
+        private PropertyManagerPageButton PMButtonAddJoint;
+        private PropertyManagerPageButton PMButtonRemoveJoint;
+        private PropertyManagerPageListbox PMListMates;
+        private PropertyManagerPageLabel PMLabelJointSummary;
 
-        // Selection-box mark for the reference-axis picker (distinct from the
-        // link pick funnel's mark).
-        private const int AxisRefMark = 5;
-
-        // Index of the joint currently shown in the editor (-1 = none).
+        // Index of the joint currently selected in the list (-1 = none).
         private int activeJointIndex = -1;
 
-        // Combobox item order mirrors the UrdfJointType enum so the index casts
-        // straight to/from the enum value.
-        private static readonly string[] JointTypeChoices =
-            { "Fixed", "Revolute", "Continuous", "Prismatic" };
+        // All mates in the assembly (backing the mate list) + the link names
+        // backing the parent/child combos — both indexed by control position.
+        private List<MateInfo> allMates = new List<MateInfo>();
+        private string[] linkNames = new string[0];
 
         // SPDX license choices for the optional License dropdown. First entry is
         // blank ("none"); the combo is editable so a custom id can be typed.
@@ -203,23 +192,16 @@ namespace SW2GZ.URDFExport
         private const int LabelLinkValidationID = StepIdBase + 2 * 20 + 7;
 
         // Step 4 (Joints) control IDs (step index 3 → base 160).
-        private const int ListJointsID           = StepIdBase + 3 * 20 + 2;
-        private const int LabelJointEdgeID        = StepIdBase + 3 * 20 + 3;
-        private const int ComboJointTypeID        = StepIdBase + 3 * 20 + 4;
-        private const int SelAxisRefID            = StepIdBase + 3 * 20 + 5;
-        private const int TextLimitLowerID        = StepIdBase + 3 * 20 + 6;
-        private const int TextLimitUpperID        = StepIdBase + 3 * 20 + 7;
-        private const int LabelJointCounterID     = StepIdBase + 3 * 20 + 8;
-        private const int LabelSecAxisID          = StepIdBase + 3 * 20 + 9;
-        private const int LabelAxisInfoID         = StepIdBase + 3 * 20 + 10;
-        private const int LabelJointValidationID  = StepIdBase + 3 * 20 + 11;
-        // Caption labels for the joint editor fields (within the same 20-ID block).
-        private const int LabelJointInstrID       = StepIdBase + 3 * 20 + 12;
-        private const int LabelJointTypeCapID     = StepIdBase + 3 * 20 + 13;
-        private const int LabelJointAxisCapID     = StepIdBase + 3 * 20 + 14;
-        private const int LabelLimitLowerCapID    = StepIdBase + 3 * 20 + 15;
-        private const int LabelLimitUpperCapID    = StepIdBase + 3 * 20 + 16;
-        private const int LabelSecLimitsID        = StepIdBase + 3 * 20 + 17;
+        private const int LabelJointInstrID       = StepIdBase + 3 * 20 + 2;
+        private const int ListJointsID            = StepIdBase + 3 * 20 + 3;
+        private const int LabelJointSummaryID     = StepIdBase + 3 * 20 + 4;
+        private const int LabelMapCapID           = StepIdBase + 3 * 20 + 5;
+        private const int ComboParentID           = StepIdBase + 3 * 20 + 6;
+        private const int ComboChildID            = StepIdBase + 3 * 20 + 7;
+        private const int ButtonAddJointID        = StepIdBase + 3 * 20 + 8;
+        private const int ButtonRemoveJointID     = StepIdBase + 3 * 20 + 9;
+        private const int LabelMatesCapID         = StepIdBase + 3 * 20 + 10;
+        private const int ListMatesID             = StepIdBase + 3 * 20 + 11;
 
         private int StepCount => StepNames.Length;
 
@@ -798,332 +780,190 @@ namespace SW2GZ.URDFExport
 
         // ───────────────────────────── step 4: joints ────────────────────────
 
-        // Step 4 — one joint per non-root link (the edge to its parent). A
-        // combobox selects the joint; the fields below edit its type, axis,
-        // limits and command interface. Editing is optional (Fixed is a valid
-        // default), so this step never blocks Next — issues are advisory.
+        // Step 4 — map joints (parent → child) and assign each a SolidWorks mate.
+        // The mate defines the joint's type and limits. The panel is two lists
+        // (joints + all mates) plus parent/child controls to add a joint.
         private void BuildJointsStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
         {
             int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
 
             AddFieldLabel(group, LabelJointInstrID,
-                "Pick a joint from the list. Type and limits come from the mates; " +
-                "set the axis by selecting the geometry it turns/slides about.",
+                "Map joints (parent → child), then assign each one a mate from the " +
+                "list below — the mate sets the joint type and limits.",
                 leftEdge, labelOpts);
 
             // ── Joints list ──────────────────────────────────────────────────
             PMListJoints = (PropertyManagerPageListbox)group.AddControl2(
                 ListJointsID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
-                "", (short)leftEdge, visibleEnabled, "All joints — click one to edit it");
+                "", (short)leftEdge, visibleEnabled, "Joints — select one to assign a mate");
             ((IPropertyManagerPageListbox)PMListJoints).Height = 96;
 
-            PMLabelJointCounter = AddFieldLabel(group, LabelJointCounterID, "", leftEdge, labelOpts);
-            PMLabelJointEdge = AddFieldLabel(group, LabelJointEdgeID, "", leftEdge, labelOpts);
+            PMLabelJointSummary = AddFieldLabel(group, LabelJointSummaryID, "", leftEdge, labelOpts);
 
-            AddFieldLabel(group, LabelJointTypeCapID, "Type", leftEdge, labelOpts);
-            PMComboJointType = (PropertyManagerPageCombobox)group.AddControl2(
-                ComboJointTypeID,
+            // ── Add / remove a joint by parent + child ───────────────────────
+            AddFieldLabel(group, LabelMapCapID, "New joint — parent / child link:", leftEdge, labelOpts);
+            PMComboParent = (PropertyManagerPageCombobox)group.AddControl2(
+                ComboParentID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
-                "", (short)indent, visibleEnabled, "Joint type (seeded from the mate)");
-            PMComboJointType.AddItems(JointTypeChoices);
+                "", (short)indent, visibleEnabled, "Parent link");
+            PMComboChild = (PropertyManagerPageCombobox)group.AddControl2(
+                ComboChildID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
+                "", (short)indent, visibleEnabled, "Child link");
 
-            // ── Axis section ─────────────────────────────────────────────────
-            PMLabelSecAxis = AddFieldLabel(group, LabelSecAxisID, "— Axis —", leftEdge, labelOpts);
-            PMLabelAxisCap = AddFieldLabel(group, LabelJointAxisCapID,
-                "Select a cylindrical face, a circular/linear edge, or an axis:",
-                leftEdge, labelOpts);
-            PMSelAxisRef = (PropertyManagerPageSelectionbox)group.AddControl2(
-                SelAxisRefID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Selectionbox,
-                "", (short)indent, visibleEnabled,
-                "Select the geometry that defines this joint's axis");
-            var axisFilters = new swSelectType_e[]
-            {
-                swSelectType_e.swSelFACES, swSelectType_e.swSelEDGES, swSelectType_e.swSelDATUMAXES,
-            };
-            PMSelAxisRef.SingleEntityOnly = true;
-            PMSelAxisRef.Height = 22;
-            PMSelAxisRef.Mark = AxisRefMark;
-            PMSelAxisRef.SetSelectionFilters((object)axisFilters);
+            PMButtonAddJoint = (PropertyManagerPageButton)group.AddControl2(
+                ButtonAddJointID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Button,
+                "Add joint", (short)indent, visibleEnabled, "Add a joint for the chosen parent/child");
+            ((IPropertyManagerPageControl)PMButtonAddJoint).Width = 90;
+            PMButtonRemoveJoint = (PropertyManagerPageButton)group.AddControl2(
+                ButtonRemoveJointID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Button,
+                "Remove joint", (short)indent, visibleEnabled, "Remove the selected joint");
+            ((IPropertyManagerPageControl)PMButtonRemoveJoint).Width = 100;
 
-            PMLabelAxisInfo = AddFieldLabel(group, LabelAxisInfoID, "", leftEdge, labelOpts);
-
-            // ── Limits section ───────────────────────────────────────────────
-            PMLabelSecLimits = AddFieldLabel(group, LabelSecLimitsID, "— Limits —", leftEdge, labelOpts);
-            PMLabelLowerCap = AddFieldLabel(group, LabelLimitLowerCapID, "Lower", leftEdge, labelOpts);
-            PMNumLower = (PropertyManagerPageNumberbox)group.AddControl2(
-                TextLimitLowerID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
-                "", (short)indent, visibleEnabled, "Lower limit (rad for revolute, m for prismatic)");
-            ConfigureLimitBox(PMNumLower);
-
-            PMLabelUpperCap = AddFieldLabel(group, LabelLimitUpperCapID, "Upper", leftEdge, labelOpts);
-            PMNumUpper = (PropertyManagerPageNumberbox)group.AddControl2(
-                TextLimitUpperID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
-                "", (short)indent, visibleEnabled, "Upper limit (rad for revolute, m for prismatic)");
-            ConfigureLimitBox(PMNumUpper);
-
-            PMLabelJointValidation = AddFieldLabel(group, LabelJointValidationID, "", leftEdge, labelOpts);
+            // ── Mates list ───────────────────────────────────────────────────
+            AddFieldLabel(group, LabelMatesCapID,
+                "Mates — select one to assign to the selected joint:", leftEdge, labelOpts);
+            PMListMates = (PropertyManagerPageListbox)group.AddControl2(
+                ListMatesID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
+                "", (short)leftEdge, visibleEnabled, "Assembly mates — click to assign to the selected joint");
+            ((IPropertyManagerPageListbox)PMListMates).Height = 96;
         }
 
-        // Sets a scrollable numeric range on a limit numberbox.
-        private static void ConfigureLimitBox(PropertyManagerPageNumberbox box)
-        {
-            box.SetRange2(
-                (int)swNumberboxUnitType_e.swNumberBox_UnitlessDouble,
-                -1.0e6, 1.0e6, true, 0.05, 0.5, 0.01);
-        }
-
-        // Re-derives the joint list from the (possibly re-shaped) link tree, with
-        // axis + type seeded from the SolidWorks mates, preserving the user's
-        // per-joint edits, then clamps the active index.
-        private void SyncJoints()
-        {
-            config.Joints = JointSeeder.Sync(config.Links, config.Joints, ReadMateAxes());
-            if (config.Joints.Count == 0) activeJointIndex = -1;
-            else if (activeJointIndex < 0 || activeJointIndex >= config.Joints.Count) activeJointIndex = 0;
-        }
-
-        // Reads joint axes/types from the assembly mates. COM can throw on odd
-        // assemblies, so failures degrade gracefully to "no mates" (joints then
-        // default to Fixed/None and the user sets them by hand).
-        private IReadOnlyList<MateAxis> ReadMateAxes()
+        // Reads all assembly mates (for the mate list). COM may throw on odd
+        // assemblies — degrade to an empty list.
+        private void ReadAllMates()
         {
             try
             {
-                return new SolidWorksAssemblyWalker((AssemblyDoc)model).WalkMateAxes();
+                allMates = new List<MateInfo>(
+                    new SolidWorksAssemblyWalker((AssemblyDoc)model).WalkAllMates());
             }
             catch (Exception e)
             {
-                logger.Warn("Could not read mates for joint axes; joints default to Fixed.", e);
-                return null;
+                logger.Warn("Could not read assembly mates.", e);
+                allMates = new List<MateInfo>();
             }
         }
 
-        // Fills the joint list and loads the active joint's fields.
-        private void PopulateJointSelector()
+        // On entering the step: seed joints from the link tree if the list is
+        // empty, then refresh the link combos, mate list and joint list.
+        private void EnterJointsStep()
+        {
+            if (config.Joints == null) config.Joints = new List<JointDef>();
+            if (config.Joints.Count == 0)
+                config.Joints = JointSeeder.Sync(config.Links, null);
+
+            var names = new List<string>();
+            if (config.Links != null) foreach (LinkDef l in config.Links) names.Add(l.Name);
+            linkNames = names.ToArray();
+
+            if (PMComboParent != null)
+            {
+                PMComboParent.Clear();
+                PMComboChild.Clear();
+                foreach (string n in linkNames) { PMComboParent.AddItems(n); PMComboChild.AddItems(n); }
+                if (linkNames.Length > 0) { PMComboParent.CurrentSelection = 0; PMComboChild.CurrentSelection = 0; }
+            }
+
+            ReadAllMates();
+            PopulateMateList();
+
+            if (activeJointIndex < 0 && config.Joints.Count > 0) activeJointIndex = 0;
+            PopulateJointList();
+        }
+
+        private void PopulateMateList()
+        {
+            if (PMListMates == null) return;
+            PMListMates.Clear();
+            foreach (MateInfo m in allMates)
+                PMListMates.AddItems(m.Name + "  [" + m.Kind + "]");
+        }
+
+        // Refreshes the joint list — each row shows the joint name + assigned mate.
+        private void PopulateJointList()
         {
             if (PMListJoints == null) return;
             PMListJoints.Clear();
-            foreach (JointDef j in config.Joints) PMListJoints.AddItems(j.Name);
+            foreach (JointDef j in config.Joints)
+            {
+                string tag = string.IsNullOrEmpty(j.MateName) ? "(no mate)" : j.MateName;
+                PMListJoints.AddItems(j.Name + "   —   " + tag);
+            }
             if (config.Joints.Count > 0)
-                PMListJoints.CurrentSelection = (short)(activeJointIndex < 0 ? 0 : activeJointIndex);
-            LoadJointFields();
+            {
+                if (activeJointIndex < 0 || activeJointIndex >= config.Joints.Count) activeJointIndex = 0;
+                PMListJoints.CurrentSelection = (short)activeJointIndex;
+            }
+            UpdateJointSummary();
         }
 
         private JointDef ActiveJoint() =>
             activeJointIndex >= 0 && activeJointIndex < config.Joints.Count
                 ? config.Joints[activeJointIndex] : null;
 
-        // Reflects the active joint onto the editor controls + the "Joint i of N"
-        // counter, sets field visibility by type, and highlights its geometry.
-        private void LoadJointFields()
+        // Shows the selected joint's parent → child, type and limits.
+        private void UpdateJointSummary()
         {
-            int count = config.Joints != null ? config.Joints.Count : 0;
-            if (PMLabelJointCounter != null)
-                PMLabelJointCounter.Caption = count == 0
-                    ? "No joints."
-                    : "Joint " + (activeJointIndex + 1) + " of " + count;
-
+            if (PMLabelJointSummary == null) return;
             JointDef j = ActiveJoint();
-            if (PMLabelJointEdge != null)
-                PMLabelJointEdge.Caption = j != null
-                    ? j.ParentLink + "  →  " + j.ChildLink
-                    : "No joints yet — define a link tree in the previous step.";
-            if (j == null) { UpdateJointFieldVisibility(); UpdateJointValidationLabel(); return; }
-
-            if (PMComboJointType != null) PMComboJointType.CurrentSelection = (short)(int)j.Type;
-            if (PMNumLower != null) PMNumLower.Value = j.LimitLower ?? 0.0;
-            if (PMNumUpper != null) PMNumUpper.Value = j.LimitUpper ?? 0.0;
-
-            UpdateAxisInfoLabel();
-            UpdateJointFieldVisibility();
-            UpdateJointValidationLabel();
-            HighlightActiveJointGeometry();
+            if (j == null) { PMLabelJointSummary.Caption = "No joint selected."; return; }
+            string s = j.ParentLink + " → " + j.ChildLink + "   |   " + j.Type;
+            if (j.LimitLower.HasValue || j.LimitUpper.HasValue)
+                s += "   [" + Fmt(j.LimitLower) + ", " + Fmt(j.LimitUpper) + "]";
+            PMLabelJointSummary.Caption = s;
         }
 
-        // Shows/hides axis + limit controls per joint type:
-        //   Fixed       → no axis, no limits
-        //   Revolute    → axis + lower/upper
-        //   Continuous  → axis, no limits (unlimited rotation)
-        //   Prismatic   → axis (direction of motion) + lower/upper
-        private void UpdateJointFieldVisibility()
+        private static string Fmt(double? v) =>
+            v.HasValue ? v.Value.ToString("0.###", CultureInfo.InvariantCulture) : "–";
+
+        // Adds a joint for the parent/child currently chosen in the combos.
+        private void AddJointFromCombos()
         {
-            JointDef j = ActiveJoint();
-            bool moving = j != null && j.Type != UrdfJointType.Fixed;
-            bool limited = j != null &&
-                (j.Type == UrdfJointType.Revolute || j.Type == UrdfJointType.Prismatic);
+            if (PMComboParent == null || linkNames.Length == 0) return;
+            int pi = PMComboParent.CurrentSelection, ci = PMComboChild.CurrentSelection;
+            if (pi < 0 || ci < 0 || pi >= linkNames.Length || ci >= linkNames.Length) return;
+            string parent = linkNames[pi], child = linkNames[ci];
+            if (parent == child) { swApp.SendMsgToUser("Parent and child must be different links."); return; }
 
-            Vis(PMLabelSecAxis, moving);
-            Vis(PMLabelAxisCap, moving);
-            Vis(PMSelAxisRef, moving);
-            Vis(PMLabelAxisInfo, moving);
-            Vis(PMLabelSecLimits, limited);
-            Vis(PMLabelLowerCap, limited);
-            Vis(PMNumLower, limited);
-            Vis(PMLabelUpperCap, limited);
-            Vis(PMNumUpper, limited);
+            string name = JointSeeder.JointName(parent, child);
+            foreach (JointDef ex in config.Joints)
+                if (ex.Name == name) { swApp.SendMsgToUser("That joint already exists."); return; }
+
+            config.Joints.Add(new JointDef { Name = name, ParentLink = parent, ChildLink = child });
+            activeJointIndex = config.Joints.Count - 1;
+            PopulateJointList();
         }
 
-        private static void Vis(object ctrl, bool visible)
-        {
-            try { if (ctrl != null) ((IPropertyManagerPageControl)ctrl).Visible = visible; }
-            catch { /* control doesn't support Visible — ignore */ }
-        }
-
-        // Summarises the active joint's axis (reference-axis name + direction).
-        private void UpdateAxisInfoLabel()
-        {
-            if (PMLabelAxisInfo == null) return;
-            JointDef j = ActiveJoint();
-            if (j == null || !j.HasAxis)
-            {
-                PMLabelAxisInfo.Caption = "Axis: none — select the geometry it turns/slides about.";
-                return;
-            }
-            string nm = string.IsNullOrEmpty(j.AxisRef) ? "(from mate)" : j.AxisRef;
-            PMLabelAxisInfo.Caption = "Axis: " + nm + "  (" +
-                j.AxisX.ToString("0.##", CultureInfo.InvariantCulture) + ", " +
-                j.AxisY.ToString("0.##", CultureInfo.InvariantCulture) + ", " +
-                j.AxisZ.ToString("0.##", CultureInfo.InvariantCulture) + ")";
-        }
-
-        // Axis selection box changed — derive the axis direction from the picked
-        // geometry (cylindrical face → its axis; circular/linear edge → its
-        // direction; datum axis → itself), transformed into the assembly frame.
-        private void OnAxisRefSelected()
+        private void RemoveActiveJoint()
         {
             JointDef j = ActiveJoint();
             if (j == null) return;
-            try
-            {
-                ISelectionMgr selMgr = (ISelectionMgr)model.SelectionManager;
-                if (selMgr.GetSelectedObjectCount2(AxisRefMark) < 1) return;
-                object obj = selMgr.GetSelectedObject6(1, AxisRefMark);
-                int selType = selMgr.GetSelectedObjectType3(1, AxisRefMark);
-
-                Vector3 local = new Vector3(0, 0, 1);
-                bool ok = false;
-                string name = "selection";
-
-                switch ((swSelectType_e)selType)
-                {
-                    case swSelectType_e.swSelDATUMAXES:
-                    {
-                        var feat = obj as Feature;
-                        RefAxis ax = feat != null ? feat.GetSpecificFeature2() as RefAxis : obj as RefAxis;
-                        if (ax != null && ax.GetRefAxisParams() is double[] p && p.Length >= 6)
-                        {
-                            local = new Vector3((float)(p[3] - p[0]), (float)(p[4] - p[1]), (float)(p[5] - p[2]));
-                            ok = true;
-                            name = feat != null ? feat.Name : "axis";
-                        }
-                        break;
-                    }
-                    case swSelectType_e.swSelFACES:
-                    {
-                        var surf = (obj as Face2)?.GetSurface() as Surface;
-                        if (surf != null && surf.IsCylinder() && surf.CylinderParams is double[] cp && cp.Length >= 6)
-                        {
-                            local = new Vector3((float)cp[3], (float)cp[4], (float)cp[5]);
-                            ok = true;
-                            name = "cylindrical face";
-                        }
-                        break;
-                    }
-                    case swSelectType_e.swSelEDGES:
-                    {
-                        var curve = (obj as Edge)?.GetCurve() as Curve;
-                        if (curve != null && curve.IsCircle() && curve.CircleParams is double[] ci && ci.Length >= 6)
-                        {
-                            local = new Vector3((float)ci[3], (float)ci[4], (float)ci[5]);
-                            ok = true; name = "circular edge";
-                        }
-                        else if (curve != null && curve.IsLine() && curve.LineParams is double[] li && li.Length >= 6)
-                        {
-                            local = new Vector3((float)li[3], (float)li[4], (float)li[5]);
-                            ok = true; name = "linear edge";
-                        }
-                        break;
-                    }
-                }
-
-                if (!ok)
-                {
-                    swApp.SendMsgToUser(
-                        "Select a cylindrical face, a circular or linear edge, or a reference axis.");
-                    return;
-                }
-
-                // Convert the part-local direction into the assembly frame.
-                var comp = selMgr.GetSelectedObjectsComponent4(1, AxisRefMark) as Component2;
-                Vector3 dir = comp != null ? RotateByComponentXform(comp, local) : local;
-
-                j.AxisRef = name;
-                j.SetAxis(dir);
-                UpdateAxisInfoLabel();
-                UpdateJointValidationLabel();
-            }
-            catch (Exception e)
-            {
-                logger.Warn("Could not read the selected axis geometry", e);
-            }
+            config.Joints.RemoveAt(activeJointIndex);
+            if (activeJointIndex >= config.Joints.Count) activeJointIndex = config.Joints.Count - 1;
+            PopulateJointList();
         }
 
-        // Applies a component's rotation (Transform2 3x3 block) to a direction.
-        private static Vector3 RotateByComponentXform(Component2 comp, Vector3 v)
+        // Assigns the mate at 'mateIndex' to the selected joint: the mate's kind
+        // sets the joint type, and its axis/limits are copied in.
+        private void AssignMateToActiveJoint(int mateIndex)
         {
-            MathTransform x = comp.Transform2;
-            if (x == null || !(x.ArrayData is double[] d) || d.Length < 9) return v;
-            return new Vector3(
-                (float)(d[0] * v.X + d[1] * v.Y + d[2] * v.Z),
-                (float)(d[3] * v.X + d[4] * v.Y + d[5] * v.Z),
-                (float)(d[6] * v.X + d[7] * v.Y + d[8] * v.Z));
-        }
+            JointDef j = ActiveJoint();
+            if (j == null) { swApp.SendMsgToUser("Select a joint first, then a mate."); return; }
+            if (mateIndex < 0 || mateIndex >= allMates.Count) return;
 
-        // Highlights the active joint's mate reference geometry in the viewport so
-        // the user can see the axis as they step through joints. No-op outside the
-        // Joints step. Best-effort COM — failures are swallowed (just no highlight).
-        private void HighlightActiveJointGeometry()
-        {
-            if (currentStep != 3) return;
-            try
-            {
-                JointDef j = ActiveJoint();
-                if (j == null) { model.ClearSelection2(true); return; }
-                HashSet<string> aIds = ComponentIdsForLink(j.ParentLink);
-                HashSet<string> bIds = ComponentIdsForLink(j.ChildLink);
-                if (aIds.Count == 0 || bIds.Count == 0) { model.ClearSelection2(true); return; }
-                new SolidWorksAssemblyWalker((AssemblyDoc)model).HighlightMateReferences(aIds, bIds);
-            }
-            catch (Exception e)
-            {
-                logger.Warn("Could not highlight joint mate geometry in the viewport", e);
-            }
-        }
+            MateInfo m = allMates[mateIndex];
+            j.MateName = m.Name;
+            j.Type = JointSeeder.ToJointType(m.Kind);
+            j.SetAxis(m.Axis);
+            j.LimitLower = m.LimitLower;
+            j.LimitUpper = m.LimitUpper;
 
-        private HashSet<string> ComponentIdsForLink(string linkName)
-        {
-            var set = new HashSet<string>();
-            if (config.Links == null) return set;
-            foreach (LinkDef l in config.Links)
-                if (l.Name == linkName && l.ComponentIds != null)
-                {
-                    foreach (string id in l.ComponentIds) set.Add(id);
-                    break;
-                }
-            return set;
-        }
-
-        private void UpdateJointValidationLabel()
-        {
-            if (PMLabelJointValidation == null) return;
-            List<string> w = JointDefValidator.Validate(config.Joints);
-            PMLabelJointValidation.Caption = w.Count == 0
-                ? "Joints OK."
-                : w.Count + " note(s): " + w[0];
+            PopulateJointList();   // refresh the row's mate tag + summary
         }
 
         // ───────────────────────────── navigation ────────────────────────────
@@ -1155,19 +995,8 @@ namespace SW2GZ.URDFExport
             bool isLast = currentStep == StepCount - 1;
             PMButtonNext.Caption = isLast ? "Finish" : "Next >";
 
-            // Entering Joints: re-derive joints from the link tree (preserving
-            // edits) and refresh the editor (which also highlights the active
-            // joint's mate geometry in the viewport).
-            if (currentStep == 3)
-            {
-                SyncJoints();
-                PopulateJointSelector();
-            }
-            else if (currentStep == 4)
-            {
-                // Leaving Joints for Review — drop the joint geometry highlight.
-                try { model.ClearSelection2(true); } catch { }
-            }
+            // Entering Joints: seed (if empty), refresh the lists + combos.
+            if (currentStep == 3) EnterJointsStep();
         }
 
         private void GoBack()
@@ -1268,6 +1097,8 @@ namespace SW2GZ.URDFExport
                     case ButtonBrowseID: BrowseForOutputFolder(); break;
                     case ButtonAddLinkID: AddLink(); break;
                     case ButtonRemoveLinkID: RemoveLink(); break;
+                    case ButtonAddJointID: AddJointFromCombos(); break;
+                    case ButtonRemoveJointID: RemoveActiveJoint(); break;
                     default: break;
                 }
             }
@@ -1332,17 +1163,10 @@ namespace SW2GZ.URDFExport
         void IPropertyManagerPage2Handler9.OnSelectionboxListChanged(int Id, int Count)
         {
             if (Id == PickFunnelID && Count > 0) OnFunnelChanged();
-            else if (Id == SelAxisRefID && Count > 0) OnAxisRefSelected();
         }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutCreated(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutDestroyed(int Id) { }
-        void IPropertyManagerPage2Handler9.OnNumberboxChanged(int Id, double Value)
-        {
-            JointDef j = ActiveJoint();
-            if (j == null) return;
-            if (Id == TextLimitLowerID) { j.LimitLower = Value; UpdateJointValidationLabel(); }
-            else if (Id == TextLimitUpperID) { j.LimitUpper = Value; UpdateJointValidationLabel(); }
-        }
+        void IPropertyManagerPage2Handler9.OnNumberboxChanged(int Id, double Value) { }
         void IPropertyManagerPage2Handler9.OnNumberBoxTrackingCompleted(int Id, double Value) { }
         void IPropertyManagerPage2Handler9.OnCheckboxCheck(int Id, bool Checked) { }
         void IPropertyManagerPage2Handler9.OnComboboxEditChanged(int Id, string Text)
@@ -1356,34 +1180,13 @@ namespace SW2GZ.URDFExport
         void IPropertyManagerPage2Handler9.OnComboboxSelectionChanged(int Id, int Item)
         {
             if (Id == TextLicenseID)
-            {
                 config.License = PMComboLicense.get_ItemText((short)Item) ?? "";
-                return;
-            }
-
-            switch (Id)
-            {
-                case ComboJointTypeID:
-                {
-                    JointDef j = ActiveJoint();
-                    if (j != null)
-                    {
-                        j.Type = (UrdfJointType)Item;
-                        UpdateJointFieldVisibility();   // show/hide axis + limits for the new type
-                        UpdateJointValidationLabel();
-                    }
-                    break;
-                }
-                default: break;
-            }
+            // Parent/child combos are read on "Add joint"; no per-change handling.
         }
         void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item)
         {
-            if (Id == ListJointsID)
-            {
-                activeJointIndex = Item;
-                LoadJointFields();
-            }
+            if (Id == ListJointsID) { activeJointIndex = Item; UpdateJointSummary(); }
+            else if (Id == ListMatesID) AssignMateToActiveJoint(Item);
         }
         void IPropertyManagerPage2Handler9.OnListboxRMBUp(int Id, int PosX, int PosY) { }
         void IPropertyManagerPage2Handler9.OnGroupCheck(int Id, bool Checked) { }

@@ -78,6 +78,7 @@
     <Compile Include="..\SW2GZ\Build\JointGraphBuilder.cs"    Link="Sources\Build\JointGraphBuilder.cs" />
     <Compile Include="..\SW2GZ\Build\Model\JointDef.cs"       Link="Sources\Build\Model\JointDef.cs" />
     <Compile Include="..\SW2GZ\Build\MateAxis.cs"             Link="Sources\Build\MateAxis.cs" />
+    <Compile Include="..\SW2GZ\Build\MateInfo.cs"            Link="Sources\Build\MateInfo.cs" />
     <Compile Include="..\SW2GZ\Build\JointSeeder.cs"          Link="Sources\Build\JointSeeder.cs" />
     <Compile Include="..\SW2GZ\Build\JointDefConverter.cs"    Link="Sources\Build\JointDefConverter.cs" />
     <Compile Include="..\SW2GZ\Build\JointDefValidator.cs"    Link="Sources\Build\JointDefValidator.cs" />

@@ -5,10 +5,11 @@ Structural-only joint data (what Gz needs to simulate the joint): type, the
 axis it moves about, and the lower/upper motion range. Actuation/control
 concerns (command interface, effort, velocity) are not stored here.
 
-The axis is a SolidWorks reference axis: AxisRef is the reference-axis feature
-name (empty until the user selects or generates one) and AxisX/Y/Z is its cached
-direction in the assembly frame. Type is seeded from the mate between the two
-links; the user reviews each joint.
+The user maps each joint to a parent and child link and assigns a SolidWorks
+mate that defines it: MateName is the assigned mate, and Type / AxisX-Y-Z /
+limits are taken from that mate when assigned. A fixed mate → Fixed; a
+concentric mate → Continuous; a limit-angle mate → Revolute; a limit-distance
+mate → Prismatic.
 
 Joint origin is not stored here — SolidWorks→ROS coordinate conversion is a
 later increment, so the converter emits Pose.Identity for now.
@@ -26,8 +27,9 @@ namespace SW2GZ.Build.Model
         [DataMember] public string ChildLink { get; set; } = string.Empty;
         [DataMember] public UrdfJointType Type { get; set; } = UrdfJointType.Fixed;
 
-        // Reference axis: feature name (or empty) + cached direction (assembly frame).
-        [DataMember] public string AxisRef { get; set; } = string.Empty;
+        // The assigned mate (defines type/axis/limits), and the cached axis
+        // direction (assembly frame) read from that mate.
+        [DataMember] public string MateName { get; set; } = string.Empty;
         [DataMember] public double AxisX { get; set; }
         [DataMember] public double AxisY { get; set; }
         [DataMember] public double AxisZ { get; set; }

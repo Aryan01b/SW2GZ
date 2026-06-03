@@ -19,7 +19,7 @@ namespace SW2GZ.Test.Build
             var def = new JointDef
             {
                 Name = "drive", ParentLink = "base", ChildLink = "wheel",
-                Type = UrdfJointType.Revolute, AxisRef = "Axis1",
+                Type = UrdfJointType.Revolute, MateName = "Concentric1",
                 AxisX = 0, AxisY = 0, AxisZ = 1,
                 LimitLower = -1.5, LimitUpper = 1.5,
             };
