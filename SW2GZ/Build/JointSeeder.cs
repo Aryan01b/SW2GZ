@@ -65,11 +65,14 @@ namespace SW2GZ.Build
                 }
                 else
                 {
+                    // No mate assigned yet → floating (6-DOF). The user assigns a
+                    // mate (e.g. LOCK → fixed) to constrain it.
                     result.Add(new JointDef
                     {
                         Name = JointName(parent, l.Name),
                         ParentLink = parent,
                         ChildLink = l.Name,
+                        Type = UrdfJointType.Floating,
                     });
                 }
             }

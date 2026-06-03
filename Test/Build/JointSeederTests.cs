@@ -25,7 +25,18 @@ namespace SW2GZ.Test.Build
             Assert.Equal("wheel", j.ChildLink);
             Assert.Equal("base", j.ParentLink);
             Assert.Equal("base_wheel_joint", j.Name);     // <parent>_<child>_joint
-            Assert.Equal(UrdfJointType.Fixed, j.Type);    // until a mate is assigned
+            Assert.Equal(UrdfJointType.Floating, j.Type); // no mate assigned = floating (6-DOF)
+        }
+
+        [Fact]
+        public void NewlySeededJoint_DefaultsToFloating()
+        {
+            var links = new List<LinkDef> { L("base", ""), L("arm", "base") };
+
+            JointDef j = Assert.Single(JointSeeder.Sync(links, null));
+
+            Assert.Equal(UrdfJointType.Floating, j.Type);
+            Assert.Equal(string.Empty, j.MateName);   // unassigned
         }
 
         [Fact]
