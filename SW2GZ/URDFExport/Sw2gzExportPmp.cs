@@ -142,7 +142,6 @@ namespace SW2GZ.URDFExport
         private static readonly string[] StepNames =
         {
             "Mode",
-            "Output",
             "Create base model structure",
             "Joints",
             "Review",
@@ -151,7 +150,6 @@ namespace SW2GZ.URDFExport
         private static readonly string[] StepDescriptions =
         {
             "Choose what to generate: Robot package / Gz model / Gz world.",
-            "Where to save + package name + ROS 2 / Gz versions.",
             "Build the link tree and assign geometry to each link.",
             "Define joints: type, axis/orientation, naming.",
             "Summary + Finish.",
@@ -311,15 +309,12 @@ namespace SW2GZ.URDFExport
                         BuildModeStep(stepGroup, leftEdge, indent, visibleEnabled);
                         break;
                     case 1:
-                        BuildOutputStep(stepGroup, leftEdge, indent, visibleEnabled);
-                        break;
-                    case 2:
                         BuildLinksStep(stepGroup, leftEdge, indent, visibleEnabled);
                         break;
-                    case 3:
+                    case 2:
                         BuildJointsStep(stepGroup, leftEdge, indent, visibleEnabled);
                         break;
-                    case 4:
+                    case 3:
                         BuildReviewStep(stepGroup, leftEdge, indent, visibleEnabled);
                         break;
                     default:
@@ -1059,8 +1054,8 @@ namespace SW2GZ.URDFExport
             PMButtonNext.Caption = isLast ? "Finish" : "Next >";
 
             // Entering Joints: seed (if empty), refresh the lists + combos.
-            if (currentStep == 3) EnterJointsStep();
-            else if (currentStep == 4) EnterReviewStep();
+            if (currentStep == 2) EnterJointsStep();
+            else if (currentStep == 3) EnterReviewStep();
         }
 
         private void GoBack()
@@ -1073,8 +1068,8 @@ namespace SW2GZ.URDFExport
 
         private void GoNext()
         {
-            // Step 3 (Links) must pass validation before advancing.
-            if (currentStep == 2)
+            // Links step must pass validation before advancing.
+            if (currentStep == 1)
             {
                 List<string> issues = LinkDefValidator.Validate(config.Links, allComponentIds);
                 if (issues.Count > 0)
@@ -1092,9 +1087,13 @@ namespace SW2GZ.URDFExport
             }
             else
             {
-                // Finish — persist, then export the bare robot package.
+                // Finish — Create Model only SAVES the structure. Export is the
+                // separate ribbon command.
                 SaveCheckpoint(currentStep);
-                RunModelExport();
+                swApp.SendMsgToUser(
+                    "Model saved. Use the Export button on the SW2GZ ribbon to " +
+                    "generate the ROS 2 / Gz package.");
+                PMPage.Close(true);
             }
         }
 
@@ -1192,7 +1191,7 @@ namespace SW2GZ.URDFExport
         void IPropertyManagerPage2Handler9.AfterActivation()
         {
             ShowStep(currentStep);
-            if (currentStep == 2 && PMPickFunnel != null)
+            if (currentStep == 1 && PMPickFunnel != null)
             {
                 PMPickFunnel.SetSelectionFocus();
             }

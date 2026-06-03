@@ -24,6 +24,8 @@ using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidWorks.Interop.swpublished;
 using SolidWorksTools;
+using SW2GZ.Build;
+using SW2GZ.UI;
 using SW2GZ.URDFExport;
 using SW2GZ.Utilities;
 using System;
@@ -69,6 +71,7 @@ namespace SW2GZ.SW
         // Stable user-ID handed to AddCommandItem2; SolidWorks persists toolbar
         // docking state against it, so it must not collide with other groups.
         private const int sw2gzWizardUserID = 920;
+        private const int sw2gzExportUserID = 921;
 
         #region Event Handler Variables
 
@@ -283,7 +286,7 @@ namespace SW2GZ.SW
             // of merging old + new into duplicate buttons.
             bool ignorePrevious = false;
             object registryIDs;
-            int[] knownIDs = new int[] { sw2gzWizardUserID };
+            int[] knownIDs = new int[] { sw2gzWizardUserID, sw2gzExportUserID };
             bool hadRegistryData = CmdMgr.GetGroupDataFromRegistry(sw2gzCmdGroupID, out registryIDs);
             if (hadRegistryData && !CompareIDs((int[])registryIDs, knownIDs))
             {
@@ -311,6 +314,15 @@ namespace SW2GZ.SW
                     logger.Error("Failed to add SW2GZ command item to the command group");
                 }
 
+                int exportIndex = grp.AddCommandItem2(
+                    "Export", -1, "Export the saved model to a ROS 2 / Gz package", "Export", 0,
+                    "LaunchExport", "WizardEnable", sw2gzExportUserID,
+                    (int)swCommandItemType_e.swToolbarItem);
+                if (exportIndex < 0)
+                {
+                    logger.Error("Failed to add SW2GZ Export command item");
+                }
+
                 // Exactly ONE entry: the ribbon/toolbar button. HasMenu=false so the
                 // command group does NOT auto-create a duplicate Tools-menu item.
                 grp.HasToolbar = true;
@@ -323,6 +335,7 @@ namespace SW2GZ.SW
                 try
                 {
                     int cmdId = grp.get_CommandID(cmdIndex);
+                    int exportCmdId = grp.get_CommandID(exportIndex);
 
                     // Remove any existing SW2GZ tab from a previous load BEFORE re-adding,
                     // otherwise AddCommandTabBox() stacks a second button box on top of the
@@ -338,8 +351,12 @@ namespace SW2GZ.SW
                     if (tab != null)
                     {
                         ICommandTabBox box = tab.AddCommandTabBox();
-                        int[] cmdIds = { cmdId };
-                        int[] textTypes = { (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow };
+                        int[] cmdIds = { cmdId, exportCmdId };
+                        int[] textTypes =
+                        {
+                            (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow,
+                            (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow,
+                        };
                         box.AddCommands(cmdIds, textTypes);
                         logger.Info("Added SW2GZ command tab for assembly documents");
                     }
@@ -467,6 +484,64 @@ namespace SW2GZ.SW
                 MessageBox.Show("There was a problem launching the SW2GZ export panel: \n\"" +
                     e.Message + "\"\nEmail your maintainer with the log file found at " +
                     Logger.GetFileName());
+            }
+        }
+
+        // Export command: loads the saved model, confirms what's implemented +
+        // collects meta in a dialog, then runs the bare-model export.
+        public void LaunchExport()
+        {
+            try
+            {
+                ModelDoc2 modeldoc = SwApp.ActiveDoc;
+                if (modeldoc == null || modeldoc.GetType() != (int)swDocumentTypes_e.swDocASSEMBLY)
+                {
+                    SwApp.SendMsgToUser("Open an assembly first.");
+                    return;
+                }
+
+                Sw2gzExportConfig config = Sw2gzConfigSerialization.Load(modeldoc);
+                if (config.Links == null || config.Links.Count == 0)
+                {
+                    SwApp.SendMsgToUser("No model saved yet — run Create Model first.");
+                    return;
+                }
+
+                using (var dlg = new ExportDialog(config))
+                {
+                    if (dlg.ShowDialog() != DialogResult.OK) return;
+                }
+
+                if (string.IsNullOrWhiteSpace(config.OutputFolder))
+                {
+                    SwApp.SendMsgToUser("Set an output folder before exporting.");
+                    return;
+                }
+
+                Sw2gzConfigSerialization.Save((SldWorks)SwApp, modeldoc, config);
+                string pkg = PackageNameSanitizer.Sanitize(config.PackageName).Value;
+                SW2GZ.Validate.ValidationReport report =
+                    Sw2gzModelExporter.Run((SldWorks)SwApp, modeldoc, config);
+                string ws = Sw2gzModelExporter.WorkspacePath(config.OutputFolder, config.PackageName);
+
+                if (report.HasErrors)
+                {
+                    SwApp.SendMsgToUser("Export finished with errors:\n• " +
+                        string.Join("\n• ", System.Linq.Enumerable.ToArray(
+                            System.Linq.Enumerable.Select(report.Errors, x => x.Message))));
+                    return;
+                }
+
+                SwApp.SendMsgToUser(
+                    "Exported to:\n" + ws + "\n\nBuild and launch:\n" +
+                    "  cd \"" + ws + "\"\n  colcon build\n  source install/setup.bash\n" +
+                    "  ros2 launch " + pkg + " gz_sim.launch.py");
+            }
+            catch (Exception e)
+            {
+                logger.Error("SW2GZ export failed", e);
+                MessageBox.Show("Export failed:\n" + e.Message +
+                    "\nLog: " + Logger.GetFileName());
             }
         }
 

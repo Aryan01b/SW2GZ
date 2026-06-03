@@ -497,6 +497,8 @@
     <Compile Include="SwSurface\Abstractions\IAssemblyWalker.cs" />
     <Compile Include="SwSurface\SolidWorksAssemblyWalker.cs" />
     <Compile Include="SwSurface\WizardAssemblyWalker.cs" />
+    <Compile Include="URDFExport\Sw2gzModelExporter.cs" />
+    <Compile Include="UI\ExportDialog.cs" />
     <Compile Include="SwSurface\Abstractions\IMeshTessellator.cs" />
     <Compile Include="SwSurface\SolidWorksMeshTessellator.cs" />
     <Compile Include="SwSurface\Abstractions\IAppearanceSource.cs" />
