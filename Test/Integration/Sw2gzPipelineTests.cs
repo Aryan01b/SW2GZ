@@ -84,6 +84,69 @@ namespace SW2GZ.Integration.Tests
         }
 
         [Fact]
+        public void Run_ModelOnly_OmitsControlAndPluginFiles()
+        {
+            var mass = new Mock<IMassProperties>();
+            mass.Setup(m => m.Get(It.IsAny<string>()))
+                .Returns(new MassProps(1.0, Vector3.Zero, Matrix3.Identity));
+
+            var walker = new Mock<IAssemblyWalker>();
+            walker.Setup(w => w.WalkActive()).Returns(new[]
+            {
+                new LinkSpec("base_link", new[] { "/p/base.SLDPRT" }),
+                new LinkSpec("arm1",      new[] { "/p/arm1.SLDPRT" }),
+            });
+            walker.Setup(w => w.WalkMates()).Returns(new[]
+            {
+                new MateSpec("shoulder", MateKind.Revolute, Pose.Identity, Vector3.UnitZ,
+                    -1.0, 1.0, 0, 0, UrdfCmdInterface.Position, "base_link", "arm1"),
+            });
+
+            var tess = new Mock<IMeshTessellator>();
+            tess.Setup(t => t.Tessellate(It.IsAny<string>(), It.IsAny<TessellationLod>()))
+                .Returns(TinyMesh());
+
+            var tmp = Path.Combine(Path.GetTempPath(), "sw2gz_pipe_" + Guid.NewGuid());
+            try
+            {
+                var report = new Sw2gzPipeline(mass.Object, walker.Object, tess.Object)
+                    .Run(tmp, "model_pkg", "A", "a@b", "MIT",
+                         Array.Empty<SW2GZ.Build.Model.SensorDef>(), modelOnly: true);
+                Assert.False(report.HasErrors,
+                    string.Join("; ", System.Linq.Enumerable.Select(report.Errors, e => e.Code + " " + e.Message)));
+
+                string root = Path.Combine(tmp, "model_pkg_ws", "src", "model_pkg");
+
+                // Present: the bare model + spawn launch.
+                Assert.True(File.Exists(Path.Combine(root, "urdf", "model_pkg.urdf.xacro")));
+                Assert.True(File.Exists(Path.Combine(root, "urdf", "inc", "materials.xacro")));
+                Assert.True(File.Exists(Path.Combine(root, "launch", "gz_sim.launch.py")));
+                Assert.True(File.Exists(Path.Combine(root, "launch", "display.launch.py")));
+                Assert.True(File.Exists(Path.Combine(root, "meshes", "base_link.dae")));
+
+                // Absent: all control + gz-plugin scaffolding.
+                Assert.False(File.Exists(Path.Combine(root, "urdf", "inc", "ros2_control.xacro")));
+                Assert.False(File.Exists(Path.Combine(root, "urdf", "inc", "gz.xacro")));
+                Assert.False(File.Exists(Path.Combine(root, "launch", "ros2_control.launch.py")));
+                Assert.False(File.Exists(Path.Combine(root, "config", "controllers.yaml")));
+                Assert.False(File.Exists(Path.Combine(root, "config", "ros_gz_bridge.yaml")));
+
+                // The xacro must not reference the dropped includes, and the joint
+                // still appears (the body is unchanged).
+                string xacro = File.ReadAllText(Path.Combine(root, "urdf", "model_pkg.urdf.xacro"));
+                Assert.DoesNotContain("ros2_control.xacro", xacro);
+                Assert.DoesNotContain("gz.xacro", xacro);
+                Assert.Contains("<joint name=\"shoulder\" type=\"revolute\">", xacro);
+
+                // The spawn launch must not load the ros2_control system plugin.
+                string gzLaunch = File.ReadAllText(Path.Combine(root, "launch", "gz_sim.launch.py"));
+                Assert.DoesNotContain("gz_ros2_control", gzLaunch);
+                Assert.Contains("ros_gz_sim", gzLaunch);
+            }
+            finally { if (Directory.Exists(tmp)) Directory.Delete(tmp, true); }
+        }
+
+        [Fact]
         public void Run_LinkWithoutMaterial_ThrowsBeforeWriting()
         {
             var mass = new Mock<IMassProperties>();

@@ -65,9 +65,12 @@ namespace SW2GZ.URDFExport
 
         // TODO P6-COM: replace caller-supplied `sensors` with a SW-COM source once the
         // workstation session lands an ISensorSource boundary similar to IAppearanceSource.
+        // modelOnly=true emits the bare robot package — links + joints + materials,
+        // a Gz-spawn launch and an empty world — with NO ros2_control / Gazebo
+        // plugin files. It still builds in colcon and spawns the robot.
         public SW2GZ.Validate.ValidationReport Run(string outputDir, string packageName,
                                     string author, string email, string license,
-                                    IReadOnlyList<SensorDef> sensors)
+                                    IReadOnlyList<SensorDef> sensors, bool modelOnly = false)
         {
             if (sensors == null) throw new ArgumentNullException(nameof(sensors));
             // ── Step 1: Sanitize ──────────────────────────────────────────────
@@ -202,10 +205,10 @@ namespace SW2GZ.URDFExport
                     Path.Combine(root, "CMakeLists.txt"),
                     AmentCMakeWriter.Write(new AmentCMakeInput(pkg, hasMeshes: true)));
 
-                // urdf/<pkg>.urdf.xacro
+                // urdf/<pkg>.urdf.xacro — model-only drops the control/plugin includes.
                 File.WriteAllText(
                     Path.Combine(root, "urdf", $"{pkg}.urdf.xacro"),
-                    XacroWriter.Write(pkg, bodyXml));
+                    modelOnly ? XacroWriter.WriteModelOnly(pkg, bodyXml) : XacroWriter.Write(pkg, bodyXml));
 
                 // urdf/inc/materials.xacro (P5: real material defs from RobotModel.Materials;
                 // empty list emits a placeholder comment so the file still parses).
@@ -213,17 +216,20 @@ namespace SW2GZ.URDFExport
                     Path.Combine(root, "urdf", "inc", "materials.xacro"),
                     UrdfSerializer.SerializeMaterialsXacro(model.Materials));
 
-                // urdf/inc/ros2_control.xacro
                 var jointNames = new List<string>();
                 foreach (UrdfJoint j in joints) jointNames.Add(j.Name);
-                File.WriteAllText(
-                    Path.Combine(root, "urdf", "inc", "ros2_control.xacro"),
-                    Ros2ControlWriter.Write(pkg, jointNames));
 
-                // urdf/inc/gz.xacro
-                File.WriteAllText(
-                    Path.Combine(root, "urdf", "inc", "gz.xacro"),
-                    GzPluginTags.WriteGzRos2ControlXacro(pkg));
+                // Control + Gazebo-plugin files — skipped entirely in model-only mode.
+                if (!modelOnly)
+                {
+                    File.WriteAllText(
+                        Path.Combine(root, "urdf", "inc", "ros2_control.xacro"),
+                        Ros2ControlWriter.Write(pkg, jointNames));
+
+                    File.WriteAllText(
+                        Path.Combine(root, "urdf", "inc", "gz.xacro"),
+                        GzPluginTags.WriteGzRos2ControlXacro(pkg));
+                }
 
                 // worlds/empty.sdf — P6-data: sensor list drives plugin injection.
                 File.WriteAllText(
@@ -232,18 +238,24 @@ namespace SW2GZ.URDFExport
 
                 // launch/
                 string launchDir = Path.Combine(root, "launch");
-                File.WriteAllText(Path.Combine(launchDir, "display.launch.py"),      LaunchPyWriter.Display(pkg));
-                File.WriteAllText(Path.Combine(launchDir, "gz_sim.launch.py"),       LaunchPyWriter.GzSim(pkg));
-                File.WriteAllText(Path.Combine(launchDir, "ros2_control.launch.py"), LaunchPyWriter.Ros2Control(pkg));
+                File.WriteAllText(Path.Combine(launchDir, "display.launch.py"), LaunchPyWriter.Display(pkg));
+                File.WriteAllText(Path.Combine(launchDir, "gz_sim.launch.py"),
+                    modelOnly ? LaunchPyWriter.GzSimModelOnly(pkg) : LaunchPyWriter.GzSim(pkg));
 
-                // config/
-                File.WriteAllText(
-                    Path.Combine(root, "config", "controllers.yaml"),
-                    ControllersYaml.Write(new ControllersInput(pkg, jointNames)));
+                if (!modelOnly)
+                {
+                    File.WriteAllText(Path.Combine(launchDir, "ros2_control.launch.py"),
+                        LaunchPyWriter.Ros2Control(pkg));
 
-                File.WriteAllText(
-                    Path.Combine(root, "config", "ros_gz_bridge.yaml"),
-                    RosGzBridgeYaml.Write(pkg, model.Sensors));
+                    // config/
+                    File.WriteAllText(
+                        Path.Combine(root, "config", "controllers.yaml"),
+                        ControllersYaml.Write(new ControllersInput(pkg, jointNames)));
+
+                    File.WriteAllText(
+                        Path.Combine(root, "config", "ros_gz_bridge.yaml"),
+                        RosGzBridgeYaml.Write(pkg, model.Sensors));
+                }
 
                 // ── Step 6: Validate ──────────────────────────────────────────────
                 // Merge P9 pre-write warnings with post-write OutputValidator

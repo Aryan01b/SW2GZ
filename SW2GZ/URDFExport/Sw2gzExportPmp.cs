@@ -45,6 +45,7 @@ using SW2GZ.Utilities;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -987,15 +988,63 @@ namespace SW2GZ.URDFExport
             }
             else
             {
-                // Finish — for now the wizard only SAVES the basic robot data (links +
-                // joints) into the assembly checkpoint. ROS 2 / Gz (modular xacro)
-                // export is a later increment, driven from this saved data.
+                // Finish — persist, then export the bare robot package.
                 SaveCheckpoint(currentStep);
-                logger.Info("SW2GZ export shell Finish pressed — basic data saved to the assembly checkpoint");
+                RunModelExport();
+            }
+        }
+
+        // Builds the colcon-ready ROS 2 Jazzy + Gz Harmonic package for the bare
+        // model (links + joints only, no control/plugins) from the wizard's data.
+        private void RunModelExport()
+        {
+            if (config.Links == null || config.Links.Count == 0)
+            {
+                swApp.SendMsgToUser("There are no links to export — define the link tree first.");
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(config.OutputFolder))
+            {
+                swApp.SendMsgToUser("Set an output folder (Step 2) before exporting.");
+                return;
+            }
+
+            string pkg = PackageNameSanitizer.Sanitize(config.PackageName).Value;
+            try
+            {
+                var mass = new SolidWorksMassProperties(swApp, (AssemblyDoc)model);
+                var tess = new SolidWorksMeshTessellator(swApp, (AssemblyDoc)model);
+                var walker = new WizardAssemblyWalker((AssemblyDoc)model, config.Links, config.Joints);
+                var appearances = new DefaultAppearanceSource();
+
+                SW2GZ.Validate.ValidationReport report =
+                    new Sw2gzPipeline(mass, walker, tess, appearances).Run(
+                        config.OutputFolder, config.PackageName, config.Author, config.Email, config.License,
+                        System.Array.Empty<SensorDef>(), modelOnly: true);
+
+                string ws = Path.Combine(config.OutputFolder, pkg + "_ws");
+                if (report.HasErrors)
+                {
+                    swApp.SendMsgToUser("Export finished with errors:\n• " +
+                        string.Join("\n• ", report.Errors.Select(e => e.Message).ToArray()));
+                    return;
+                }
+
+                logger.Info("SW2GZ model package exported to " + ws);
                 swApp.SendMsgToUser(
-                    "Saved. The link tree and joints are stored in this assembly and reload " +
-                    "next time you open the SW2GZ panel. (Export is not generated yet.)");
+                    "Exported the robot package to:\n" + ws + "\n\n" +
+                    "Build and launch (ROS 2 Jazzy + Gz Harmonic):\n" +
+                    "  cd \"" + ws + "\"\n" +
+                    "  colcon build\n" +
+                    "  source install/setup.bash\n" +
+                    "  ros2 launch " + pkg + " gz_sim.launch.py");
                 PMPage.Close(true);
+            }
+            catch (Exception e)
+            {
+                logger.Error("SW2GZ model export failed", e);
+                swApp.SendMsgToUser("Export failed:\n" + e.Message +
+                    "\n\nSee the log file: " + Logger.GetFileName());
             }
         }
 

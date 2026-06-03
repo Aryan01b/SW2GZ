@@ -39,5 +39,26 @@ namespace SW2GZ.Ros2
             sb.AppendLine("</robot>");
             return sb.ToString();
         }
+
+        // Model-only variant: the bare robot (links + joints + materials), with no
+        // ros2_control or Gazebo plugin includes. Builds in colcon and spawns in
+        // Gz Harmonic as a static model.
+        public static string WriteModelOnly(string robotName, string urdfBodyXml)
+        {
+            if (string.IsNullOrWhiteSpace(robotName))
+                throw new ArgumentException("robotName must not be null or whitespace.", nameof(robotName));
+            if (urdfBodyXml == null)
+                throw new ArgumentNullException(nameof(urdfBodyXml));
+
+            var sb = new StringBuilder();
+            sb.AppendLine("<?xml version=\"1.0\"?>");
+            sb.AppendLine($"<robot name=\"{SecurityElement.Escape(robotName)}\" xmlns:xacro=\"http://www.ros.org/wiki/xacro\">");
+            sb.AppendLine("  <xacro:arg name=\"prefix\" default=\"\"/>");
+            sb.AppendLine("  <xacro:arg name=\"use_sim\" default=\"false\"/>");
+            sb.AppendLine("  <xacro:include filename=\"inc/materials.xacro\"/>");
+            sb.AppendLine(urdfBodyXml);
+            sb.AppendLine("</robot>");
+            return sb.ToString();
+        }
     }
 }

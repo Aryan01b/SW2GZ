@@ -496,6 +496,7 @@
     <Compile Include="SwSurface\Abstractions\LinkSpec.cs" />
     <Compile Include="SwSurface\Abstractions\IAssemblyWalker.cs" />
     <Compile Include="SwSurface\SolidWorksAssemblyWalker.cs" />
+    <Compile Include="SwSurface\WizardAssemblyWalker.cs" />
     <Compile Include="SwSurface\Abstractions\IMeshTessellator.cs" />
     <Compile Include="SwSurface\SolidWorksMeshTessellator.cs" />
     <Compile Include="SwSurface\Abstractions\IAppearanceSource.cs" />
