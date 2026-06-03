@@ -118,5 +118,36 @@ namespace SW2GZ.Test.URDFExport
             Assert.Equal("motor-1@robot", restored.Links[0].ComponentIds[1]);
             Assert.Equal("base_link", restored.Links[1].ParentName);
         }
+
+        [Fact]
+        public void RoundTrip_PreservesStackProfile()
+        {
+            var config = new Sw2gzExportConfig
+            {
+                Stacks = new SW2GZ.Ros2.StackProfile
+                {
+                    GzSim = true,
+                    Actuation = SW2GZ.Ros2.ActuationBackend.GzPlugin,
+                    SensorsEnabled = true,
+                },
+            };
+
+            string xml = Sw2gzConfigCodec.ToXmlString(config);
+            Sw2gzExportConfig restored = Sw2gzConfigCodec.FromXmlString(xml);
+
+            Assert.NotNull(restored.Stacks);
+            Assert.True(restored.Stacks.GzSim);
+            Assert.Equal(SW2GZ.Ros2.ActuationBackend.GzPlugin, restored.Stacks.Actuation);
+            Assert.True(restored.Stacks.SensorsEnabled);
+        }
+
+        [Fact]
+        public void Default_StacksIsFullStack()
+        {
+            // A fresh config must default to the full stack so unconfigured assemblies
+            // export exactly as before this refactor.
+            var config = new Sw2gzExportConfig();
+            Assert.Equal(SW2GZ.Ros2.ActuationBackend.Ros2Control, config.Stacks.Actuation);
+        }
     }
 }

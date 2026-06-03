@@ -39,5 +39,10 @@ namespace SW2GZ.URDFExport
         // Step 4 — joint definitions, one per non-root link edge. Seeded from the
         // link tree (JointSeeder) and editable in the Joints step.
         [DataMember] public List<JointDef> Joints { get; set; } = new List<JointDef>();
+
+        // Stacks — à-la-carte ROS 2 / Gazebo stack selection for this assembly.
+        // Defaults to the full stack (Default()) so a config saved before this
+        // field existed deserializes to the same full-stack export as before.
+        [DataMember] public StackProfile Stacks { get; set; } = StackProfile.Default();
     }
 }
