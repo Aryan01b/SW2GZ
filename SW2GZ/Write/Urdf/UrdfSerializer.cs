@@ -207,10 +207,9 @@ namespace SW2GZ.Write.Urdf
                 "    <origin xyz=\"{0} {1} {2}\" rpy=\"{3} {4} {5}\"/>",
                 pos.X, pos.Y, pos.Z, roll, pitch, yaw));
 
-            // Axis. URDF requires <axis> for revolute/continuous/prismatic;
-            // we emit unconditionally for simplicity (harmless on fixed joints
-            // since downstream xacro/parsers ignore it).
-            if (j.Type != UrdfJointType.Fixed)
+            // URDF axis applies to revolute/continuous/prismatic/planar (planar's
+            // axis is the plane normal). Fixed and floating have no axis.
+            if (j.Type != UrdfJointType.Fixed && j.Type != UrdfJointType.Floating)
             {
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
                     "    <axis xyz=\"{0} {1} {2}\"/>",
@@ -243,6 +242,8 @@ namespace SW2GZ.Write.Urdf
             UrdfJointType.Revolute   => "revolute",
             UrdfJointType.Continuous => "continuous",
             UrdfJointType.Prismatic  => "prismatic",
+            UrdfJointType.Planar     => "planar",
+            UrdfJointType.Floating   => "floating",
             _                        => throw new System.InvalidOperationException($"Unhandled UrdfJointType: {t}"),
         };
     }

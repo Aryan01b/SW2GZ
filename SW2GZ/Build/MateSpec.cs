@@ -5,7 +5,7 @@ using SW2GZ.Math;
 
 namespace SW2GZ.Build
 {
-    public enum MateKind { Fixed, Revolute, Continuous, Prismatic }
+    public enum MateKind { Fixed, Revolute, Continuous, Prismatic, Planar, Floating }
 
     // ParentLink / ChildLink are sanitized link names matching LinkSpec.Name.
     // They identify which two links the mate couples; JointGraphBuilder resolves

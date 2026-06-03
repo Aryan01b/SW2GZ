@@ -335,7 +335,8 @@ namespace SW2GZ.Validate
             foreach (UrdfJoint j in model.Joints)
             {
                 if (j == null) continue;
-                if (j.Type == UrdfJointType.Fixed) continue;
+                // Fixed and floating carry no axis; floating is 6-DOF by definition.
+                if (j.Type == UrdfJointType.Fixed || j.Type == UrdfJointType.Floating) continue;
                 double ax = j.Axis.X, ay = j.Axis.Y, az = j.Axis.Z;
                 double mag = System.Math.Sqrt(ax * ax + ay * ay + az * az);
                 if (mag < AxisEpsilon)

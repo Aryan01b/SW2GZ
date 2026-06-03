@@ -84,5 +84,36 @@ namespace SW2GZ.Write.Urdf.Tests
                 "rpy=\"{0} {1} {2}\"", roll, pitch, yaw);
             Assert.Contains(expected, xml);
         }
+
+        [Fact]
+        public void PlanarJoint_EmitsTypeAndAxis_NoLimit()
+        {
+            var joint = new UrdfJoint("plane_j", UrdfJointType.Planar, "base_link", "arm1",
+                Pose.Identity, Vector3.UnitZ, null, null, 0, 0, UrdfCmdInterface.Position);
+            var model = RobotModelBuilder.Build(Meta(),
+                new[] { Link("base_link"), Link("arm1") }, new[] { joint });
+
+            string xml = UrdfSerializer.SerializeBody(model);
+
+            Assert.Contains("type=\"planar\"", xml);
+            Assert.Contains("<axis xyz=\"0 0 1\"/>", xml);
+            Assert.DoesNotContain("<limit", xml);
+        }
+
+        [Fact]
+        public void FloatingJoint_EmitsType_NoAxisNoLimit()
+        {
+            // Floating is axis-less by definition (zero axis must NOT error).
+            var joint = new UrdfJoint("free_j", UrdfJointType.Floating, "base_link", "arm1",
+                Pose.Identity, Vector3.Zero, null, null, 0, 0, UrdfCmdInterface.Position);
+            var model = RobotModelBuilder.Build(Meta(),
+                new[] { Link("base_link"), Link("arm1") }, new[] { joint });
+
+            string xml = UrdfSerializer.SerializeBody(model);
+
+            Assert.Contains("type=\"floating\"", xml);
+            Assert.DoesNotContain("<axis", xml);
+            Assert.DoesNotContain("<limit", xml);
+        }
     }
 }

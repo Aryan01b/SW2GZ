@@ -1,6 +1,6 @@
 namespace SW2GZ.Build.Urdf
 {
-    public enum UrdfJointType { Fixed, Revolute, Continuous, Prismatic }
+    public enum UrdfJointType { Fixed, Revolute, Continuous, Prismatic, Planar, Floating }
     public enum UrdfCmdInterface { Position, Velocity, Effort }
 
     public sealed record UrdfJoint(
