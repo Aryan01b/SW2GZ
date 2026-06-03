@@ -40,6 +40,31 @@ namespace SW2GZ.URDFExport
             string data = Sw2gzConfigCodec.ToXmlString(config);
             SaveDataToModelDoc(swApp, model, data);
             logger.Info("Saved SW2GZ wizard checkpoint to the assembly document.");
+
+            // DIAGNOSTIC: immediately read the Attribute back and log what we get.
+            // If the readback matches what we wrote, the write is good and any later
+            // "lost checkpoint" symptom must be a downstream roll-back (SW undo on
+            // PMP cancel) or a different document being loaded. If the readback
+            // already differs, the Attribute write itself isn't sticking.
+            try
+            {
+                string roundtrip = GetConfigData(model);
+                Sw2gzExportConfig back = Sw2gzConfigCodec.FromXmlString(roundtrip);
+                if (back == null)
+                {
+                    logger.Warn("Save readback: Attribute returned null/empty data " +
+                        "(write did not persist to the in-memory model).");
+                }
+                else
+                {
+                    logger.Info($"Save readback: Mode={back.Mode} LastStep={back.LastStep} " +
+                        $"Links={back.Links?.Count ?? 0} Joints={back.Joints?.Count ?? 0}");
+                }
+            }
+            catch (Exception e)
+            {
+                logger.Warn("Save readback failed: " + e.Message);
+            }
         }
 
         /// Load the wizard checkpoint from the model. Returns a fresh default
@@ -50,7 +75,14 @@ namespace SW2GZ.URDFExport
 
             string data = GetConfigData(model);
             Sw2gzExportConfig config = Sw2gzConfigCodec.FromXmlString(data);
-            return config ?? new Sw2gzExportConfig();
+            if (config == null)
+            {
+                logger.Info("Load: no checkpoint found — returning fresh default config.");
+                return new Sw2gzExportConfig();
+            }
+            logger.Info($"Load: Mode={config.Mode} LastStep={config.LastStep} " +
+                $"Links={config.Links?.Count ?? 0} Joints={config.Joints?.Count ?? 0}");
+            return config;
         }
 
         // ───────────────────────────── private ───────────────────────────────

@@ -83,13 +83,10 @@ namespace SW2GZ.URDFExport
         private PropertyManagerPageOption PMOptSdfModel;
         private PropertyManagerPageOption PMOptSdfWorld;
 
-        // Step 2 (Output) controls.
-        private PropertyManagerPageTextbox PMTextOutputFolder;
-        private PropertyManagerPageButton PMButtonBrowse;
-        private PropertyManagerPageTextbox PMTextPackageName;
-        private PropertyManagerPageTextbox PMTextAuthor;
-        private PropertyManagerPageTextbox PMTextEmail;
-        private PropertyManagerPageCombobox PMComboLicense;
+        // Output / package metadata fields no longer have a wizard step — they're
+        // collected by ExportDialog under the Export ribbon button now. The
+        // Sw2gzExportConfig fields stay (used by Export), but the per-PMP textbox /
+        // combobox / Browse-button controls are gone.
 
         // Step 3 (Links) controls — embedded WinForms hierarchy tree + pick funnel.
         private PropertyManagerPageWindowFromHandle PMTreeHandle;
@@ -131,14 +128,6 @@ namespace SW2GZ.URDFExport
         // All mates in the assembly, backing the mate list (indexed by position).
         private List<MateInfo> allMates = new List<MateInfo>();
 
-        // SPDX license choices for the optional License dropdown. First entry is
-        // blank ("none"); the combo is editable so a custom id can be typed.
-        private static readonly string[] LicenseChoices =
-        {
-            "", "MIT", "Apache-2.0", "BSD-3-Clause", "BSD-2-Clause",
-            "GPL-3.0-only", "LGPL-3.0-only", "MPL-2.0", "Proprietary",
-        };
-
         // Step model — placeholder headings + descriptions only (no real controls).
         private static readonly string[] StepNames =
         {
@@ -176,19 +165,9 @@ namespace SW2GZ.URDFExport
         private const int OptSdfModelID     = StepIdBase + 0 * 20 + 4;
         private const int OptSdfWorldID     = StepIdBase + 0 * 20 + 5;
 
-        // Step 2 (Output) control IDs (step index 1 → base 120).
-        private const int LabelOutputFolderID = StepIdBase + 1 * 20 + 2;
-        private const int TextOutputFolderID  = StepIdBase + 1 * 20 + 3;
-        private const int ButtonBrowseID      = StepIdBase + 1 * 20 + 4;
-        private const int LabelPackageNameID  = StepIdBase + 1 * 20 + 5;
-        private const int TextPackageNameID   = StepIdBase + 1 * 20 + 6;
-        private const int LabelAuthorID       = StepIdBase + 1 * 20 + 7;
-        private const int TextAuthorID        = StepIdBase + 1 * 20 + 8;
-        private const int LabelEmailID        = StepIdBase + 1 * 20 + 9;
-        private const int TextEmailID         = StepIdBase + 1 * 20 + 10;
-        private const int LabelLicenseID      = StepIdBase + 1 * 20 + 11;
-        private const int TextLicenseID       = StepIdBase + 1 * 20 + 12;
-        private const int LabelTargetsID      = StepIdBase + 1 * 20 + 13;
+        // Output-step control IDs removed — the wizard no longer renders those
+        // controls (collected by ExportDialog instead). The ID range StepIdBase +
+        // 1*20 + (2..13) is reserved/unused, kept open for future re-introduction.
 
         // Step 3 (Links) control IDs (step index 2 → base 140).
         private const int TreeHandleID          = StepIdBase + 2 * 20 + 2;
@@ -350,10 +329,12 @@ namespace SW2GZ.URDFExport
 
             // Reflect any loaded checkpoint onto the controls.
             SeedModeControls();
-            SeedOutputControls();
 
-            // Seed the UI on the first step.
-            ShowStep(0);
+            // No ShowStep here — the constructor calls ShowStep(config.LastStep)
+            // right after BuildPage(), so a hardcoded ShowStep(0) would either be
+            // immediately overridden (one wasted render) or, when LastStep lands on
+            // Joints/Review, double-run EnterJointsStep/EnterReviewStep side effects
+            // (mate scan, list rebuild). AfterActivation re-asserts the step too.
         }
 
         // Step 1 — three mutually-exclusive radio buttons selecting the export
@@ -389,62 +370,10 @@ namespace SW2GZ.URDFExport
             PMOptSdfWorld.Checked = config.Mode == ExportMode.SdfWorld;
         }
 
-        // Step 2 — output folder (+ Browse), package name, author/email/license,
-        // and a read-only target note (ROS 2 Jazzy + Gz Harmonic are locked).
-        //
-        // Each field is a caption Label (left edge) above an indented Textbox.
-        // The label Caption is set explicitly after creation — passing it only via
-        // AddControl2 proved unreliable for some rows (labels rendered blank), so
-        // we always set Caption on the returned control (matches the dynamic-label
-        // pattern in GeometryPropertyManager).
-        private void BuildOutputStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
-        {
-            int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
-
-            AddFieldLabel(group, LabelOutputFolderID, "Output folder", leftEdge, labelOpts);
-            PMTextOutputFolder = (PropertyManagerPageTextbox)group.AddControl2(
-                TextOutputFolderID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
-                "", (short)indent, visibleEnabled, "Folder the package is written to");
-            PMButtonBrowse = (PropertyManagerPageButton)group.AddControl2(
-                ButtonBrowseID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Browse...", (short)indent, visibleEnabled, "Choose the output folder");
-            ((IPropertyManagerPageControl)PMButtonBrowse).Width = 90;
-
-            AddFieldLabel(group, LabelPackageNameID, "Package name", leftEdge, labelOpts);
-            PMTextPackageName = (PropertyManagerPageTextbox)group.AddControl2(
-                TextPackageNameID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
-                "", (short)indent, visibleEnabled, "ROS 2 package name (sanitized on export)");
-
-            AddFieldLabel(group, LabelAuthorID, "Author", leftEdge, labelOpts);
-            PMTextAuthor = (PropertyManagerPageTextbox)group.AddControl2(
-                TextAuthorID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
-                "", (short)indent, visibleEnabled, "Maintainer name for package.xml");
-
-            AddFieldLabel(group, LabelEmailID, "Email (optional)", leftEdge, labelOpts);
-            PMTextEmail = (PropertyManagerPageTextbox)group.AddControl2(
-                TextEmailID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
-                "", (short)indent, visibleEnabled, "Maintainer email for package.xml (optional)");
-
-            AddFieldLabel(group, LabelLicenseID, "License (optional)", leftEdge, labelOpts);
-            PMComboLicense = (PropertyManagerPageCombobox)group.AddControl2(
-                TextLicenseID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
-                "", (short)indent, visibleEnabled,
-                "SPDX license id for package.xml (pick one or type your own)");
-            // No EditBoxReadOnly style => editable; user may type a custom id.
-            PMComboLicense.AddItems(LicenseChoices);
-
-            PropertyManagerPageLabel targets = AddFieldLabel(group, LabelTargetsID,
-                "Targets: ROS 2 Jazzy + Gz Sim Harmonic (fixed in this release)",
-                leftEdge, labelOpts);
-        }
-
-        // Adds a caption label and sets its Caption explicitly (see BuildOutputStep).
+        // Adds a caption label and sets its Caption explicitly — passing the caption
+        // only via AddControl2 proved unreliable for some rows (labels rendered
+        // blank), so we always set Caption on the returned control too (matches the
+        // dynamic-label pattern in GeometryPropertyManager).
         private PropertyManagerPageLabel AddFieldLabel(
             PropertyManagerPageGroup group, int id, string caption, int leftEdge, int labelOpts)
         {
@@ -454,34 +383,6 @@ namespace SW2GZ.URDFExport
                 caption, (short)leftEdge, labelOpts, "");
             label.Caption = caption;
             return label;
-        }
-
-        private void SeedOutputControls()
-        {
-            if (PMTextOutputFolder == null) return;
-            PMTextOutputFolder.Text = config.OutputFolder ?? "";
-            PMTextPackageName.Text = config.PackageName ?? "";
-            PMTextAuthor.Text = config.Author ?? "";
-            PMTextEmail.Text = config.Email ?? "";
-            SeedLicenseCombo();
-        }
-
-        // Selects config.License in the combo. A custom (saved) value not in the
-        // preset list is appended and selected.
-        private void SeedLicenseCombo()
-        {
-            string val = config.License ?? "";
-            short idx = -1;
-            for (short i = 0; i < LicenseChoices.Length; i++)
-            {
-                if (LicenseChoices[i] == val) { idx = i; break; }
-            }
-            if (idx < 0 && val.Length > 0)
-            {
-                PMComboLicense.AddItems(val);
-                idx = (short)LicenseChoices.Length;
-            }
-            PMComboLicense.CurrentSelection = idx < 0 ? (short)0 : idx;
         }
 
         // Seeds blank fields with sensible defaults the first time the wizard runs
@@ -1191,25 +1092,6 @@ namespace SW2GZ.URDFExport
         }
 
         // Opens a folder picker and writes the choice into config + the textbox.
-        private void BrowseForOutputFolder()
-        {
-            using (var dialog = new FolderBrowserDialog())
-            {
-                if (!string.IsNullOrEmpty(config.OutputFolder))
-                {
-                    dialog.SelectedPath = config.OutputFolder;
-                }
-                if (dialog.ShowDialog() == DialogResult.OK)
-                {
-                    config.OutputFolder = dialog.SelectedPath;
-                    if (PMTextOutputFolder != null)
-                    {
-                        PMTextOutputFolder.Text = dialog.SelectedPath;
-                    }
-                }
-            }
-        }
-
         // ───────────────────────────── handler interface ─────────────────────
 
         void IPropertyManagerPage2Handler9.AfterActivation()
@@ -1226,13 +1108,12 @@ namespace SW2GZ.URDFExport
             try
             {
                 logger.Info($"OnButtonPress Id={Id} (Back={ButtonBackID} Next={ButtonNextID} " +
-                    $"Browse={ButtonBrowseID} Add={ButtonAddLinkID} Rem={ButtonRemoveLinkID}) " +
+                    $"Add={ButtonAddLinkID} Rem={ButtonRemoveLinkID}) " +
                     $"currentStep={currentStep} mode={config.Mode}");
                 switch (Id)
                 {
                     case ButtonBackID: GoBack(); break;
                     case ButtonNextID: GoNext(); break;
-                    case ButtonBrowseID: BrowseForOutputFolder(); break;
                     case ButtonAddLinkID: AddLink(); break;
                     case ButtonRemoveLinkID: RemoveLink(); break;
                     default: break;
@@ -1284,41 +1165,24 @@ namespace SW2GZ.URDFExport
                     return false;
             }
         }
-        void IPropertyManagerPage2Handler9.OnTextboxChanged(int Id, string Text)
-        {
-            switch (Id)
-            {
-                case TextOutputFolderID: config.OutputFolder = Text ?? ""; break;
-                case TextPackageNameID:  config.PackageName = Text ?? ""; break;
-                case TextAuthorID:       config.Author = Text ?? ""; break;
-                case TextEmailID:        config.Email = Text ?? ""; break;
-                default: break;
-            }
-        }
+        void IPropertyManagerPage2Handler9.OnTextboxChanged(int Id, string Text) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxFocusChanged(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxListChanged(int Id, int Count)
         {
-            if (Id == PickFunnelID && Count > 0) OnFunnelChanged();
+            // Fire on Count==0 too — clearing the last component out of a link must
+            // still mirror into ComponentIds, otherwise validation reports the link
+            // as fully assigned when it isn't. OnFunnelChanged() short-circuits on
+            // SameSet so a no-op event is cheap.
+            if (Id == PickFunnelID) OnFunnelChanged();
         }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutCreated(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutDestroyed(int Id) { }
         void IPropertyManagerPage2Handler9.OnNumberboxChanged(int Id, double Value) { }
         void IPropertyManagerPage2Handler9.OnNumberBoxTrackingCompleted(int Id, double Value) { }
         void IPropertyManagerPage2Handler9.OnCheckboxCheck(int Id, bool Checked) { }
-        void IPropertyManagerPage2Handler9.OnComboboxEditChanged(int Id, string Text)
-        {
-            if (Id == TextLicenseID)
-            {
-                config.License = Text ?? "";
-            }
-        }
+        void IPropertyManagerPage2Handler9.OnComboboxEditChanged(int Id, string Text) { }
 
-        void IPropertyManagerPage2Handler9.OnComboboxSelectionChanged(int Id, int Item)
-        {
-            if (Id == TextLicenseID)
-                config.License = PMComboLicense.get_ItemText((short)Item) ?? "";
-            // Parent/child combos are read on "Add joint"; no per-change handling.
-        }
+        void IPropertyManagerPage2Handler9.OnComboboxSelectionChanged(int Id, int Item) { }
         void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item)
         {
             if (Id == ListJointsID) { activeJointIndex = Item; UpdateJointDetails(); }
