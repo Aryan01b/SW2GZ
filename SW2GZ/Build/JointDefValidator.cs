@@ -21,8 +21,13 @@ namespace SW2GZ.Build
 
             foreach (JointDef j in joints)
             {
-                bool moving = j.Type != UrdfJointType.Fixed;
-                if (moving && !j.HasAxis)
+                // Axis is meaningful for revolute/continuous/prismatic and for
+                // planar (the plane normal). Fixed and floating carry no axis.
+                bool needsAxis = j.Type == UrdfJointType.Revolute
+                              || j.Type == UrdfJointType.Continuous
+                              || j.Type == UrdfJointType.Prismatic
+                              || j.Type == UrdfJointType.Planar;
+                if (needsAxis && !j.HasAxis)
                     warnings.Add($"Joint '{j.Name}' is {j.Type.ToString().ToLowerInvariant()} " +
                                  "but has no axis — select or generate a reference axis.");
 

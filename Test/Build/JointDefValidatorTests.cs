@@ -58,5 +58,25 @@ namespace SW2GZ.Test.Build
         {
             Assert.Empty(JointDefValidator.Validate(null));
         }
+
+        [Fact]
+        public void FloatingJointWithNoAxis_NoWarning()
+        {
+            var joints = new List<JointDef>
+            {
+                new JointDef { Name = "free", Type = UrdfJointType.Floating },  // axis 0,0,0
+            };
+            Assert.DoesNotContain(JointDefValidator.Validate(joints), w => w.Contains("axis"));
+        }
+
+        [Fact]
+        public void PlanarJointWithNoAxis_Warns()
+        {
+            var joints = new List<JointDef>
+            {
+                new JointDef { Name = "plane", Type = UrdfJointType.Planar },   // axis 0,0,0
+            };
+            Assert.Contains(JointDefValidator.Validate(joints), w => w.Contains("plane") && w.Contains("axis"));
+        }
     }
 }
