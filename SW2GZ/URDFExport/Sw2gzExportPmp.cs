@@ -114,8 +114,15 @@ namespace SW2GZ.URDFExport
         private PropertyManagerPageLabel PMLabelDetailType;
         private PropertyManagerPageLabel PMLabelDetailLimits;
 
-        // Step 5 (Review) — a read-only summary listbox.
-        private PropertyManagerPageListbox PMListReview;
+        // Step 5 (Review) — compact metadata labels + separate links/joints lists.
+        private PropertyManagerPageLabel PMLabelReviewMode;
+        private PropertyManagerPageLabel PMLabelReviewPkg;
+        private PropertyManagerPageLabel PMLabelReviewOut;
+        private PropertyManagerPageLabel PMLabelReviewBy;
+        private PropertyManagerPageLabel PMLabelReviewLinksCap;
+        private PropertyManagerPageListbox PMListReviewLinks;
+        private PropertyManagerPageLabel PMLabelReviewJointsCap;
+        private PropertyManagerPageListbox PMListReviewJoints;
 
         // Index of the joint currently selected in the list (-1 = none).
         private int activeJointIndex = -1;
@@ -205,7 +212,14 @@ namespace SW2GZ.URDFExport
 
         // Step 5 (Review) control IDs (step index 4 → base 180).
         private const int LabelReviewInstrID      = StepIdBase + 4 * 20 + 2;
-        private const int ListReviewID            = StepIdBase + 4 * 20 + 3;
+        private const int LabelReviewModeID       = StepIdBase + 4 * 20 + 3;
+        private const int LabelReviewPkgID        = StepIdBase + 4 * 20 + 4;
+        private const int LabelReviewOutID        = StepIdBase + 4 * 20 + 5;
+        private const int LabelReviewByID         = StepIdBase + 4 * 20 + 6;
+        private const int LabelReviewLinksCapID   = StepIdBase + 4 * 20 + 7;
+        private const int ListReviewLinksID       = StepIdBase + 4 * 20 + 8;
+        private const int LabelReviewJointsCapID  = StepIdBase + 4 * 20 + 9;
+        private const int ListReviewJointsID      = StepIdBase + 4 * 20 + 10;
 
         private int StepCount => StepNames.Length;
 
@@ -941,56 +955,66 @@ namespace SW2GZ.URDFExport
         private void BuildReviewStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
         {
             int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
-            AddFieldLabel(group, LabelReviewInstrID,
-                "Review the model below, then Finish to export the ROS 2 / Gz package.",
-                leftEdge, labelOpts);
-            PMListReview = (PropertyManagerPageListbox)group.AddControl2(
-                ListReviewID,
+            AddFieldLabel(group, LabelReviewInstrID, "Review, then Finish to export.", leftEdge, labelOpts);
+
+            // Compact metadata, one key:value per row.
+            PMLabelReviewMode = AddFieldLabel(group, LabelReviewModeID, "", leftEdge, labelOpts);
+            PMLabelReviewPkg  = AddFieldLabel(group, LabelReviewPkgID, "", leftEdge, labelOpts);
+            PMLabelReviewOut  = AddFieldLabel(group, LabelReviewOutID, "", leftEdge, labelOpts);
+            PMLabelReviewBy   = AddFieldLabel(group, LabelReviewByID, "", leftEdge, labelOpts);
+
+            // Links + joints in their own compact lists under section headers.
+            PMLabelReviewLinksCap = AddFieldLabel(group, LabelReviewLinksCapID, "", leftEdge, labelOpts);
+            PMListReviewLinks = (PropertyManagerPageListbox)group.AddControl2(
+                ListReviewLinksID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
-                "", (short)leftEdge, visibleEnabled, "Model summary");
-            ((IPropertyManagerPageListbox)PMListReview).Height = 240;
+                "", (short)leftEdge, visibleEnabled, "Links");
+            ((IPropertyManagerPageListbox)PMListReviewLinks).Height = 76;
+
+            PMLabelReviewJointsCap = AddFieldLabel(group, LabelReviewJointsCapID, "", leftEdge, labelOpts);
+            PMListReviewJoints = (PropertyManagerPageListbox)group.AddControl2(
+                ListReviewJointsID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
+                "", (short)leftEdge, visibleEnabled, "Joints");
+            ((IPropertyManagerPageListbox)PMListReviewJoints).Height = 96;
         }
 
-        // Fills the review summary: metadata, links and joints.
+        // Fills the review metadata labels + links/joints lists.
         private void EnterReviewStep()
         {
-            if (PMListReview == null) return;
-            PMListReview.Clear();
-
+            if (PMLabelReviewMode == null) return;
             string pkg = PackageNameSanitizer.Sanitize(config.PackageName ?? "").Value;
-            PMListReview.AddItems("Mode:  " + ModeText(config.Mode));
-            PMListReview.AddItems("Output:  " +
-                (string.IsNullOrEmpty(config.OutputFolder) ? "(not set)" : config.OutputFolder));
-            string pkgLine = "Package:  " + pkg;
+
+            PMLabelReviewMode.Caption = "Mode:  " + ModeText(config.Mode);
+            string pkgCap = "Package:  " + pkg;
             if (!string.Equals(pkg, config.PackageName))
-                pkgLine += "   (from \"" + (config.PackageName ?? "") + "\")";
-            PMListReview.AddItems(pkgLine);
-            PMListReview.AddItems("Author:  " +
+                pkgCap += "   (was \"" + (config.PackageName ?? "") + "\")";
+            PMLabelReviewPkg.Caption = pkgCap;
+            PMLabelReviewOut.Caption = "Output:  " +
+                (string.IsNullOrEmpty(config.OutputFolder) ? "(not set)" : config.OutputFolder);
+            PMLabelReviewBy.Caption = "Author:  " +
                 (string.IsNullOrEmpty(config.Author) ? "—" : config.Author) +
-                (string.IsNullOrEmpty(config.Email) ? "" : "  <" + config.Email + ">") +
-                (string.IsNullOrEmpty(config.License) ? "" : "   License: " + config.License));
-            PMListReview.AddItems("");
+                (string.IsNullOrEmpty(config.License) ? "" : "    ·  " + config.License);
 
             var links = config.Links ?? new List<LinkDef>();
-            PMListReview.AddItems("Links (" + links.Count + "):");
+            PMLabelReviewLinksCap.Caption = "Links  (" + links.Count + ")";
+            PMListReviewLinks.Clear();
             foreach (LinkDef l in links)
             {
-                string rel = string.IsNullOrEmpty(l.ParentName) ? "(base)" : "← " + l.ParentName;
+                string rel = string.IsNullOrEmpty(l.ParentName) ? "base" : "← " + l.ParentName;
                 int parts = l.ComponentIds != null ? l.ComponentIds.Count : 0;
-                PMListReview.AddItems("   " + l.Name + "   " + rel +
-                    "   [" + parts + " part" + (parts == 1 ? "" : "s") + "]");
+                PMListReviewLinks.AddItems(l.Name + "    " + rel + "    ·" + parts + "p");
             }
-            PMListReview.AddItems("");
 
             var joints = config.Joints ?? new List<JointDef>();
-            PMListReview.AddItems("Joints (" + joints.Count + "):");
+            PMLabelReviewJointsCap.Caption = "Joints  (" + joints.Count + ")";
+            PMListReviewJoints.Clear();
             foreach (JointDef j in joints)
             {
-                string mate = string.IsNullOrEmpty(j.MateName) ? "(no mate)" : "[" + j.MateName + "]";
+                string mate = string.IsNullOrEmpty(j.MateName) ? "no mate" : j.MateName;
                 string lim = (j.LimitLower.HasValue || j.LimitUpper.HasValue)
-                    ? "  limits [" + Fmt(j.LimitLower) + ", " + Fmt(j.LimitUpper) + "]" : "";
-                PMListReview.AddItems("   " + j.Name + "   " + j.ParentLink + "→" + j.ChildLink +
-                    "   " + j.Type + "   " + mate + lim);
+                    ? "  [" + Fmt(j.LimitLower) + "," + Fmt(j.LimitUpper) + "]" : "";
+                PMListReviewJoints.AddItems(j.Name + "    " + j.Type + "    " + mate + lim);
             }
         }
 
