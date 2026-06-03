@@ -63,16 +63,29 @@ namespace SW2GZ.URDFExport
                                     string author, string email, string license) =>
             Run(outputDir, packageName, author, email, license, System.Array.Empty<SensorDef>());
 
+        // Back-compat overload — the old coarse boolean maps onto the new profile:
+        //   modelOnly:false → full stack (Default)   modelOnly:true → bare model (ModelOnly)
+        // Existing callers/tests keep working byte-for-byte.
+        public SW2GZ.Validate.ValidationReport Run(string outputDir, string packageName,
+                                    string author, string email, string license,
+                                    IReadOnlyList<SensorDef> sensors, bool modelOnly = false) =>
+            Run(outputDir, packageName, author, email, license, sensors,
+                modelOnly ? StackProfile.ModelOnly() : StackProfile.Default());
+
         // TODO P6-COM: replace caller-supplied `sensors` with a SW-COM source once the
         // workstation session lands an ISensorSource boundary similar to IAppearanceSource.
-        // modelOnly=true emits the bare robot package — links + joints + materials,
-        // a Gz-spawn launch and an empty world — with NO ros2_control / Gazebo
+        // The StackProfile selects which stacks the export emits. A ModelOnly()
+        // profile emits the bare robot package — links + joints + materials, a
+        // Gz-spawn launch and an empty world — with NO ros2_control / Gazebo
         // plugin files. It still builds in colcon and spawns the robot.
         public SW2GZ.Validate.ValidationReport Run(string outputDir, string packageName,
                                     string author, string email, string license,
-                                    IReadOnlyList<SensorDef> sensors, bool modelOnly = false)
+                                    IReadOnlyList<SensorDef> sensors, StackProfile profile)
         {
             if (sensors == null) throw new ArgumentNullException(nameof(sensors));
+            if (profile == null) throw new ArgumentNullException(nameof(profile));
+            // D1: actuation == Ros2Control reproduces the legacy full-stack output; every other backend (incl. GzPlugin, whose own writer lands in D3) falls through to the legacy model-only output. This single flag == today's !modelOnly.
+            bool fullStack = profile.Actuation == ActuationBackend.Ros2Control;
             // ── Step 1: Sanitize ──────────────────────────────────────────────
             string pkg = PackageNameSanitizer.Sanitize(packageName).Value;
 
@@ -206,9 +219,10 @@ namespace SW2GZ.URDFExport
                     AmentCMakeWriter.Write(new AmentCMakeInput(pkg, hasMeshes: true)));
 
                 // urdf/<pkg>.urdf.xacro — model-only drops the control/plugin includes.
+                // gated by actuation backend (D1: Ros2Control == full stack)
                 File.WriteAllText(
                     Path.Combine(root, "urdf", $"{pkg}.urdf.xacro"),
-                    modelOnly ? XacroWriter.WriteModelOnly(pkg, bodyXml) : XacroWriter.Write(pkg, bodyXml));
+                    fullStack ? XacroWriter.Write(pkg, bodyXml) : XacroWriter.WriteModelOnly(pkg, bodyXml));
 
                 // urdf/inc/materials.xacro (P5: real material defs from RobotModel.Materials;
                 // empty list emits a placeholder comment so the file still parses).
@@ -220,7 +234,8 @@ namespace SW2GZ.URDFExport
                 foreach (UrdfJoint j in joints) jointNames.Add(j.Name);
 
                 // Control + Gazebo-plugin files — skipped entirely in model-only mode.
-                if (!modelOnly)
+                // gated by actuation backend (D1: Ros2Control == full stack)
+                if (fullStack)
                 {
                     File.WriteAllText(
                         Path.Combine(root, "urdf", "inc", "ros2_control.xacro"),
@@ -239,10 +254,12 @@ namespace SW2GZ.URDFExport
                 // launch/
                 string launchDir = Path.Combine(root, "launch");
                 File.WriteAllText(Path.Combine(launchDir, "display.launch.py"), LaunchPyWriter.Display(pkg));
+                // gated by actuation backend (D1: Ros2Control == full stack)
                 File.WriteAllText(Path.Combine(launchDir, "gz_sim.launch.py"),
-                    modelOnly ? LaunchPyWriter.GzSimModelOnly(pkg) : LaunchPyWriter.GzSim(pkg));
+                    fullStack ? LaunchPyWriter.GzSim(pkg) : LaunchPyWriter.GzSimModelOnly(pkg));
 
-                if (!modelOnly)
+                // gated by actuation backend (D1: Ros2Control == full stack)
+                if (fullStack)
                 {
                     File.WriteAllText(Path.Combine(launchDir, "ros2_control.launch.py"),
                         LaunchPyWriter.Ros2Control(pkg));
