@@ -90,6 +90,56 @@ namespace SW2GZ.Test.Writers
 
         [Fact]
         [Trait("Category", "Unit")]
+        public void Serialize_PosesChildLinkRelativeToParentViaJointOrigin()
+        {
+            var l0 = LinkBuilder.Build("base_link",
+                new MassProps(1.0, Vector3.Zero, Matrix3.Identity), OneTri(), OneTri());
+            var l1 = LinkBuilder.Build("arm",
+                new MassProps(1.0, Vector3.Zero, Matrix3.Identity), OneTri(), OneTri());
+            // origin: 0.5 along X, 0.25 along Z, no rotation — adjust the Pose ctor call
+            // to match the actual Pose constructor you confirmed.
+            var origin = new Pose(new Vector3(0.5f, 0f, 0.25f), System.Numerics.Quaternion.Identity);
+            var joint = new UrdfJoint("shoulder", UrdfJointType.Revolute, "base_link", "arm",
+                origin, Vector3.UnitZ, -1.0, 1.0, 10.0, 2.0, UrdfCmdInterface.Position);
+            var meta = new RobotMeta("posed", "A", "a@b", "MIT", CoordinateConvention.Identity);
+            var model = new RobotModel(meta,
+                new[] { new ModelLink(l0, null, null), new ModelLink(l1, null, null) },
+                new[] { joint }, System.Array.Empty<MaterialDef>(),
+                System.Array.Empty<SensorDef>(),
+                new ControlSpec(new[] { "shoulder" }, ControlSpec.DefaultJointStateBroadcaster));
+
+            string sdf = SdfModelWriter.Serialize(model);
+            // Child link 'arm' is placed relative to 'base_link' via the joint origin.
+            Assert.Contains("<pose relative_to=\"base_link\">0.5 0 0.25 0 0 0</pose>", sdf);
+            // The joint itself no longer carries a pose.
+            Assert.DoesNotContain("relative_to=\"base_link\">0.5 0 0.25 0 0 0</pose>\n    </joint>", sdf);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
+        public void Serialize_ContinuousJointMapsToRevoluteWithoutLimit()
+        {
+            var l0 = LinkBuilder.Build("base_link",
+                new MassProps(1.0, Vector3.Zero, Matrix3.Identity), OneTri(), OneTri());
+            var l1 = LinkBuilder.Build("wheel",
+                new MassProps(1.0, Vector3.Zero, Matrix3.Identity), OneTri(), OneTri());
+            var joint = new UrdfJoint("axle", UrdfJointType.Continuous, "base_link", "wheel",
+                Pose.Identity, Vector3.UnitY, null, null, 5.0, 3.0, UrdfCmdInterface.Velocity);
+            var meta = new RobotMeta("cont", "A", "a@b", "MIT", CoordinateConvention.Identity);
+            var model = new RobotModel(meta,
+                new[] { new ModelLink(l0, null, null), new ModelLink(l1, null, null) },
+                new[] { joint }, System.Array.Empty<MaterialDef>(),
+                System.Array.Empty<SensorDef>(),
+                new ControlSpec(new[] { "axle" }, ControlSpec.DefaultJointStateBroadcaster));
+
+            string sdf = SdfModelWriter.Serialize(model);
+            Assert.Contains("<joint name=\"axle\" type=\"revolute\">", sdf);
+            Assert.Contains("<xyz>0 1 0</xyz>", sdf);
+            Assert.DoesNotContain("<limit>", sdf);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
         public void Write_RobotModel_WritesModelSdfFile()
         {
             SdfModelWriter.Write(TwoLinkModel(), TempDir);

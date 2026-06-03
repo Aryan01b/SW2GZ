@@ -67,11 +67,17 @@ namespace SW2GZ.Gz
             var mats = new Dictionary<string, MaterialDef>(StringComparer.Ordinal);
             foreach (MaterialDef m in model.Materials) mats[m.Name] = m;
 
+            // Each link is the child of at most one joint (kinematic tree). Map
+            // child-link name → its parent joint so the link can be posed relative
+            // to its parent link (SDF frame semantics), reproducing the URDF layout.
+            var childToJoint = new Dictionary<string, UrdfJoint>(StringComparer.Ordinal);
+            foreach (UrdfJoint j in model.Joints) childToJoint[j.ChildLink] = j;
+
             var sb = new StringBuilder();
             sb.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
             sb.AppendLine("<sdf version=\"1.10\">");
             sb.AppendLine($"  <model name=\"{modelEsc}\">");
-            foreach (ModelLink ml in model.Links) AppendLink(sb, ml, modelEsc, mats);
+            foreach (ModelLink ml in model.Links) AppendLink(sb, ml, modelEsc, mats, childToJoint);
             foreach (UrdfJoint j in model.Joints) AppendJoint(sb, j);
             sb.AppendLine("  </model>");
             sb.AppendLine("</sdf>");
@@ -79,11 +85,25 @@ namespace SW2GZ.Gz
         }
 
         private static void AppendLink(StringBuilder sb, ModelLink ml, string modelEsc,
-                                       IReadOnlyDictionary<string, MaterialDef> mats)
+                                       IReadOnlyDictionary<string, MaterialDef> mats,
+                                       IReadOnlyDictionary<string, UrdfJoint> childToJoint)
         {
             UrdfLink link = ml.Link;
             string linkEsc = SecurityElement.Escape(link.Name);
             sb.AppendLine($"    <link name=\"{linkEsc}\">");
+
+            // Pose the link relative to its parent link via the connecting joint's
+            // origin. The SDF joint frame defaults to the child link frame, so the
+            // joint itself emits no <pose>. Root links (no parent joint) stay at the
+            // model origin.
+            if (childToJoint.TryGetValue(link.Name, out UrdfJoint pj))
+            {
+                var p = pj.Origin.Position;
+                var (r, pi, y) = Matrix3.FromQuaternion(pj.Origin.Rotation).ToRpy();
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                    "      <pose relative_to=\"{0}\">{1} {2} {3} {4} {5} {6}</pose>",
+                    SecurityElement.Escape(pj.ParentLink), p.X, p.Y, p.Z, r, pi, y));
+            }
 
             sb.AppendLine("      <inertial>");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
@@ -132,11 +152,9 @@ namespace SW2GZ.Gz
             sb.AppendLine($"      <parent>{parentEsc}</parent>");
             sb.AppendLine($"      <child>{SecurityElement.Escape(j.ChildLink)}</child>");
 
-            var pos = j.Origin.Position;
-            var (roll, pitch, yaw) = Matrix3.FromQuaternion(j.Origin.Rotation).ToRpy();
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
-                "      <pose relative_to=\"{0}\">{1} {2} {3} {4} {5} {6}</pose>",
-                parentEsc, pos.X, pos.Y, pos.Z, roll, pitch, yaw));
+            // No <pose> here: the SDF joint frame defaults to the child link frame,
+            // which already carries the URDF parent→child origin (set on the link),
+            // so the axis below is expressed in that frame exactly as in URDF.
 
             if (j.Type == UrdfJointType.Revolute || j.Type == UrdfJointType.Continuous
                 || j.Type == UrdfJointType.Prismatic)
