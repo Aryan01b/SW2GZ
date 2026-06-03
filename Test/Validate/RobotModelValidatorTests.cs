@@ -242,6 +242,22 @@ namespace SW2GZ.Validate.Tests
             Assert.Contains(r.Errors, e => e.Code == "P9.E.JOINT_AXIS_ZERO");
         }
 
+        [Fact]
+        public void Validate_FloatingZeroAxis_NoAxisError()
+        {
+            // Floating joints are 6-DOF and carry no axis; a zero axis must NOT
+            // be flagged (unlike revolute/continuous/prismatic/planar).
+            var links = new[] { Link("a"), Link("b") };
+            var joints = new[]
+            {
+                new UrdfJoint("free", UrdfJointType.Floating, "a", "b",
+                    Pose.Identity, Vector3.Zero, null, null, 0, 0, UrdfCmdInterface.Position),
+            };
+            var model = ModelWith(links, joints);
+            ValidationReport r = RobotModelValidator.Validate(model);
+            Assert.DoesNotContain(r.Errors, e => e.Code == "P9.E.JOINT_AXIS_ZERO");
+        }
+
         // ─── V8 — Material refs ───────────────────────────────────────────────
 
         [Fact]
