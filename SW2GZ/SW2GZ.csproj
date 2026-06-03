@@ -536,6 +536,7 @@
     <Compile Include="UI\ViewModels\ControllersStepViewModel.cs" />
     <Compile Include="UI\ViewModels\ReviewStepViewModel.cs" />
     <Compile Include="UI\ViewModels\WizardViewModel.cs" />
+    <Compile Include="UI\ViewModels\WizardStepPlan.cs" />
     <!-- P8 — SolidWorks/WinForms service impls (net48-only; NOT source-linked into the test project). -->
     <Compile Include="UI\Services\Sw\WinFormsFolderBrowserService.cs" />
     <Compile Include="UI\Services\Sw\SwViewportSelectionService.cs" />

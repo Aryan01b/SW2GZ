@@ -546,6 +546,12 @@ namespace SW2GZ.SW
         // The SW2GZ entry point. Opens the native PropertyManagerPage export shell
         // (left panel) so the 3D viewport stays live. Invoked by name (reflection)
         // from the ribbon/toolbar button, so it must stay public.
+        // Held as a field (not a local) so the PropertyManagerPage2Handler9 COM
+        // callback object stays rooted while the page is open. As a local it gets
+        // GC'd after LaunchWizard returns, and OnButtonPress (Back/Next/Finish)
+        // silently stops firing — the buttons appear dead.
+        private Sw2gzExportPmp _exportWizard;
+
         public void LaunchWizard()
         {
             try
@@ -558,8 +564,8 @@ namespace SW2GZ.SW
                     return;
                 }
 
-                var pmp = new Sw2gzExportPmp((SldWorks)SwApp, modeldoc);
-                pmp.Show();
+                _exportWizard = new Sw2gzExportPmp((SldWorks)SwApp, modeldoc);
+                _exportWizard.Show();
             }
             catch (Exception e)
             {

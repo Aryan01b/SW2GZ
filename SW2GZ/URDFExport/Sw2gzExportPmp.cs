@@ -41,6 +41,7 @@ using SW2GZ.Ros2;
 using SW2GZ.SwSurface;
 using SW2GZ.SwSurface.Abstractions;
 using SW2GZ.UI;
+using SW2GZ.UI.ViewModels;
 using SW2GZ.Utilities;
 using System.Collections.Generic;
 using System.Globalization;
@@ -221,20 +222,8 @@ namespace SW2GZ.URDFExport
 
         private int StepCount => StepNames.Length;
 
-        // Physical step indices (match the BuildPage switch + StepNames order).
-        private const int StepMode   = 0;
-        private const int StepLinks  = 1;   // "Create base model structure"
-        private const int StepJoints = 2;
-        private const int StepReview = 3;
-
-        // Steps reachable for the current export mode. Robot Package walks the
-        // full plan (Mode → Links → Joints → Review). gz asset/world are static
-        // visual models — they need neither a manual link tree nor joints (links
-        // are auto-seeded from the assembly), so they skip straight Mode → Review.
-        private int[] ReachableSteps() =>
-            config.Mode == ExportMode.RobotPackage
-                ? new[] { StepMode, StepLinks, StepJoints, StepReview }
-                : new[] { StepMode, StepReview };
+        // Navigation rules (mode -> reachable steps, Back/Next/Finish) live in the
+        // pure, unit-tested WizardStepPlan. This shell only renders the result.
 
         // Index of the current step (0-based).
         private int currentStep;
@@ -1050,9 +1039,9 @@ namespace SW2GZ.URDFExport
 
             // Snap to a step reachable for the current mode (e.g. a checkpoint
             // saved on Joints under Robot Package, reopened after switching to gz).
-            int[] reach = ReachableSteps();
-            int pos = System.Array.IndexOf(reach, step);
-            if (pos < 0) { step = reach[0]; pos = 0; }
+            step = WizardStepPlan.Snap(config.Mode, step);
+            int pos = WizardStepPlan.Position(config.Mode, step);
+            int reachCount = WizardStepPlan.Count(config.Mode);
             currentStep = step;
 
             for (int i = 0; i < StepCount; i++)
@@ -1064,36 +1053,34 @@ namespace SW2GZ.URDFExport
             }
 
             PMLabelHeader.Caption =
-                "Step " + (pos + 1) + " of " + reach.Length +
+                "Step " + (pos + 1) + " of " + reachCount +
                 " — " + StepNames[currentStep];
 
             // Back disabled on the first reachable step.
             ((IPropertyManagerPageControl)PMButtonBack).Enabled = pos > 0;
 
             // Next becomes "Finish" on the last reachable step.
-            bool isLast = pos == reach.Length - 1;
-            PMButtonNext.Caption = isLast ? "Finish" : "Next >";
+            PMButtonNext.Caption = WizardStepPlan.IsLast(config.Mode, currentStep) ? "Finish" : "Next >";
 
             // Entering Joints: seed (if empty), refresh the lists + combos.
-            if (currentStep == StepJoints) EnterJointsStep();
-            else if (currentStep == StepReview) EnterReviewStep();
+            if (currentStep == WizardStepPlan.StepJoints) EnterJointsStep();
+            else if (currentStep == WizardStepPlan.StepReview) EnterReviewStep();
         }
 
         private void GoBack()
         {
-            int[] reach = ReachableSteps();
-            int pos = System.Array.IndexOf(reach, currentStep);
-            if (pos > 0)
+            int prev = WizardStepPlan.Back(config.Mode, currentStep);
+            if (prev >= 0)
             {
-                ShowStep(reach[pos - 1]);
+                ShowStep(prev);
             }
         }
 
         private void GoNext()
         {
             // Links step must pass validation before advancing. Only Robot Package
-            // visits it; gz modes skip Links + Joints (ReachableSteps).
-            if (currentStep == StepLinks)
+            // visits it; gz modes skip Links + Joints (WizardStepPlan).
+            if (currentStep == WizardStepPlan.StepLinks)
             {
                 List<string> issues = LinkDefValidator.Validate(config.Links, allComponentIds);
                 if (issues.Count > 0)
@@ -1104,13 +1091,9 @@ namespace SW2GZ.URDFExport
                 }
             }
 
-            int[] reach = ReachableSteps();
-            int pos = System.Array.IndexOf(reach, currentStep);
-            if (pos < 0) pos = 0;
-
-            if (pos < reach.Length - 1)
+            int next = WizardStepPlan.Next(config.Mode, currentStep);
+            if (next >= 0)
             {
-                int next = reach[pos + 1];
                 SaveCheckpoint(next);
                 ShowStep(next);
             }
@@ -1222,7 +1205,7 @@ namespace SW2GZ.URDFExport
         void IPropertyManagerPage2Handler9.AfterActivation()
         {
             ShowStep(currentStep);
-            if (currentStep == StepLinks && PMPickFunnel != null)
+            if (currentStep == WizardStepPlan.StepLinks && PMPickFunnel != null)
             {
                 PMPickFunnel.SetSelectionFocus();
             }
