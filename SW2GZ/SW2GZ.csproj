@@ -417,6 +417,7 @@
     <Compile Include="Versioning\VersionInfo.cs" />
     <Compile Include="Ros2\TargetProfile.cs" />
     <Compile Include="Ros2\StackProfile.cs" />
+    <Compile Include="Ros2\StackConfigMap.cs" />
     <Compile Include="Ros2\StackRibbonGate.cs" />
     <Compile Include="Ros2\StackFlyoutModel.cs" />
     <Compile Include="Ros2\PackageXmlV3Writer.cs" />
@@ -501,6 +502,7 @@
     <Compile Include="SwSurface\WizardAssemblyWalker.cs" />
     <Compile Include="URDFExport\Sw2gzModelExporter.cs" />
     <Compile Include="UI\ExportDialog.cs" />
+    <Compile Include="UI\StackConfigDialog.cs" />
     <Compile Include="SwSurface\Abstractions\IMeshTessellator.cs" />
     <Compile Include="SwSurface\SolidWorksMeshTessellator.cs" />
     <Compile Include="SwSurface\Abstractions\IAppearanceSource.cs" />

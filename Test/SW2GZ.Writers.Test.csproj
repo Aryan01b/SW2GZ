@@ -28,6 +28,7 @@
   <ItemGroup>
     <Compile Include="..\SW2GZ\Ros2\TargetProfile.cs"        Link="Sources\Ros2\TargetProfile.cs" />
     <Compile Include="..\SW2GZ\Ros2\StackProfile.cs"         Link="Sources\Ros2\StackProfile.cs" />
+    <Compile Include="..\SW2GZ\Ros2\StackConfigMap.cs"       Link="Sources\Ros2\StackConfigMap.cs" />
     <Compile Include="..\SW2GZ\Ros2\StackRibbonGate.cs"      Link="Sources\Ros2\StackRibbonGate.cs" />
     <Compile Include="..\SW2GZ\Ros2\StackFlyoutModel.cs"     Link="Sources\Ros2\StackFlyoutModel.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzExportConfig.cs" Link="Sources\URDFExport\Sw2gzExportConfig.cs" />

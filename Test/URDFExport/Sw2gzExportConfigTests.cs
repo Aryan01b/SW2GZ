@@ -168,6 +168,22 @@ namespace SW2GZ.Test.URDFExport
         }
 
         [Fact]
+        public void RoundTrip_PreservesBridgePlan()
+        {
+            var config = new Sw2gzExportConfig {
+                Stacks = new SW2GZ.Ros2.StackProfile {
+                    Actuation = SW2GZ.Ros2.ActuationBackend.GzPlugin,
+                    Bridge = new SW2GZ.Ros2.BridgePlan { Clock = false, CmdVel = true, Odom = true }
+                }
+            };
+            var restored = Sw2gzConfigCodec.FromXmlString(Sw2gzConfigCodec.ToXmlString(config));
+            Assert.False(restored.Stacks.Bridge.Clock);
+            Assert.True(restored.Stacks.Bridge.CmdVel);
+            Assert.True(restored.Stacks.Bridge.Odom);
+            Assert.True(restored.Stacks.Bridge.Tf);
+        }
+
+        [Fact]
         public void Deserialize_LegacyXmlWithoutLinksAndJoints_DefaultsToEmptyLists()
         {
             // Simulates a config whose XML omits <Links>/<Joints>. Because
