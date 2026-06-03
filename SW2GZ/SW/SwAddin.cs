@@ -72,11 +72,13 @@ namespace SW2GZ.SW
         // docking state against it, so it must not collide with other groups.
         private const int sw2gzWizardUserID = 920;
         private const int sw2gzExportUserID = 921;
-
-        // Held as a module field so the COM object survives across SolidWorks
-        // callbacks (FlyoutCallback fires every time the user opens the flyout)
-        // and is not garbage-collected while the ribbon still references it.
-        private FlyoutGroup _stacksFlyout = null;
+        // Per-stack config buttons (the "Stacks" ribbon section). Stable user IDs,
+        // contiguous after the two existing buttons so SolidWorks docking state is
+        // persisted distinctly per button.
+        private const int sw2gzActuationUserID = 922;
+        private const int sw2gzSensorsUserID   = 923;
+        private const int sw2gzGazeboUserID     = 924;
+        private const int sw2gzBridgeUserID     = 925;
 
         #region Event Handler Variables
 
@@ -316,7 +318,8 @@ namespace SW2GZ.SW
             // of merging old + new into duplicate buttons.
             bool ignorePrevious = false;
             object registryIDs;
-            int[] knownIDs = new int[] { sw2gzWizardUserID, sw2gzExportUserID };
+            int[] knownIDs = new int[] { sw2gzWizardUserID, sw2gzExportUserID,
+                sw2gzActuationUserID, sw2gzSensorsUserID, sw2gzGazeboUserID, sw2gzBridgeUserID };
             bool hadRegistryData = CmdMgr.GetGroupDataFromRegistry(sw2gzCmdGroupID, out registryIDs);
             if (hadRegistryData && !CompareIDs((int[])registryIDs, knownIDs))
             {
@@ -354,46 +357,52 @@ namespace SW2GZ.SW
                     logger.Error("Failed to add SW2GZ Export command item");
                 }
 
+                // Four per-stack config buttons (the "Stacks" ribbon section). Each
+                // opens a parameterized StackConfigDialog and shares one enable method
+                // (StacksEnable) — they're greyed until a model is saved in
+                // RobotPackage mode. Image index 0 = cube column of the strip
+                // (distinct per-stack icons are a deferred follow-up).
+                int actIndex = grp.AddCommandItem2("Actuation", -1,
+                    "Configure the actuation backend (none / Gz plugin / ros2_control)", "Actuation", 0,
+                    "LaunchActuationConfig", "StacksEnable", sw2gzActuationUserID,
+                    (int)swCommandItemType_e.swToolbarItem);
+                if (actIndex < 0)
+                {
+                    logger.Error("Failed to add SW2GZ Actuation command item");
+                }
+
+                int senIndex = grp.AddCommandItem2("Sensors", -1,
+                    "Configure sensors emitted into the Gz model", "Sensors", 0,
+                    "LaunchSensorsConfig", "StacksEnable", sw2gzSensorsUserID,
+                    (int)swCommandItemType_e.swToolbarItem);
+                if (senIndex < 0)
+                {
+                    logger.Error("Failed to add SW2GZ Sensors command item");
+                }
+
+                int gzIndex = grp.AddCommandItem2("Gazebo", -1,
+                    "Configure Gazebo simulation options", "Gazebo", 0,
+                    "LaunchGazeboConfig", "StacksEnable", sw2gzGazeboUserID,
+                    (int)swCommandItemType_e.swToolbarItem);
+                if (gzIndex < 0)
+                {
+                    logger.Error("Failed to add SW2GZ Gazebo command item");
+                }
+
+                int brIndex = grp.AddCommandItem2("Bridge", -1,
+                    "Configure the ros_gz_bridge topic selection", "Bridge", 0,
+                    "LaunchBridgeConfig", "StacksEnable", sw2gzBridgeUserID,
+                    (int)swCommandItemType_e.swToolbarItem);
+                if (brIndex < 0)
+                {
+                    logger.Error("Failed to add SW2GZ Bridge command item");
+                }
+
                 // Exactly ONE entry: the ribbon/toolbar button. HasMenu=false so the
                 // command group does NOT auto-create a duplicate Tools-menu item.
                 grp.HasToolbar = true;
                 grp.HasMenu = false;
                 grp.Activate();
-
-                // Stacks flyout — per-assembly à-la-carte stack toggles. SolidWorks
-                // repopulates the flyout via FlyoutCallback every time it opens, and
-                // that callback reads the ACTIVE assembly's saved StackProfile, so the
-                // checkmarks always reflect the current robot with no ActiveDocChange
-                // plumbing. All decisions delegate to the pure (unit-tested)
-                // SW2GZ.Ros2.StackFlyoutModel; this is thin COM glue only.
-                //
-                // CreateFlyoutGroup2 in this interop has no dedicated enable param:
-                // the 8th arg (UpdateCallbackFunction) is the group-level state/enable
-                // method. We pass FlyoutEnable there so the whole flyout greys out for
-                // non-assembly docs, and FlyoutCallback as the populate callback.
-                try
-                {
-                    _stacksFlyout = CmdMgr.CreateFlyoutGroup2(
-                        flyoutGroupID,
-                        "Stacks",
-                        "Stacks",
-                        "Enable/disable ROS 2 + Gazebo stacks for this assembly",
-                        Sw2gzIconList(),   // MainIconList — flyout glyph (cube)
-                        Sw2gzIconList(),   // IconList — item images (index 0 = cube)
-                        "FlyoutCallback",
-                        "FlyoutEnable");
-                    if (_stacksFlyout == null)
-                    {
-                        logger.Warn("Stacks flyout creation returned null (two buttons unaffected)");
-                    }
-                }
-                catch (Exception e)
-                {
-                    // Best-effort: the two ribbon buttons must keep working even if the
-                    // flyout fails to register.
-                    logger.Warn("Stacks flyout creation failed (two buttons still available)", e);
-                    _stacksFlyout = null;
-                }
 
                 // Place the button on a dedicated CommandManager ribbon tab for
                 // assembly documents. Best-effort: if any step fails we still have
@@ -416,33 +425,23 @@ namespace SW2GZ.SW
                     CommandTab tab = CmdMgr.AddCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
                     if (tab != null)
                     {
-                        ICommandTabBox box = tab.AddCommandTabBox();
-
-                        // Append the Stacks flyout to the same tab box (best-effort). A
-                        // flyout sits on a CommandTabBox via its CmdID combined with a
-                        // flyout-style flag OR'd into the text-display type — that flag is
-                        // what tells SolidWorks the entry is a flyout rather than a plain
-                        // command. If the flyout failed to create, fall back to just the
-                        // two buttons.
-                        int[] cmdIds;
-                        int[] textTypes;
                         int textBelow = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow;
-                        if (_stacksFlyout != null)
-                        {
-                            cmdIds = new int[] { cmdId, exportCmdId, _stacksFlyout.CmdID };
-                            textTypes = new int[]
-                            {
-                                textBelow,
-                                textBelow,
-                                textBelow | (int)swCommandTabButtonFlyoutStyle_e.swCommandTabButton_ActionFlyout,
-                            };
-                        }
-                        else
-                        {
-                            cmdIds = new int[] { cmdId, exportCmdId };
-                            textTypes = new int[] { textBelow, textBelow };
-                        }
+
+                        // Primary box: Create Model + Export.
+                        ICommandTabBox box = tab.AddCommandTabBox();
+                        int[] cmdIds = new int[] { cmdId, exportCmdId };
+                        int[] textTypes = new int[] { textBelow, textBelow };
                         box.AddCommands(cmdIds, textTypes);
+
+                        // Second box → renders as a distinct ribbon SECTION: the four
+                        // per-stack "Stacks" config buttons. Kept inside this try/catch
+                        // so a failure here still leaves the two main buttons working.
+                        ICommandTabBox box2 = tab.AddCommandTabBox();
+                        int[] stackIds = { grp.get_CommandID(actIndex), grp.get_CommandID(senIndex),
+                                           grp.get_CommandID(gzIndex), grp.get_CommandID(brIndex) };
+                        int[] stackText = { textBelow, textBelow, textBelow, textBelow };
+                        box2.AddCommands(stackIds, stackText);
+
                         logger.Info("Added SW2GZ command tab for assembly documents");
                     }
                 }
@@ -477,18 +476,6 @@ namespace SW2GZ.SW
         }
         public void RemoveCommandMgr()
         {
-            // Remove the Stacks flyout group first (best-effort — must not block the
-            // command-group teardown that follows). RemoveFlyoutGroup returns a bool.
-            try
-            {
-                CmdMgr.RemoveFlyoutGroup(flyoutGroupID);
-                _stacksFlyout = null;
-            }
-            catch (Exception e)
-            {
-                logger.Warn("Removing Stacks flyout group failed", e);
-            }
-
             // Symmetric with AddCommandMgr: only the command group is created, so
             // only the command group is removed (single ribbon/toolbar button).
             CmdMgr.RemoveCommandGroup(sw2gzCmdGroupID);
@@ -655,93 +642,72 @@ namespace SW2GZ.SW
                     modeldoc.GetType() == (int)swDocumentTypes_e.swDocASSEMBLY) ? 1 : 0;
         }
 
+        // Enable-state for the Stacks section buttons. They tune a robot package built
+        // from a saved model, so they're enabled only when the active doc is an assembly
+        // AND a model has been saved (Create Model run) AND the export Mode is
+        // RobotPackage. StackRibbonGate holds the pure rule; the assembly check is here.
+        // Never throw into the COM caller — any failure greys the buttons (return 0).
+        public int StacksEnable()
+        {
+            try
+            {
+                ModelDoc2 m = SwApp.ActiveDoc as ModelDoc2;
+                if (m == null || m.GetType() != (int)swDocumentTypes_e.swDocASSEMBLY) return 0;
+                Sw2gzExportConfig config = Sw2gzConfigSerialization.Load(m);
+                return SW2GZ.Ros2.StackRibbonGate.IsEnabled(config) ? 1 : 0;
+            }
+            catch (Exception e) { logger.Warn("StacksEnable failed", e); return 0; }
+        }
+
         #endregion UI Callbacks
 
-        #region Stacks Flyout Callbacks
+        #region Stacks Section Callbacks
 
-        // Repopulate callback — SolidWorks invokes this by name every time the user
-        // opens the Stacks flyout. We clear and rebuild the rows so per-item state
-        // methods (FlyoutState*) are re-evaluated against the active assembly. All
-        // names below are passed as strings and resolved via reflection, so every
-        // referenced method must be public and named exactly.
-        public void FlyoutCallback()
-        {
-            try
-            {
-                if (_stacksFlyout == null) return;
-                _stacksFlyout.RemoveAllCommandItems();
-                // One row per StackFlyoutItem, in enum order. Each row has its own
-                // click + state method (SW references them by name string).
-                AddFlyoutRow(SW2GZ.Ros2.StackFlyoutItem.GazeboSim,            "FlyoutClickGazeboSim", "FlyoutStateGazeboSim");
-                AddFlyoutRow(SW2GZ.Ros2.StackFlyoutItem.ActuationNone,        "FlyoutClickActNone",   "FlyoutStateActNone");
-                AddFlyoutRow(SW2GZ.Ros2.StackFlyoutItem.ActuationGzPlugin,    "FlyoutClickActGz",     "FlyoutStateActGz");
-                AddFlyoutRow(SW2GZ.Ros2.StackFlyoutItem.ActuationRos2Control, "FlyoutClickActRos2",   "FlyoutStateActRos2");
-                AddFlyoutRow(SW2GZ.Ros2.StackFlyoutItem.Sensors,             "FlyoutClickSensors",   "FlyoutStateSensors");
-            }
-            catch (Exception e) { logger.Warn("FlyoutCallback failed", e); }
-        }
+        // String-named launch handlers (resolved by SW via reflection — must stay public).
+        public void LaunchActuationConfig() => OpenStackConfig(StackTarget.Actuation);
+        public void LaunchSensorsConfig()   => OpenStackConfig(StackTarget.Sensors);
+        public void LaunchGazeboConfig()    => OpenStackConfig(StackTarget.Gazebo);
+        public void LaunchBridgeConfig()    => OpenStackConfig(StackTarget.Bridge);
 
-        // imageIndex 0 = cube column of the flyout IconList.
-        private void AddFlyoutRow(SW2GZ.Ros2.StackFlyoutItem item, string clickFn, string stateFn)
-        {
-            string label = SW2GZ.Ros2.StackFlyoutModel.Label(item);
-            _stacksFlyout.AddCommandItem(label, label, 0, clickFn, stateFn);
-        }
-
-        // Group-level enable (UpdateCallbackFunction of CreateFlyoutGroup2): the whole
-        // flyout is enabled only for assembly documents.
-        public int FlyoutEnable()
-        {
-            ModelDoc2 m = SwApp.ActiveDoc as ModelDoc2;
-            return (m != null && m.GetType() == (int)swDocumentTypes_e.swDocASSEMBLY) ? 1 : 0;
-        }
-
-        // Per-item click handlers (string-named, invoked by SW via reflection).
-        public void FlyoutClickGazeboSim() => ApplyFlyoutClick(SW2GZ.Ros2.StackFlyoutItem.GazeboSim);
-        public void FlyoutClickActNone() => ApplyFlyoutClick(SW2GZ.Ros2.StackFlyoutItem.ActuationNone);
-        public void FlyoutClickActGz() => ApplyFlyoutClick(SW2GZ.Ros2.StackFlyoutItem.ActuationGzPlugin);
-        public void FlyoutClickActRos2() => ApplyFlyoutClick(SW2GZ.Ros2.StackFlyoutItem.ActuationRos2Control);
-        public void FlyoutClickSensors() => ApplyFlyoutClick(SW2GZ.Ros2.StackFlyoutItem.Sensors);
-
-        // Per-item state handlers — return SW state code (3 = checked, 1 = unchecked).
-        public int FlyoutStateGazeboSim() => FlyoutItemState(SW2GZ.Ros2.StackFlyoutItem.GazeboSim);
-        public int FlyoutStateActNone() => FlyoutItemState(SW2GZ.Ros2.StackFlyoutItem.ActuationNone);
-        public int FlyoutStateActGz() => FlyoutItemState(SW2GZ.Ros2.StackFlyoutItem.ActuationGzPlugin);
-        public int FlyoutStateActRos2() => FlyoutItemState(SW2GZ.Ros2.StackFlyoutItem.ActuationRos2Control);
-        public int FlyoutStateSensors() => FlyoutItemState(SW2GZ.Ros2.StackFlyoutItem.Sensors);
-
-        // Apply a flyout click to the ACTIVE assembly's saved profile and persist it.
-        private void ApplyFlyoutClick(SW2GZ.Ros2.StackFlyoutItem item)
+        // Open the per-stack config dialog for the active assembly, editing a CLONE of
+        // its saved StackProfile and persisting only if the user clicks OK. Guarded +
+        // logged; never throws into the COM caller.
+        private void OpenStackConfig(StackTarget target)
         {
             try
             {
                 ModelDoc2 m = SwApp.ActiveDoc as ModelDoc2;
-                if (m == null || m.GetType() != (int)swDocumentTypes_e.swDocASSEMBLY) return;
+                if (m == null || m.GetType() != (int)swDocumentTypes_e.swDocASSEMBLY)
+                {
+                    SwApp.SendMsgToUser("Open an assembly first.");
+                    return;
+                }
                 Sw2gzExportConfig config = Sw2gzConfigSerialization.Load(m);
-                config.Stacks = SW2GZ.Ros2.StackFlyoutModel.Apply(
-                    config.Stacks ?? SW2GZ.Ros2.StackProfile.Default(), item);
-                Sw2gzConfigSerialization.Save((SldWorks)SwApp, m, config);
-                logger.Info("Stacks flyout: applied " + item + " -> Actuation=" + config.Stacks.Actuation
-                    + " GzSim=" + config.Stacks.GzSim + " Sensors=" + config.Stacks.SensorsEnabled);
+                if (!SW2GZ.Ros2.StackRibbonGate.IsEnabled(config))
+                {
+                    SwApp.SendMsgToUser("Run Create Model first (and set Mode = Robot Package).");
+                    return;
+                }
+                using (var dlg = new StackConfigDialog(target,
+                           config.Stacks ?? SW2GZ.Ros2.StackProfile.Default()))
+                {
+                    if (dlg.ShowDialog() == DialogResult.OK && dlg.Result != null)
+                    {
+                        config.Stacks = dlg.Result;
+                        Sw2gzConfigSerialization.Save((SldWorks)SwApp, m, config);
+                        logger.Info("Stacks: saved " + target + " -> Actuation=" + config.Stacks.Actuation
+                            + " GzSim=" + config.Stacks.GzSim + " Sensors=" + config.Stacks.SensorsEnabled);
+                    }
+                }
             }
-            catch (Exception e) { logger.Warn("ApplyFlyoutClick failed for " + item, e); }
-        }
-
-        // Return the SW state code for a flyout row: 3 = checked, 1 = unchecked.
-        private int FlyoutItemState(SW2GZ.Ros2.StackFlyoutItem item)
-        {
-            try
+            catch (Exception e)
             {
-                ModelDoc2 m = SwApp.ActiveDoc as ModelDoc2;
-                SW2GZ.Ros2.StackProfile profile = (m != null && m.GetType() == (int)swDocumentTypes_e.swDocASSEMBLY)
-                    ? (Sw2gzConfigSerialization.Load(m).Stacks ?? SW2GZ.Ros2.StackProfile.Default())
-                    : SW2GZ.Ros2.StackProfile.Default();
-                return SW2GZ.Ros2.StackFlyoutModel.IsChecked(profile, item) ? 3 : 1;
+                logger.Error("Stack config (" + target + ") failed", e);
+                MessageBox.Show("Stack config failed:\n" + e.Message);
             }
-            catch (Exception e) { logger.Warn("FlyoutItemState failed for " + item, e); return 1; }
         }
 
-        #endregion Stacks Flyout Callbacks
+        #endregion Stacks Section Callbacks
 
         #region Event Methods
 
