@@ -105,7 +105,7 @@ namespace SW2GZ.URDFExport
         // Step 4 (Joints) controls — structural only (type, axis, motion limits).
         // A selector + Prev/Next + "Joint i of N" let the user walk every joint so
         // none is missed. Limits are plain textboxes (reuse the proven textbox path).
-        private PropertyManagerPageCombobox PMComboJointSel;
+        private PropertyManagerPageListbox PMListJoints;
         private PropertyManagerPageLabel PMLabelJointCounter;
         private PropertyManagerPageButton PMButtonPrevJoint;
         private PropertyManagerPageButton PMButtonNextJoint;
@@ -196,7 +196,7 @@ namespace SW2GZ.URDFExport
         private const int LabelLinkValidationID = StepIdBase + 2 * 20 + 7;
 
         // Step 4 (Joints) control IDs (step index 3 → base 160).
-        private const int ComboJointSelID        = StepIdBase + 3 * 20 + 2;
+        private const int ListJointsID           = StepIdBase + 3 * 20 + 2;
         private const int LabelJointEdgeID        = StepIdBase + 3 * 20 + 3;
         private const int ComboJointTypeID        = StepIdBase + 3 * 20 + 4;
         private const int ComboJointAxisID        = StepIdBase + 3 * 20 + 5;
@@ -799,9 +799,16 @@ namespace SW2GZ.URDFExport
             int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
 
             AddFieldLabel(group, LabelJointInstrID,
-                "One joint per non-base link. Type and axis are read from the mates; " +
-                "step through every joint with Prev/Next and adjust as needed.",
+                "One joint per non-base link. Type and axis are read from the mates. " +
+                "Pick any joint from the list (or use Prev/Next) and adjust as needed.",
                 leftEdge, labelOpts);
+
+            // The full joint list — every joint visible at once; click one to edit.
+            PMListJoints = (PropertyManagerPageListbox)group.AddControl2(
+                ListJointsID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
+                "All joints", (short)leftEdge, visibleEnabled, "All joints — click one to edit it");
+            ((IPropertyManagerPageListbox)PMListJoints).Height = 110;
 
             PMLabelJointCounter = AddFieldLabel(group, LabelJointCounterID, "", leftEdge, labelOpts);
 
@@ -816,11 +823,6 @@ namespace SW2GZ.URDFExport
                 (short)swPropertyManagerPageControlType_e.swControlType_Button,
                 "Next joint >", (short)indent, visibleEnabled, "Show the next joint");
             ((IPropertyManagerPageControl)PMButtonNextJoint).Width = 100;
-
-            PMComboJointSel = (PropertyManagerPageCombobox)group.AddControl2(
-                ComboJointSelID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
-                "", (short)leftEdge, visibleEnabled, "Jump to a joint");
 
             PMLabelJointEdge = AddFieldLabel(group, LabelJointEdgeID, "", leftEdge, labelOpts);
 
@@ -888,18 +890,18 @@ namespace SW2GZ.URDFExport
             if (next < 0) next = 0;
             if (next > config.Joints.Count - 1) next = config.Joints.Count - 1;
             activeJointIndex = next;
-            if (PMComboJointSel != null) PMComboJointSel.CurrentSelection = (short)activeJointIndex;
+            if (PMListJoints != null) PMListJoints.CurrentSelection = (short)activeJointIndex;
             LoadJointFields();
         }
 
-        // Fills the joint selector combobox and loads the active joint's fields.
+        // Fills the joint list and loads the active joint's fields.
         private void PopulateJointSelector()
         {
-            if (PMComboJointSel == null) return;
-            PMComboJointSel.Clear();
-            foreach (JointDef j in config.Joints) PMComboJointSel.AddItems(j.Name);
+            if (PMListJoints == null) return;
+            PMListJoints.Clear();
+            foreach (JointDef j in config.Joints) PMListJoints.AddItems(j.Name);
             if (config.Joints.Count > 0)
-                PMComboJointSel.CurrentSelection = (short)(activeJointIndex < 0 ? 0 : activeJointIndex);
+                PMListJoints.CurrentSelection = (short)(activeJointIndex < 0 ? 0 : activeJointIndex);
             LoadJointFields();
         }
 
@@ -1230,10 +1232,6 @@ namespace SW2GZ.URDFExport
 
             switch (Id)
             {
-                case ComboJointSelID:
-                    activeJointIndex = Item;
-                    LoadJointFields();
-                    break;
                 case ComboJointTypeID:
                 {
                     JointDef j = ActiveJoint();
@@ -1249,7 +1247,14 @@ namespace SW2GZ.URDFExport
                 default: break;
             }
         }
-        void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item) { }
+        void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item)
+        {
+            if (Id == ListJointsID)
+            {
+                activeJointIndex = Item;
+                LoadJointFields();
+            }
+        }
         void IPropertyManagerPage2Handler9.OnListboxRMBUp(int Id, int PosX, int PosY) { }
         void IPropertyManagerPage2Handler9.OnGroupCheck(int Id, bool Checked) { }
         void IPropertyManagerPage2Handler9.OnGroupExpand(int Id, bool Expanded) { }
