@@ -461,7 +461,6 @@
     <Compile Include="Build\JointBuilder.cs" />
     <Compile Include="Build\JointGraphBuilder.cs" />
     <Compile Include="Build\Model\JointDef.cs" />
-    <Compile Include="Build\MateAxis.cs" />
     <Compile Include="Build\MateInfo.cs" />
     <Compile Include="Build\JointSeeder.cs" />
     <Compile Include="Build\JointDefConverter.cs" />

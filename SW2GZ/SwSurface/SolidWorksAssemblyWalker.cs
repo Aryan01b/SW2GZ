@@ -141,60 +141,6 @@ namespace SW2GZ.SwSurface
 #endif
         }
 
-        // P9 — surfaces each mate as a MateAxis for the wizard's Joints step:
-        // raw top-level component ids (matched against LinkDef.ComponentIds) plus
-        // the axis direction (assembly frame) and an inferred joint kind. Concentric
-        // → Revolute about the cylinder axis; Slot → Prismatic; everything else →
-        // Fixed (no fabricated motion). COM-only; validated via SolidWorks smoke
-        // testing, never reaches the net8 test project.
-        public IReadOnlyList<MateAxis> WalkMateAxes()
-        {
-#if SW_INTEROP
-            if (_doc == null)
-#endif
-                throw new System.NotImplementedException(
-                    "SolidWorksAssemblyWalker.WalkMateAxes() requires a live SldWorks session.");
-
-#if SW_INTEROP
-            var axes = new List<MateAxis>();
-            var modelDoc = (IModelDoc2)_doc;
-
-            Feature feat = (Feature)modelDoc.FirstFeature();
-            try
-            {
-                while (feat != null)
-                {
-                    if (feat.GetTypeName2() == "MateGroup")
-                    {
-                        Feature sub = (Feature)feat.GetFirstSubFeature();
-                        try
-                        {
-                            while (sub != null)
-                            {
-                                TryAddMateAxis(sub, axes);
-                                Feature nextSub = (Feature)sub.GetNextSubFeature();
-                                Marshal.ReleaseComObject(sub);
-                                sub = nextSub;
-                            }
-                        }
-                        finally { if (sub != null) Marshal.ReleaseComObject(sub); }
-                    }
-                    else
-                    {
-                        TryAddMateAxis(feat, axes);
-                    }
-
-                    Feature next = (Feature)feat.GetNextFeature();
-                    Marshal.ReleaseComObject(feat);
-                    feat = next;
-                }
-            }
-            finally { if (feat != null) Marshal.ReleaseComObject(feat); }
-
-            return axes.AsReadOnly();
-#endif
-        }
-
         // P9 — lists every mate in the assembly as a MateInfo (name + implied joint
         // type + best-effort axis + limit range) for the Joints step's mate list.
         // The user assigns one of these to a joint. COM-only.
@@ -356,72 +302,6 @@ namespace SW2GZ.SwSurface
                     finally { Marshal.ReleaseComObject(ent); }
                 }
                 return any;
-            }
-            finally { Marshal.ReleaseComObject(mate); }
-        }
-
-        // Builds a MateAxis from one mate feature (raw top-level component ids +
-        // axis + kind). No-op for non-mate features. Releases every COM RCW.
-        private static void TryAddMateAxis(Feature feat, List<MateAxis> sink)
-        {
-            object specific = feat.GetSpecificFeature2();
-            var mate = specific as Mate2;
-            if (mate == null)
-            {
-                if (specific != null) Marshal.ReleaseComObject(specific);
-                return;
-            }
-
-            try
-            {
-                string compA = null, compB = null;
-                int entCount = mate.GetMateEntityCount();
-                for (int i = 0; i < entCount; i++)
-                {
-                    MateEntity2 ent = mate.MateEntity(i);
-                    if (ent == null) continue;
-                    try
-                    {
-                        Component2 comp = ent.ReferenceComponent;
-                        if (comp == null) continue;
-                        try
-                        {
-                            string raw = TopLevelName(comp);   // raw Name2 (matches LinkDef.ComponentIds)
-                            if (compA == null) compA = raw;
-                            else if (compB == null && raw != compA) compB = raw;
-                        }
-                        finally { Marshal.ReleaseComObject(comp); }
-                    }
-                    finally { Marshal.ReleaseComObject(ent); }
-                }
-
-                if (compA == null || compB == null) return;
-
-                MateKind kind;
-                switch ((swMateType_e)mate.Type)
-                {
-                    case swMateType_e.swMateCONCENTRIC: kind = MateKind.Revolute;  break;
-                    case swMateType_e.swMateSLOT:       kind = MateKind.Prismatic; break;
-                    default:                            kind = MateKind.Fixed;     break;
-                }
-
-                Vector3 axis = kind == MateKind.Fixed ? new Vector3(0, 0, 1) : MateAxisDirection(mate);
-
-                // Limit-angle / limit-distance mates carry a min/max range; read it
-                // (radians for angle, metres for distance — matches URDF/SDF units).
-                double? lower = null, upper = null;
-                try
-                {
-                    double max = mate.MaximumVariation, min = mate.MinimumVariation;
-                    if (System.Math.Abs(max) > 1e-9 || System.Math.Abs(min) > 1e-9)
-                    {
-                        lower = min;
-                        upper = max;
-                    }
-                }
-                catch { /* not a limit mate — no range */ }
-
-                sink.Add(new MateAxis(compA, compB, axis, kind, lower, upper));
             }
             finally { Marshal.ReleaseComObject(mate); }
         }
