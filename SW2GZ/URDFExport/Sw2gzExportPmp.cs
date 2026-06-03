@@ -1044,13 +1044,23 @@ namespace SW2GZ.URDFExport
             int reachCount = WizardStepPlan.Count(config.Mode);
             currentStep = step;
 
+            logger.Info($"ShowStep req={step} pos={pos}/{reachCount} mode={config.Mode}");
             for (int i = 0; i < StepCount; i++)
             {
                 // Group boxes expose Visible directly on IPropertyManagerPageGroup;
                 // they do NOT support IPropertyManagerPageControl (that's leaf controls
                 // only), so casting a group to it throws E_NOINTERFACE.
-                PMStepGroups[i].Visible = (i == currentStep);
+                try { PMStepGroups[i].Visible = (i == currentStep); }
+                catch (Exception ex) { logger.Error($"set group[{i}].Visible failed", ex); }
             }
+            // DIAGNOSTIC: read back what SolidWorks actually accepted.
+            try
+            {
+                var vis = string.Join(",", System.Linq.Enumerable.Range(0, StepCount)
+                    .Select(i => i + "=" + PMStepGroups[i].Visible));
+                logger.Info($"group visibility after set: {vis} (currentStep={currentStep})");
+            }
+            catch (Exception ex) { logger.Error("visibility readback failed", ex); }
 
             PMLabelHeader.Caption =
                 "Step " + (pos + 1) + " of " + reachCount +
@@ -1215,6 +1225,9 @@ namespace SW2GZ.URDFExport
         {
             try
             {
+                logger.Info($"OnButtonPress Id={Id} (Back={ButtonBackID} Next={ButtonNextID} " +
+                    $"Browse={ButtonBrowseID} Add={ButtonAddLinkID} Rem={ButtonRemoveLinkID}) " +
+                    $"currentStep={currentStep} mode={config.Mode}");
                 switch (Id)
                 {
                     case ButtonBackID: GoBack(); break;
