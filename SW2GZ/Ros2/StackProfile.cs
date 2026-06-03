@@ -29,6 +29,25 @@ namespace SW2GZ.Ros2
     //   Ros2Control — gz_ros2_control + controller_manager + controllers.yaml.
     public enum ActuationBackend { None, GzPlugin, Ros2Control }
 
+    // Per-topic ros_gz_bridge selection. Defaults mirror the always-bridged core
+    // topics (clock/tf/joint_states); cmd_vel + odom are opt-in (mobile robots).
+    [DataContract(Name = "BridgePlan", Namespace = "")]
+    public sealed class BridgePlan
+    {
+        [DataMember] public bool Clock { get; set; } = true;
+        [DataMember] public bool Tf { get; set; } = true;
+        [DataMember] public bool JointStates { get; set; } = true;
+        [DataMember] public bool CmdVel { get; set; } = false;
+        [DataMember] public bool Odom { get; set; } = false;
+
+        public BridgePlan() { }
+        // Deep-copy ctor so a StackProfile copy doesn't share its BridgePlan.
+        public BridgePlan(BridgePlan o)
+        {
+            Clock = o.Clock; Tf = o.Tf; JointStates = o.JointStates; CmdVel = o.CmdVel; Odom = o.Odom;
+        }
+    }
+
     [DataContract(Name = "StackProfile", Namespace = "")]
     public sealed class StackProfile
     {
@@ -44,6 +63,32 @@ namespace SW2GZ.Ros2
         // Whether the export emits Gz sensor blocks + sensor bridge entries.
         // Reserved in D1; populated + wired in D4 (SW COM sensor extraction).
         [DataMember] public bool SensorsEnabled { get; set; } = false;
+
+        // Per-topic ros_gz_bridge selection for this assembly.
+        [DataMember] public BridgePlan Bridge { get; set; } = new BridgePlan();
+
+        public StackProfile() { }
+        // Copy-constructor — dialogs edit a clone and commit on OK; also keeps
+        // future fields from being silently dropped when duplicating a profile.
+        public StackProfile(StackProfile o)
+        {
+            GzSim = o.GzSim;
+            Actuation = o.Actuation;
+            SensorsEnabled = o.SensorsEnabled;
+            Bridge = new BridgePlan(o.Bridge ?? new BridgePlan());
+        }
+
+        // DataContractSerializer constructs instances via GetUninitializedObject,
+        // which skips field/property initializers. Without this hook a config
+        // saved before Bridge existed would deserialize it to null (→ NRE on
+        // first read). Seed it here so legacy XML lacking a <Bridge> element
+        // resumes with sane defaults; any present element overwrites this during
+        // member population.
+        [OnDeserializing]
+        private void OnDeserializing(StreamingContext context)
+        {
+            Bridge = new BridgePlan();
+        }
 
         // Full ROS 2 + Gz + ros2_control stack. Equivalent to the old
         // `modelOnly: false` path.

@@ -23,6 +23,35 @@ namespace Test.URDFExport
         }
 
         [Fact]
+        public void CopyCtor_CopiesAllFields()
+        {
+            var src = new StackProfile {
+                GzSim = false, Actuation = ActuationBackend.GzPlugin, SensorsEnabled = true,
+                Bridge = new BridgePlan { Clock = false, Tf = false, JointStates = false, CmdVel = true, Odom = true }
+            };
+            var copy = new StackProfile(src);
+            Assert.False(copy.GzSim);
+            Assert.Equal(ActuationBackend.GzPlugin, copy.Actuation);
+            Assert.True(copy.SensorsEnabled);
+            Assert.True(copy.Bridge.CmdVel);
+            Assert.True(copy.Bridge.Odom);
+            Assert.False(copy.Bridge.Clock);
+            copy.Bridge.CmdVel = false;
+            Assert.True(src.Bridge.CmdVel); // deep copy — source unaffected
+        }
+
+        [Fact]
+        public void Default_BridgeHasSaneDefaults()
+        {
+            var p = StackProfile.Default();
+            Assert.True(p.Bridge.Clock);
+            Assert.True(p.Bridge.Tf);
+            Assert.True(p.Bridge.JointStates);
+            Assert.False(p.Bridge.CmdVel);
+            Assert.False(p.Bridge.Odom);
+        }
+
+        [Fact]
         public void NewInstance_DefaultsMatchFactoryDefault()
         {
             var bare = new StackProfile();
