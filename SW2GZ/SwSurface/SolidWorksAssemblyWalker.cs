@@ -468,14 +468,24 @@ namespace SW2GZ.SwSurface
             {
                 MateEntity2 ent = mate.MateEntity(i);
                 if (ent == null) continue;
+                object refGeom = null, surf = null;
                 try
                 {
-                    var face = ent.Reference as Face2;
-                    if (face == null) continue;
-                    var surf = face.GetSurface() as Surface;
-                    if (surf != null && surf.IsPlane()) planarFaces++;
+                    refGeom = ent.Reference;
+                    if (refGeom is Face2 face)
+                    {
+                        surf = face.GetSurface();
+                        if (surf is Surface s && s.IsPlane()) planarFaces++;
+                    }
                 }
-                finally { Marshal.ReleaseComObject(ent); }
+                finally
+                {
+                    // Release sub-objects (mirrors SelectMateReferences' COM hygiene),
+                    // then the entity itself.
+                    if (surf != null) Marshal.ReleaseComObject(surf);
+                    if (refGeom != null) Marshal.ReleaseComObject(refGeom);
+                    Marshal.ReleaseComObject(ent);
+                }
             }
             return planarFaces >= 2;
         }
