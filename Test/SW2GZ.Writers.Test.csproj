@@ -86,7 +86,6 @@
     <Compile Include="..\SW2GZ\Build\JointDefValidator.cs"    Link="Sources\Build\JointDefValidator.cs" />
     <Compile Include="..\SW2GZ\Write\Mesh\StlWriter.cs"        Link="Sources\Write\Mesh\StlWriter.cs" />
     <Compile Include="..\SW2GZ\Write\Mesh\DaeWriter.cs"        Link="Sources\Write\Mesh\DaeWriter.cs" />
-    <Compile Include="..\SW2GZ\Gz\SdfModelInput.cs"          Link="Sources\Gz\SdfModelInput.cs" />
     <Compile Include="..\SW2GZ\Gz\ModelConfigWriter.cs"      Link="Sources\Gz\ModelConfigWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\GzPluginTags.cs"           Link="Sources\Gz\GzPluginTags.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfPhysicsBlock.cs"        Link="Sources\Gz\SdfPhysicsBlock.cs" />

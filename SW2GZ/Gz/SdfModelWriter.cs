@@ -5,10 +5,6 @@ Locked to Gz Sim Harmonic — SDF version 1.10. Emits a standard gz model
 directory's model.sdf with REAL geometry (visual/collision meshes, material
 color, inertial, joints) from the immutable RobotModel. Mesh URIs use the
 model:// scheme so the model resolves under GZ_SIM_RESOURCE_PATH.
-
-The legacy name-only SdfModelInput ctor is retained transiently for the
-net48 ExportHelper call site and is removed once that is rerouted through
-the pipeline.
 */
 using System;
 using System.Collections.Generic;
@@ -16,42 +12,14 @@ using System.Globalization;
 using System.IO;
 using System.Security;
 using System.Text;
-using System.Xml.Linq;
 using SW2GZ.Build.Model;
 using SW2GZ.Build.Urdf;
 using SW2GZ.Math;
 
 namespace SW2GZ.Gz
 {
-    public class SdfModelWriter
+    public static class SdfModelWriter
     {
-        private readonly SdfModelInput _input;
-
-        public SdfModelWriter(SdfModelInput input, object profile = null)
-        {
-            _input = input;
-        }
-
-        // Legacy name-only emit (transitional — removed in a later task).
-        public void Write(string outputDir)
-        {
-            Directory.CreateDirectory(outputDir);
-            var model = new XElement("model", new XAttribute("name", _input.Name));
-            foreach (var l in _input.Links)
-                model.Add(new XElement("link", new XAttribute("name", l.Name)));
-            foreach (var j in _input.Joints)
-                model.Add(new XElement("joint",
-                    new XAttribute("name", j.Name),
-                    new XAttribute("type", j.Type),
-                    new XElement("parent", j.Parent),
-                    new XElement("child", j.Child)));
-            var doc = new XDocument(
-                new XDeclaration("1.0", "utf-8", null),
-                new XElement("sdf", new XAttribute("version", "1.10"), model));
-            doc.Save(Path.Combine(outputDir, "model.sdf"));
-        }
-
-        // ── New RobotModel-based emit ──────────────────────────────────────
         public static void Write(RobotModel model, string outputDir)
         {
             if (model == null) throw new ArgumentNullException(nameof(model));

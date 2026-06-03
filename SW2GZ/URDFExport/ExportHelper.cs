@@ -23,7 +23,7 @@ THE SOFTWARE.
 using MathNet.Numerics.LinearAlgebra;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
-using SW2GZ.Gz;
+using SW2GZ.Build.Model;
 using SW2GZ.Ros2;
 using SW2GZ.URDF;
 using SW2GZ.URDFExport.CSV;
@@ -169,12 +169,10 @@ namespace SW2GZ.URDFExport
                     throw new InvalidOperationException("SavePath is not set.");
 
 #if SW_INTEROP
-                // Task 29: Sw2gzPipeline wiring — runs for RobotPackage mode via the new
-                // SwSurface → Build → Write → Validate pipeline. Other modes fall through to
-                // the legacy path below.
-                // TODO(T29-followup): remove the legacy RobotPackage branch once the pipeline
-                // is fully verified in SolidWorks smoke testing.
-                if (Profile != null && Profile.Mode == ExportMode.RobotPackage)
+                // All export modes flow through the SwSurface → Build → Write → Validate
+                // pipeline. The artifact dimension (RobotPackage / SdfModel / SdfWorld) is
+                // selected by Profile.Mode; the pipeline branches its write stage on it.
+                if (Profile != null)
                 {
                     var pipeline = new Sw2gzPipeline(
                         new SolidWorksMassProperties((SldWorks)iSwApp, (AssemblyDoc)ActiveSWModel),
@@ -183,7 +181,9 @@ namespace SW2GZ.URDFExport
 
                     string pkgName = PackageName ?? ActiveSWModel?.GetTitle() ?? "robot";
                     var report = pipeline.Run(SavePath, pkgName,
-                                              Profile_Author, Profile_Email, Profile_License);
+                                              Profile_Author, Profile_Email, Profile_License,
+                                              System.Array.Empty<SensorDef>(),
+                                              SW2GZ.Ros2.StackProfile.Default(), Profile.Mode);
 
                     if (report.HasErrors)
                     {
@@ -198,46 +198,7 @@ namespace SW2GZ.URDFExport
                 }
 #endif
 
-                if (URDFRobot == null)
-                    throw new InvalidOperationException("URDFRobot is null. Call CreateRobotFromActiveModel first.");
-
-                string outDir = SavePath;
-                Directory.CreateDirectory(outDir);
-
-                List<string> jointNames = GetJointNames();
-
-                switch (Profile.Mode)
-                {
-                    case ExportMode.RobotPackage:
-                        new Ros2Package(new Ros2Package.Options
-                        {
-                            PackageName = (PackageName ?? URDFRobot.Name) + "_description",
-                            Maintainer = Profile_Author,
-                            MaintainerEmail = Profile_Email,
-                            License = Profile_License,
-                            JointNames = jointNames,
-                            Profile = Profile,
-                            UrdfBodyXml = BuildUrdfBodyXml(),
-                        }).Write(outDir);
-                        break;
-                    case ExportMode.SdfModel:
-                        new ModelConfigWriter(new ModelConfigWriter.Input
-                        {
-                            Name = URDFRobot.Name,
-                            SdfVersion = "1.10", // Gz Sim Harmonic (v2.0 lock)
-                            Author = Profile_Author,
-                            Email = Profile_Email,
-                        }).Write(outDir);
-                        new SdfModelWriter(BuildSdfModelInput(), Profile).Write(outDir);
-                        break;
-                    case ExportMode.SdfWorld:
-                        File.WriteAllText(
-                            Path.Combine(outDir, URDFRobot.Name + ".world"),
-                            SdfWorldWriter.Write(new SdfWorldInput(URDFRobot.Name)));
-                        break;
-                }
-
-                logger.Info("SW2GZ export complete. Output: " + outDir);
+                logger.Info("SW2GZ export complete. Output: " + SavePath);
             }
             catch (COMException comEx)
             {
@@ -258,58 +219,6 @@ namespace SW2GZ.URDFExport
                 throw;
             }
             // No generic Exception catch (B11): unknown errors propagate.
-        }
-
-        // Serializes the URDF link/joint subtree as XML for embedding inside a
-        // <robot> xacro root. Uses URDFElement.WriteURDF which recurses through
-        // ChildElements (links and joints both implement WriteURDF).
-        private string BuildUrdfBodyXml()
-        {
-            using (var ms = new MemoryStream())
-            {
-                var settings = new XmlWriterSettings
-                {
-                    OmitXmlDeclaration = true,
-                    Indent = true,
-                    ConformanceLevel = ConformanceLevel.Fragment,
-                    Encoding = new UTF8Encoding(false),
-                };
-                using (var w = XmlWriter.Create(ms, settings))
-                {
-                    URDFRobot.BaseLink.WriteURDF(w);
-                }
-                return Encoding.UTF8.GetString(ms.ToArray());
-            }
-        }
-
-        // Walks URDFRobot tree into a SW-free POCO that SdfModelWriter consumes.
-        private SdfModelInput BuildSdfModelInput()
-        {
-            var links = new List<SdfLinkData>();
-            var joints = new List<SdfJointData>();
-            void Walk(Link l)
-            {
-                links.Add(new SdfLinkData { Name = l.Name });
-                if (l.Children != null)
-                {
-                    foreach (Link c in l.Children)
-                    {
-                        if (c.Joint != null)
-                        {
-                            joints.Add(new SdfJointData
-                            {
-                                Name = c.Joint.Name,
-                                Type = c.Joint.Type ?? "fixed",
-                                Parent = l.Name,
-                                Child = c.Name,
-                            });
-                        }
-                        Walk(c);
-                    }
-                }
-            }
-            if (URDFRobot?.BaseLink != null) Walk(URDFRobot.BaseLink);
-            return new SdfModelInput { Name = URDFRobot.Name, Links = links, Joints = joints };
         }
 
         public List<string> GetJointNames()

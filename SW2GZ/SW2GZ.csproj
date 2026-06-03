@@ -470,7 +470,6 @@
     <Compile Include="Build\JointDefValidator.cs" />
     <Compile Include="Write\Mesh\StlWriter.cs" />
     <Compile Include="Write\Mesh\DaeWriter.cs" />
-    <Compile Include="Gz\SdfModelInput.cs" />
     <Compile Include="Gz\ModelConfigWriter.cs" />
     <Compile Include="Gz\GzPluginTags.cs" />
     <Compile Include="Gz\SdfPhysicsBlock.cs" />

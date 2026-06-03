@@ -1097,8 +1097,9 @@ namespace SW2GZ.URDFExport
             }
         }
 
-        // Builds the colcon-ready ROS 2 Jazzy + Gz Harmonic package for the bare
-        // model (links + joints only, no control/plugins) from the wizard's data.
+        // Builds the colcon-ready ROS 2 Jazzy + Gz Harmonic package from the
+        // wizard's data, using the configured ExportMode (Robot Package / SDF
+        // Model / SDF World) and stack profile.
         private void RunModelExport()
         {
             if (config.Links == null || config.Links.Count == 0)
@@ -1123,7 +1124,8 @@ namespace SW2GZ.URDFExport
                 SW2GZ.Validate.ValidationReport report =
                     new Sw2gzPipeline(mass, walker, tess, appearances).Run(
                         config.OutputFolder, config.PackageName, config.Author, config.Email, config.License,
-                        System.Array.Empty<SensorDef>(), modelOnly: true);
+                        System.Array.Empty<SensorDef>(),
+                        config.Stacks ?? SW2GZ.Ros2.StackProfile.Default(), config.Mode);
 
                 string ws = Path.Combine(config.OutputFolder, pkg + "_ws");
                 if (report.HasErrors)
