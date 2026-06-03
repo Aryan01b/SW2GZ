@@ -2,13 +2,100 @@
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 */
 using System.Collections.Generic;
+using System.Numerics;
+using SW2GZ.Build;
+using SW2GZ.Build.Model;
+using SW2GZ.Build.Urdf;
 using SW2GZ.Gz;
+using SW2GZ.Math;
 using Xunit;
 
 namespace SW2GZ.Test.Writers
 {
     public class TestSdfModelWriter : WriterTestBase
     {
+        // ---- helpers ----
+        // MeshData ctor is (Vector3[] Vertices, int[] Triangles, Color? MaterialColor).
+        private static MeshData OneTri() => new MeshData(
+            new[] { new Vector3(0, 0, 0), new Vector3(1, 0, 0), new Vector3(0, 1, 0) },
+            new[] { 0, 1, 2 }, null);
+
+        private static RobotModel TwoLinkModel()
+        {
+            var l0 = LinkBuilder.Build("base_link",
+                new MassProps(2.0, Vector3.Zero, Matrix3.Identity), OneTri(), OneTri());
+            var l1 = LinkBuilder.Build("arm",
+                new MassProps(1.0, Vector3.Zero, Matrix3.Identity), OneTri(), OneTri());
+            var links = new[]
+            {
+                new ModelLink(l0, "blue", null),
+                new ModelLink(l1, null, null),
+            };
+            var joints = new[]
+            {
+                new UrdfJoint("shoulder", UrdfJointType.Revolute, "base_link", "arm",
+                    Pose.Identity, Vector3.UnitZ, -1.0, 1.0, 10.0, 2.0, UrdfCmdInterface.Position),
+            };
+            var mats = new[] { new MaterialDef("blue", 0.0, 0.0, 1.0, 1.0) };
+            var meta = new RobotMeta("my_asset", "A", "a@b", "MIT", CoordinateConvention.Identity);
+            // ControlSpec has no static Default — construct it (it is unused by the SDF writer).
+            var control = new ControlSpec(new[] { "shoulder" }, ControlSpec.DefaultJointStateBroadcaster);
+            return new RobotModel(meta, links, joints, mats,
+                System.Array.Empty<SensorDef>(), control);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
+        public void Serialize_EmitsModelWithLinksVisualCollisionInertial()
+        {
+            string sdf = SdfModelWriter.Serialize(TwoLinkModel());
+            Assert.Contains("<sdf version=\"1.10\">", sdf);
+            Assert.Contains("<model name=\"my_asset\">", sdf);
+            Assert.Contains("<link name=\"base_link\">", sdf);
+            Assert.Contains("<inertial>", sdf);
+            Assert.Contains("<mass>2</mass>", sdf);
+            Assert.Contains("<visual name=\"base_link_visual\">", sdf);
+            Assert.Contains("<collision name=\"base_link_collision\">", sdf);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
+        public void Serialize_MeshUrisUseModelScheme()
+        {
+            string sdf = SdfModelWriter.Serialize(TwoLinkModel());
+            Assert.Contains("<uri>model://my_asset/meshes/base_link.dae</uri>", sdf);
+            Assert.Contains("<uri>model://my_asset/meshes/base_link_collision.stl</uri>", sdf);
+            Assert.DoesNotContain("package://", sdf);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
+        public void Serialize_EmitsMaterialColorWhenNamed()
+        {
+            string sdf = SdfModelWriter.Serialize(TwoLinkModel());
+            Assert.Contains("<diffuse>0 0 1 1</diffuse>", sdf);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
+        public void Serialize_EmitsSdfJointWithParentChildAxisLimit()
+        {
+            string sdf = SdfModelWriter.Serialize(TwoLinkModel());
+            Assert.Contains("<joint name=\"shoulder\" type=\"revolute\">", sdf);
+            Assert.Contains("<parent>base_link</parent>", sdf);
+            Assert.Contains("<child>arm</child>", sdf);
+            Assert.Contains("<xyz>0 0 1</xyz>", sdf);
+            Assert.Contains("<lower>-1</lower><upper>1</upper><effort>10</effort><velocity>2</velocity>", sdf);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
+        public void Write_RobotModel_WritesModelSdfFile()
+        {
+            SdfModelWriter.Write(TwoLinkModel(), TempDir);
+            Assert.True(Exists("model.sdf"));
+        }
+
         [Fact]
         [Trait("Category", "Unit")]
         public void WritesModelSdfWithMatchingSdfVersionAndModelName()
