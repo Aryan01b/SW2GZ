@@ -130,5 +130,39 @@ namespace SW2GZ.Writers.Tests
             Assert.StartsWith("# ", LaunchPyWriter.Display("p"));
             Assert.StartsWith("# ", LaunchPyWriter.Ros2Control("p"));
         }
+
+        // ─── GzAsset / GzWorld ──────────────────────────────────────────────
+
+        [Fact]
+        public void GzAsset_SetsResourcePathAndSpawnsModelFile()
+        {
+            string py = LaunchPyWriter.GzAsset("my_asset");
+            Assert.Contains("GZ_SIM_RESOURCE_PATH", py);
+            Assert.Contains("'models'", py);                 // resource path = <share>/models
+            Assert.Contains("'empty.sdf'", py);              // empty world
+            Assert.Contains("ros_gz_sim", py);
+            Assert.Contains("'create'", py);                 // spawn the model
+            Assert.Contains("'model.sdf'", py);              // spawn from the model.sdf file
+            Assert.DoesNotContain("gz_ros2_control", py);
+            Assert.DoesNotContain("controller_manager", py);
+        }
+
+        [Fact]
+        public void GzWorld_SetsResourcePathAndLoadsWorld()
+        {
+            string py = LaunchPyWriter.GzWorld("my_world_pkg", "my_world_pkg");
+            Assert.Contains("GZ_SIM_RESOURCE_PATH", py);
+            Assert.Contains("'models'", py);
+            Assert.Contains("my_world_pkg.sdf", py);         // loads the composed world
+            Assert.Contains("ros_gz_sim", py);
+            Assert.DoesNotContain("'create'", py);           // no spawn — model is in the world
+            Assert.DoesNotContain("gz_ros2_control", py);
+        }
+
+        [Fact]
+        public void GzAsset_NullPkg_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(() => LaunchPyWriter.GzAsset("  "));
+        }
     }
 }
