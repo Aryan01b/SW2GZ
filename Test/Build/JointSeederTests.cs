@@ -88,6 +88,8 @@ namespace SW2GZ.Test.Build
         [InlineData(MateKind.Continuous, UrdfJointType.Continuous)]
         [InlineData(MateKind.Revolute, UrdfJointType.Revolute)]
         [InlineData(MateKind.Prismatic, UrdfJointType.Prismatic)]
+        [InlineData(MateKind.Planar, UrdfJointType.Planar)]
+        [InlineData(MateKind.Floating, UrdfJointType.Floating)]
         public void ToJointType_MapsMateKind(MateKind kind, UrdfJointType expected)
         {
             Assert.Equal(expected, JointSeeder.ToJointType(kind));

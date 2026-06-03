@@ -79,6 +79,29 @@ namespace SW2GZ.Build.Tests
         }
 
         [Fact]
+        public void Build_PlanarMate_MapsToPlanarJoint()
+        {
+            var mate = new MateSpec("plane_j", MateKind.Planar,
+                Pose.Identity, Vector3.UnitZ, null, null, 0, 0, UrdfCmdInterface.Position, "a", "b");
+
+            var (joint, _) = JointBuilder.Build(mate, L("a"), L("b"));
+
+            Assert.Equal(UrdfJointType.Planar, joint.Type);
+            Assert.Equal(Vector3.UnitZ, joint.Axis);
+        }
+
+        [Fact]
+        public void Build_FloatingMate_MapsToFloatingJoint()
+        {
+            var mate = new MateSpec("free_j", MateKind.Floating,
+                Pose.Identity, Vector3.Zero, null, null, 0, 0, UrdfCmdInterface.Position, "a", "b");
+
+            var (joint, _) = JointBuilder.Build(mate, L("a"), L("b"));
+
+            Assert.Equal(UrdfJointType.Floating, joint.Type);
+        }
+
+        [Fact]
         public void Build_ThrowsOnNullMate()
         {
             Assert.Throws<ArgumentNullException>(() =>

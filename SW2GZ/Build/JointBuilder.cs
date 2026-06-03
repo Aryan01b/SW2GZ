@@ -21,6 +21,8 @@ namespace SW2GZ.Build
                 MateKind.Revolute   => UrdfJointType.Revolute,
                 MateKind.Continuous => UrdfJointType.Continuous,
                 MateKind.Prismatic  => UrdfJointType.Prismatic,
+                MateKind.Planar     => UrdfJointType.Planar,
+                MateKind.Floating   => UrdfJointType.Floating,
                 _                   => UrdfJointType.Fixed,
             };
 

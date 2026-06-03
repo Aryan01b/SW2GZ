@@ -95,6 +95,8 @@ namespace SW2GZ.SwSurface
                 case UrdfJointType.Revolute:   return MateKind.Revolute;
                 case UrdfJointType.Continuous: return MateKind.Continuous;
                 case UrdfJointType.Prismatic:  return MateKind.Prismatic;
+                case UrdfJointType.Planar:     return MateKind.Planar;
+                case UrdfJointType.Floating:   return MateKind.Floating;
                 default:                       return MateKind.Fixed;
             }
         }

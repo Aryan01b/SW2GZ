@@ -28,6 +28,8 @@ namespace SW2GZ.Build
                 case MateKind.Revolute:   return UrdfJointType.Revolute;
                 case MateKind.Continuous: return UrdfJointType.Continuous;
                 case MateKind.Prismatic:  return UrdfJointType.Prismatic;
+                case MateKind.Planar:     return UrdfJointType.Planar;
+                case MateKind.Floating:   return UrdfJointType.Floating;
                 default:                  return UrdfJointType.Fixed;
             }
         }
