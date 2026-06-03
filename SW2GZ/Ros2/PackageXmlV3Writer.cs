@@ -7,6 +7,7 @@ ros_ign_* vs ros_gz_* deps. Hard-codes ros_gz_sim + ros_gz_bridge +
 gz_ros2_control for Harmonic.
 */
 using System;
+using System.Collections.Generic;
 using System.Xml.Linq;
 
 namespace SW2GZ.Ros2
@@ -17,7 +18,10 @@ namespace SW2GZ.Ros2
         string Description,
         string Maintainer,
         string Email,
-        string License);
+        string License)
+    {
+        public bool GzMode { get; init; } = false;
+    }
 
     public static class PackageXmlV3Writer
     {
@@ -26,6 +30,24 @@ namespace SW2GZ.Ros2
             if (input == null) throw new ArgumentNullException(nameof(input));
             if (string.IsNullOrWhiteSpace(input.Name))
                 throw new ArgumentException("Name must not be null or whitespace.", nameof(input));
+
+            var deps = new List<XElement> { new XElement("buildtool_depend", "ament_cmake") };
+            if (input.GzMode)
+            {
+                deps.Add(new XElement("exec_depend", "ros_gz_sim"));
+            }
+            else
+            {
+                deps.Add(new XElement("exec_depend", "robot_state_publisher"));
+                deps.Add(new XElement("exec_depend", "joint_state_publisher_gui"));
+                deps.Add(new XElement("exec_depend", "xacro"));
+                deps.Add(new XElement("exec_depend", "rviz2"));
+                deps.Add(new XElement("exec_depend", "ros_gz_sim"));
+                deps.Add(new XElement("exec_depend", "ros_gz_bridge"));
+                deps.Add(new XElement("exec_depend", "gz_ros2_control"));
+                deps.Add(new XElement("exec_depend", "ros2_control"));
+                deps.Add(new XElement("exec_depend", "ros2_controllers"));
+            }
 
             var doc = new XDocument(
                 new XDeclaration("1.0", "utf-8", null),
@@ -38,16 +60,7 @@ namespace SW2GZ.Ros2
                         new XAttribute("email", input.Email ?? "TODO@example.com"),
                         input.Maintainer ?? "TODO"),
                     new XElement("license", input.License ?? "Apache-2.0"),
-                    new XElement("buildtool_depend", "ament_cmake"),
-                    new XElement("exec_depend", "robot_state_publisher"),
-                    new XElement("exec_depend", "joint_state_publisher_gui"),
-                    new XElement("exec_depend", "xacro"),
-                    new XElement("exec_depend", "rviz2"),
-                    new XElement("exec_depend", "ros_gz_sim"),
-                    new XElement("exec_depend", "ros_gz_bridge"),
-                    new XElement("exec_depend", "gz_ros2_control"),
-                    new XElement("exec_depend", "ros2_control"),
-                    new XElement("exec_depend", "ros2_controllers"),
+                    deps,
                     new XElement("export",
                         new XElement("build_type", "ament_cmake"),
                         new XElement("architecture_independent"))));

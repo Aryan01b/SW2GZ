@@ -12,7 +12,9 @@ using System.Text;
 
 namespace SW2GZ.Ros2
 {
-    public sealed record AmentCMakeInput(string PackageName, bool hasMeshes);
+    public sealed record AmentCMakeInput(
+        string PackageName, bool hasMeshes,
+        bool hasModels = false, bool hasUrdf = true, bool hasConfig = true);
 
     public static class AmentCMakeWriter
     {
@@ -22,8 +24,13 @@ namespace SW2GZ.Ros2
             if (string.IsNullOrWhiteSpace(input.PackageName))
                 throw new ArgumentException("PackageName must not be null or whitespace.", nameof(input));
 
-            var dirs = new List<string> { "urdf", "launch", "config", "worlds" };
+            var dirs = new List<string>();
+            if (input.hasUrdf) dirs.Add("urdf");
+            dirs.Add("launch");
+            if (input.hasConfig) dirs.Add("config");
+            dirs.Add("worlds");
             if (input.hasMeshes) dirs.Add("meshes");
+            if (input.hasModels) dirs.Add("models");
 
             var sb = new StringBuilder();
             sb.AppendLine("cmake_minimum_required(VERSION 3.8)");

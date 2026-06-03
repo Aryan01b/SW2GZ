@@ -21,6 +21,17 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void Write_GzMode_EmitsLeanDeps()
+        {
+            var xml = PackageXmlV3Writer.Write(new PackageXmlInput(
+                "asset_pkg", "0.0.1", "d", "m", "e@x", "MIT") { GzMode = true });
+            Assert.Contains("<exec_depend>ros_gz_sim</exec_depend>", xml);
+            Assert.DoesNotContain("ros2_control", xml);
+            Assert.DoesNotContain("gz_ros2_control", xml);
+            Assert.DoesNotContain("ros_gz_bridge", xml);
+        }
+
+        [Fact]
         public void Write_DoesNotEmitFortressOrIgnPackages()
         {
             var xml = PackageXmlV3Writer.Write(Min());

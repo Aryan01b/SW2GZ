@@ -34,6 +34,18 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void Write_GzMode_InstallsModelsNotUrdfOrConfig()
+        {
+            var cmake = AmentCMakeWriter.Write(new AmentCMakeInput(
+                "asset_pkg", hasMeshes: false, hasModels: true, hasUrdf: false, hasConfig: false));
+            Assert.Contains("models", cmake);
+            Assert.Contains("launch", cmake);
+            Assert.Contains("worlds", cmake);
+            Assert.DoesNotContain("urdf", cmake);
+            Assert.DoesNotContain("config", cmake);
+        }
+
+        [Fact]
         public void Write_EmitsProjectName()
         {
             var cmake = AmentCMakeWriter.Write(new AmentCMakeInput("arm_2dof_description", hasMeshes: true));
