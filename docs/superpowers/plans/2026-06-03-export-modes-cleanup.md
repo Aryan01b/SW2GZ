@@ -700,7 +700,9 @@ git commit -m "Make CMake/package.xml writers mode-aware for gz modes"
 
 ---
 
-### Task 5: `Sw2gzPipeline.Run` — branch the write stage by `ExportMode`
+> **REVISION (2026-06-03, after concurrent StackProfile refactor landed):** A parallel approved effort (`modular-stack-ribbon`) replaced the `bool modelOnly` param with a `StackProfile profile` and rewired the write stage to gate on `profile.Actuation` (`fullStack = Actuation == Ros2Control`). `XacroWriter.WriteModelOnly` and `LaunchPyWriter.GzSimModelOnly` are STILL USED by the Actuation≠Ros2Control URDF path — **do NOT delete them**. Reconciliation chosen by user: **ExportMode = artifact format, StackProfile = stacks; thread both.** Task 5 below is revised to ADD an `ExportMode mode` param to the canonical `Run(..., StackProfile profile)` overload, leave the existing RobotPackage write stage byte-for-byte untouched, and add a parallel gz branch. gz modes ignore actuation (emit no control files). Task 6 is revised to thread `config.Mode` into the StackProfile-based callers.
+
+### Task 5: `Sw2gzPipeline.Run` — add `ExportMode` artifact branch alongside `StackProfile`
 
 Replace the `bool modelOnly` param with `ExportMode mode`; emit the gz model directory + mode-specific world + launch for the two gz modes. Delete the now-dead `XacroWriter.WriteModelOnly` and `LaunchPyWriter.GzSimModelOnly`.
 
