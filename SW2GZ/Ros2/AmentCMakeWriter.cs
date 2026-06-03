@@ -24,6 +24,9 @@ namespace SW2GZ.Ros2
             if (string.IsNullOrWhiteSpace(input.PackageName))
                 throw new ArgumentException("PackageName must not be null or whitespace.", nameof(input));
 
+            // Order is load-bearing: TestGoldenRobotPackage is byte-exact on the
+            // default (Robot Package) output "urdf launch config worlds meshes".
+            // Don't reorder without regenerating that golden.
             var dirs = new List<string>();
             if (input.hasUrdf) dirs.Add("urdf");
             dirs.Add("launch");
