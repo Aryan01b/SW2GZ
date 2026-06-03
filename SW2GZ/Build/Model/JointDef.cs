@@ -1,15 +1,14 @@
 /*
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
-P9 — persisted wizard state for the Step 4 (Joints) PropertyManagerPage. One
-JointDef per non-root link edge (parent→child) derived from the Step 3 link
-tree. Pure / COM-free and DataContract-serializable so it round-trips in the
-assembly checkpoint alongside the link list (see Sw2gzExportConfig).
+Structural-only joint data (what Gz needs to simulate the joint): type, the
+axis it moves about, and the lower/upper motion range. Actuation/control
+concerns (command interface, effort, velocity) are not stored here.
 
-Structural-only scope (what Gz needs to simulate the joint): type, the axis it
-moves about, and the lower/upper motion range. Actuation/control concerns
-(command interface, effort, velocity) are intentionally NOT stored here. Type
-and axis are seeded from the SolidWorks mates; the user reviews each joint.
+The axis is a SolidWorks reference axis: AxisRef is the reference-axis feature
+name (empty until the user selects or generates one) and AxisX/Y/Z is its cached
+direction in the assembly frame. Type is seeded from the mate between the two
+links; the user reviews each joint.
 
 Joint origin is not stored here — SolidWorks→ROS coordinate conversion is a
 later increment, so the converter emits Pose.Identity for now.
@@ -19,11 +18,6 @@ using SW2GZ.Build.Urdf;
 
 namespace SW2GZ.Build.Model
 {
-    // Principal-axis presets for a joint's rotation/translation axis. Keeps the
-    // PMP a single dropdown; mate-derived axes snap to the nearest one. None =
-    // no axis (the Fixed default).
-    public enum JointAxisPreset { None, PlusX, MinusX, PlusY, MinusY, PlusZ, MinusZ }
-
     [DataContract(Name = "JointDef", Namespace = "")]
     public sealed class JointDef
     {
@@ -31,8 +25,26 @@ namespace SW2GZ.Build.Model
         [DataMember] public string ParentLink { get; set; } = string.Empty;
         [DataMember] public string ChildLink { get; set; } = string.Empty;
         [DataMember] public UrdfJointType Type { get; set; } = UrdfJointType.Fixed;
-        [DataMember] public JointAxisPreset Axis { get; set; } = JointAxisPreset.None;
+
+        // Reference axis: feature name (or empty) + cached direction (assembly frame).
+        [DataMember] public string AxisRef { get; set; } = string.Empty;
+        [DataMember] public double AxisX { get; set; }
+        [DataMember] public double AxisY { get; set; }
+        [DataMember] public double AxisZ { get; set; }
+
         [DataMember] public double? LimitLower { get; set; }
         [DataMember] public double? LimitUpper { get; set; }
+
+        // True when a non-zero axis direction has been set (from a mate, a selected
+        // reference axis, or a generated one).
+        public bool HasAxis =>
+            System.Math.Abs(AxisX) > 1e-9 || System.Math.Abs(AxisY) > 1e-9 || System.Math.Abs(AxisZ) > 1e-9;
+
+        public void SetAxis(System.Numerics.Vector3 dir)
+        {
+            float len = dir.Length();
+            if (len > 1e-9f) { dir /= len; }
+            AxisX = dir.X; AxisY = dir.Y; AxisZ = dir.Z;
+        }
     }
 }

@@ -13,39 +13,14 @@ namespace SW2GZ.Test.Build
 {
     public class JointDefConverterTests
     {
-        [Theory]
-        [InlineData(JointAxisPreset.PlusX, 1f, 0f, 0f)]
-        [InlineData(JointAxisPreset.MinusX, -1f, 0f, 0f)]
-        [InlineData(JointAxisPreset.PlusY, 0f, 1f, 0f)]
-        [InlineData(JointAxisPreset.MinusY, 0f, -1f, 0f)]
-        [InlineData(JointAxisPreset.PlusZ, 0f, 0f, 1f)]
-        [InlineData(JointAxisPreset.MinusZ, 0f, 0f, -1f)]
-        [InlineData(JointAxisPreset.None, 0f, 0f, 0f)]
-        public void AxisVector_MapsPresets(JointAxisPreset preset, float x, float y, float z)
-        {
-            Assert.Equal(new Vector3(x, y, z), JointDefConverter.AxisVector(preset));
-        }
-
-        [Theory]
-        [InlineData(1f, 0f, 0f, JointAxisPreset.PlusX)]
-        [InlineData(-0.98f, 0.1f, 0.05f, JointAxisPreset.MinusX)]
-        [InlineData(0.02f, 0.99f, 0f, JointAxisPreset.PlusY)]
-        [InlineData(0f, -1f, 0.01f, JointAxisPreset.MinusY)]
-        [InlineData(0.1f, 0.1f, 0.97f, JointAxisPreset.PlusZ)]
-        [InlineData(0f, 0f, -1f, JointAxisPreset.MinusZ)]
-        [InlineData(0f, 0f, 0f, JointAxisPreset.None)]
-        public void SnapToPreset_PicksDominantSignedAxis(float x, float y, float z, JointAxisPreset expected)
-        {
-            Assert.Equal(expected, JointDefConverter.SnapToPreset(new Vector3(x, y, z)));
-        }
-
         [Fact]
         public void ToUrdfJoint_MapsStructuralFields_DefaultsForDroppedFields()
         {
             var def = new JointDef
             {
                 Name = "drive", ParentLink = "base", ChildLink = "wheel",
-                Type = UrdfJointType.Revolute, Axis = JointAxisPreset.PlusZ,
+                Type = UrdfJointType.Revolute, AxisRef = "Axis1",
+                AxisX = 0, AxisY = 0, AxisZ = 1,
                 LimitLower = -1.5, LimitUpper = 1.5,
             };
 
@@ -63,6 +38,17 @@ namespace SW2GZ.Test.Build
             Assert.Equal(0.0, j.LimitEffort);
             Assert.Equal(0.0, j.LimitVelocity);
             Assert.Equal(UrdfCmdInterface.Position, j.Interface);
+        }
+
+        [Fact]
+        public void SetAxis_NormalizesDirection()
+        {
+            var def = new JointDef();
+            def.SetAxis(new Vector3(0, 5, 0));
+            Assert.True(def.HasAxis);
+            Assert.Equal(0, def.AxisX, 5);
+            Assert.Equal(1, def.AxisY, 5);
+            Assert.Equal(0, def.AxisZ, 5);
         }
 
         [Fact]

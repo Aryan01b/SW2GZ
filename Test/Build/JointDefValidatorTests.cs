@@ -16,7 +16,7 @@ namespace SW2GZ.Test.Build
         {
             var joints = new List<JointDef>
             {
-                new JointDef { Name = "j", Type = UrdfJointType.Fixed, Axis = JointAxisPreset.None },
+                new JointDef { Name = "j", Type = UrdfJointType.Fixed },
             };
             Assert.Empty(JointDefValidator.Validate(joints));
         }
@@ -26,7 +26,7 @@ namespace SW2GZ.Test.Build
         {
             var joints = new List<JointDef>
             {
-                new JointDef { Name = "drive", Type = UrdfJointType.Revolute, Axis = JointAxisPreset.None },
+                new JointDef { Name = "drive", Type = UrdfJointType.Revolute },  // axis 0,0,0
             };
             Assert.Contains(JointDefValidator.Validate(joints), w => w.Contains("drive") && w.Contains("axis"));
         }
@@ -36,7 +36,7 @@ namespace SW2GZ.Test.Build
         {
             var joints = new List<JointDef>
             {
-                new JointDef { Name = "drive", Type = UrdfJointType.Revolute, Axis = JointAxisPreset.PlusZ,
+                new JointDef { Name = "drive", Type = UrdfJointType.Revolute, AxisZ = 1,
                                LimitLower = 2, LimitUpper = 1 },
             };
             Assert.Contains(JointDefValidator.Validate(joints), w => w.Contains("drive") && w.Contains("limit"));
@@ -47,7 +47,7 @@ namespace SW2GZ.Test.Build
         {
             var joints = new List<JointDef>
             {
-                new JointDef { Name = "drive", Type = UrdfJointType.Revolute, Axis = JointAxisPreset.PlusZ,
+                new JointDef { Name = "drive", Type = UrdfJointType.Revolute, AxisZ = 1,
                                LimitLower = -1, LimitUpper = 1 },
             };
             Assert.Empty(JointDefValidator.Validate(joints));

@@ -401,6 +401,146 @@ namespace SW2GZ.SwSurface
             }
         }
 
+        // P9 — generates a SolidWorks reference axis from the mate between the two
+        // given link component-sets and returns its name + direction. Finds the
+        // matching mate, selects one of its reference geometries, inserts a
+        // reference axis, then reads its direction. Best-effort COM, validated on a
+        // workstation; returns Ok=false if nothing usable is found.
+        public (bool Ok, string Name, Vector3 Dir) GenerateAxisFromMate(
+            System.Collections.Generic.ICollection<string> compIdsA,
+            System.Collections.Generic.ICollection<string> compIdsB)
+        {
+            if (compIdsA == null || compIdsB == null) return (false, null, default(Vector3));
+            var model = (IModelDoc2)_doc;
+
+            object refEntity = FindMateReferenceEntity(model, compIdsA, compIdsB);
+            if (refEntity == null) return (false, null, default(Vector3));
+
+            try
+            {
+                model.ClearSelection2(true);
+                if (!(refEntity is Entity sel)) return (false, null, default(Vector3));
+                try { sel.Select4(false, null); }
+                catch { return (false, null, default(Vector3)); }
+
+                if (!model.InsertAxis2(true)) return (false, null, default(Vector3));
+
+                // The newly inserted reference axis is the last feature in the tree.
+                Feature axisFeat = model.FeatureByPositionReverse(0) as Feature;
+                if (axisFeat == null) return (false, null, default(Vector3));
+
+                try
+                {
+                    string name = axisFeat.Name;
+                    Vector3 dir = new Vector3(0, 0, 1);
+                    if (axisFeat.GetSpecificFeature2() is RefAxis ax)
+                    {
+                        try
+                        {
+                            if (ax.GetRefAxisParams() is double[] p && p.Length >= 6)
+                            {
+                                dir = new Vector3((float)(p[3] - p[0]), (float)(p[4] - p[1]), (float)(p[5] - p[2]));
+                                if (dir.LengthSquared() > 1e-9f) dir = Vector3.Normalize(dir);
+                            }
+                        }
+                        finally { Marshal.ReleaseComObject(ax); }
+                    }
+                    return (true, name, dir);
+                }
+                finally { Marshal.ReleaseComObject(axisFeat); }
+            }
+            finally { Marshal.ReleaseComObject(refEntity); }
+        }
+
+        // Returns the first usable reference geometry (Entity) of the mate coupling
+        // the two component-sets, or null. Caller releases the returned RCW.
+        private static object FindMateReferenceEntity(
+            IModelDoc2 model,
+            System.Collections.Generic.ICollection<string> a,
+            System.Collections.Generic.ICollection<string> b)
+        {
+            object result = null;
+            Feature feat = (Feature)model.FirstFeature();
+            try
+            {
+                while (feat != null && result == null)
+                {
+                    if (feat.GetTypeName2() == "MateGroup")
+                    {
+                        Feature sub = (Feature)feat.GetFirstSubFeature();
+                        try
+                        {
+                            while (sub != null && result == null)
+                            {
+                                result = MateReferenceIfMatch(sub, a, b);
+                                Feature nextSub = (Feature)sub.GetNextSubFeature();
+                                Marshal.ReleaseComObject(sub);
+                                sub = nextSub;
+                            }
+                        }
+                        finally { if (sub != null) Marshal.ReleaseComObject(sub); }
+                    }
+
+                    Feature next = (Feature)feat.GetNextFeature();
+                    Marshal.ReleaseComObject(feat);
+                    feat = next;
+                }
+            }
+            finally { if (feat != null) Marshal.ReleaseComObject(feat); }
+            return result;
+        }
+
+        private static object MateReferenceIfMatch(
+            Feature feat,
+            System.Collections.Generic.ICollection<string> a,
+            System.Collections.Generic.ICollection<string> b)
+        {
+            object specific = feat.GetSpecificFeature2();
+            var mate = specific as Mate2;
+            if (mate == null) { if (specific != null) Marshal.ReleaseComObject(specific); return null; }
+
+            var ents = new List<MateEntity2>();
+            try
+            {
+                string topA = null, topB = null;
+                int n = mate.GetMateEntityCount();
+                for (int i = 0; i < n; i++)
+                {
+                    MateEntity2 ent = mate.MateEntity(i);
+                    if (ent == null) continue;
+                    ents.Add(ent);
+                    Component2 comp = ent.ReferenceComponent;
+                    if (comp != null)
+                    {
+                        try
+                        {
+                            string t = TopLevelName(comp);
+                            if (topA == null) topA = t;
+                            else if (topB == null && t != topA) topB = t;
+                        }
+                        finally { Marshal.ReleaseComObject(comp); }
+                    }
+                }
+
+                bool match = topA != null && topB != null &&
+                    ((a.Contains(topA) && b.Contains(topB)) || (a.Contains(topB) && b.Contains(topA)));
+
+                if (!match) return null;
+
+                foreach (MateEntity2 ent in ents)
+                {
+                    object refGeom = ent.Reference;
+                    if (refGeom != null) return refGeom;   // first usable; caller releases
+                }
+                return null;
+            }
+            finally
+            {
+                foreach (MateEntity2 ent in ents) Marshal.ReleaseComObject(ent);
+                Marshal.ReleaseComObject(mate);
+            }
+        }
+
         // Inspects a single feature; if it wraps a Mate2, classifies it into a
         // MateSpec and appends. No-op for non-mate features. All COM RCWs touched
         // here are released in finally.

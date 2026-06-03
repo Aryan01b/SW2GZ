@@ -28,7 +28,7 @@ namespace SW2GZ.Test.Build
             Assert.Equal("base", j.ParentLink);
             Assert.Equal("wheel_joint", j.Name);
             Assert.Equal(UrdfJointType.Fixed, j.Type);
-            Assert.Equal(JointAxisPreset.None, j.Axis);
+            Assert.False(j.HasAxis);
         }
 
         [Fact]
@@ -38,7 +38,7 @@ namespace SW2GZ.Test.Build
             var existing = new List<JointDef>
             {
                 new JointDef { Name = "drive", ParentLink = "base", ChildLink = "wheel",
-                               Type = UrdfJointType.Revolute, Axis = JointAxisPreset.PlusY,
+                               Type = UrdfJointType.Revolute, AxisRef = "Axis1", AxisY = 1,
                                LimitLower = -1, LimitUpper = 1 },
             };
 
@@ -46,7 +46,8 @@ namespace SW2GZ.Test.Build
 
             Assert.Equal("drive", j.Name);
             Assert.Equal(UrdfJointType.Revolute, j.Type);
-            Assert.Equal(JointAxisPreset.PlusY, j.Axis);
+            Assert.Equal("Axis1", j.AxisRef);
+            Assert.Equal(1.0, j.AxisY, 5);
             Assert.Equal(-1, j.LimitLower);
         }
 
@@ -117,7 +118,9 @@ namespace SW2GZ.Test.Build
             JointDef j = Assert.Single(JointSeeder.Sync(links, null, mates));
 
             Assert.Equal(UrdfJointType.Revolute, j.Type);
-            Assert.Equal(JointAxisPreset.PlusY, j.Axis);   // snapped from the mate
+            Assert.True(j.HasAxis);
+            Assert.Equal(1.0, j.AxisY, 2);                 // normalized mate direction (~+Y)
+            Assert.Equal(0.0, j.AxisX, 2);
         }
 
         [Fact]
@@ -132,7 +135,7 @@ namespace SW2GZ.Test.Build
             JointDef j = Assert.Single(JointSeeder.Sync(links, null, mates));
 
             Assert.Equal(UrdfJointType.Fixed, j.Type);
-            Assert.Equal(JointAxisPreset.None, j.Axis);
+            Assert.False(j.HasAxis);
         }
 
         [Fact]
@@ -142,7 +145,7 @@ namespace SW2GZ.Test.Build
             var existing = new List<JointDef>
             {
                 new JointDef { Name = "drive", ParentLink = "base", ChildLink = "wheel",
-                               Type = UrdfJointType.Prismatic, Axis = JointAxisPreset.PlusX },
+                               Type = UrdfJointType.Prismatic, AxisX = 1 },
             };
             var mates = new List<MateAxis>
             {
@@ -152,7 +155,8 @@ namespace SW2GZ.Test.Build
             JointDef j = Assert.Single(JointSeeder.Sync(links, existing, mates));
 
             Assert.Equal(UrdfJointType.Prismatic, j.Type);     // user edit preserved
-            Assert.Equal(JointAxisPreset.PlusX, j.Axis);
+            Assert.Equal(1.0, j.AxisX, 5);
+            Assert.Equal(0.0, j.AxisZ, 5);
         }
     }
 }

@@ -22,10 +22,11 @@ namespace SW2GZ.Build
             foreach (JointDef j in joints)
             {
                 bool moving = j.Type != UrdfJointType.Fixed;
-                if (moving && j.Axis == JointAxisPreset.None)
+                if (moving && !j.HasAxis)
                     warnings.Add($"Joint '{j.Name}' is {j.Type.ToString().ToLowerInvariant()} " +
-                                 "but has no axis set.");
+                                 "but has no axis — select or generate a reference axis.");
 
+                // Limits only apply to revolute/prismatic (continuous is unlimited).
                 bool limited = j.Type == UrdfJointType.Revolute || j.Type == UrdfJointType.Prismatic;
                 if (limited && j.LimitLower.HasValue && j.LimitUpper.HasValue &&
                     j.LimitLower > j.LimitUpper)

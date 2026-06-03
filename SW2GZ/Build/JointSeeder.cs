@@ -7,6 +7,7 @@ calls Sync on entry to keep joints consistent with the (possibly re-shaped)
 link tree while preserving the user's per-joint edits.
 */
 using System.Collections.Generic;
+using System.Numerics;
 using SW2GZ.Build.Model;
 using SW2GZ.Build.Urdf;
 
@@ -29,9 +30,9 @@ namespace SW2GZ.Build
                     if (!string.IsNullOrEmpty(j.ChildLink) && !byChild.ContainsKey(j.ChildLink))
                         byChild[j.ChildLink] = j;
 
-            // Mate-derived (axis, type) keyed by the edge's child link name. Only
-            // applied to newly-seeded joints — never overrides a user's prior edit.
-            Dictionary<string, (JointAxisPreset Axis, UrdfJointType Type)> mateByChild =
+            // Mate-derived (axis direction, type) keyed by the edge's child link
+            // name. Only applied to newly-seeded joints — never overrides an edit.
+            Dictionary<string, (Vector3 Axis, UrdfJointType Type)> mateByChild =
                 BuildMateByChild(links, mateAxes);
 
             // A link is a root when its parent is empty or names a link that
@@ -62,7 +63,7 @@ namespace SW2GZ.Build
                     if (mateByChild.TryGetValue(l.Name, out var derived))
                     {
                         fresh.Type = derived.Type;
-                        fresh.Axis = derived.Axis;
+                        fresh.SetAxis(derived.Axis);   // cache the mate direction
                     }
                     result.Add(fresh);
                 }
@@ -72,11 +73,11 @@ namespace SW2GZ.Build
         }
 
         // Resolves each mate's two components to their owning links, identifies the
-        // child end of that tree edge, and records the snapped axis + mapped type.
-        private static Dictionary<string, (JointAxisPreset, UrdfJointType)> BuildMateByChild(
+        // child end of that tree edge, and records the axis direction + mapped type.
+        private static Dictionary<string, (Vector3, UrdfJointType)> BuildMateByChild(
             IReadOnlyList<LinkDef> links, IReadOnlyList<MateAxis> mateAxes)
         {
-            var map = new Dictionary<string, (JointAxisPreset, UrdfJointType)>();
+            var map = new Dictionary<string, (Vector3, UrdfJointType)>();
             if (mateAxes == null) return map;
 
             // component id -> owning link name
@@ -102,7 +103,7 @@ namespace SW2GZ.Build
                 else if (byName.TryGetValue(lb, out LinkDef db) && db.ParentName == la) child = lb;
                 if (child == null) continue;
 
-                map[child] = (JointDefConverter.SnapToPreset(ma.Axis), MapKind(ma.Kind));
+                map[child] = (ma.Axis, MapKind(ma.Kind));
             }
 
             return map;
