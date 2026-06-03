@@ -2,7 +2,7 @@
 ; deploys + registers in one click.
 ; Build: ISCC.exe installer\SW2GZ.iss
 #define MyAppName        "SW2GZ"
-#define MyAppVersion     "2.0.1"
+#define MyAppVersion     "2.1.0"
 #define MyAppPublisher   "Aryan Arlikar"
 ; SW2GZ COM addin GUID (matches HKLM\SOFTWARE\SolidWorks\Addins\{...}).
 #define AddinGuid        "{34fad620-2a46-4ba6-9f5f-1dfefde894c7}"

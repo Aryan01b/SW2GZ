@@ -558,10 +558,14 @@ namespace SW2GZ.SW
                     return;
                 }
 
-                SwApp.SendMsgToUser(
+                // Success: information icon (SendMsgToUser defaults to a caution
+                // triangle, which reads as a warning for a clean export).
+                SwApp.SendMsgToUser2(
                     "Exported to:\n" + ws + "\n\nBuild and launch:\n" +
                     "  cd \"" + ws + "\"\n  colcon build\n  source install/setup.bash\n" +
-                    "  ros2 launch " + pkg + " gz_sim.launch.py");
+                    "  ros2 launch " + pkg + " gz_sim.launch.py",
+                    (int)swMessageBoxIcon_e.swMbInformation,
+                    (int)swMessageBoxBtn_e.swMbOk);
             }
             catch (Exception e)
             {

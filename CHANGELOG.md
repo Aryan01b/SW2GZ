@@ -2,26 +2,69 @@
 
 All notable changes documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [2.1.0-dev] - 2026-06-02
+## [2.1.0] — 2026-06-03
 
-### Added
+**Phase 1 complete** — interactive robot-model export. An assembly now goes
+from the SW2GZ ribbon to a turn-key, `colcon build`-able ROS 2 Jazzy + Gz Sim
+Harmonic package without leaving SolidWorks: define the structure in the
+Create-Model wizard, then one-click Export. (Phases 2–3 — Gz world and asset
+modes — are next.)
+
+### Added — Phase 1 wizard + robot-model export (`#if SW_INTEROP`)
+- **Create-Model wizard** (`Sw2gzExportPmp`) — native PropertyManagerPage, 4
+  steps: Mode → base-model structure (links) → Joints → Review. The 3D viewport
+  stays live throughout. Finish **saves the structure only** (links + joints +
+  inertia, no plugins).
+- **Mate-driven joints** — joints are seeded one-per-edge from the link
+  hierarchy tree (`JointSeeder`, named `<parent>_<child>_joint`). Selecting a
+  SolidWorks mate from the live mate list assigns the joint its type + axis +
+  limits (`WalkAllMates`: LOCK→fixed, CONCENTRIC→revolute/continuous,
+  ANGLE/DISTANCE→limited revolute/prismatic). Selecting a mate **highlights its
+  reference geometry in the viewport** to verify. Compact per-joint metadata
+  panel.
+- **Structured Review step** — compact metadata labels + separate link/joint
+  listboxes (replaces the prior paragraph-style summary).
+- **Separate Export command** — a second ribbon button loads the saved model,
+  confirms what is implemented (`ExportDialog`: N links / M joints, bare model),
+  collects package meta (output / package / author / email / license), then runs
+  the export. Create-Model and Export are now distinct concerns.
+- **Model-only export pipeline** — `Sw2gzModelExporter` + `WizardAssemblyWalker`
+  drive `Sw2gzPipeline.Run(..., modelOnly: true)`: emits xacro + launch + meshes
+  for the bare model with **no ros2_control / Gazebo plugins** (raw model you can
+  spawn and view).
+- **Ribbon polish** — Create Model and Export get distinct glyphs (isometric
+  cube vs. cube + arrow) via a horizontal sprite strip in `ICommandGroup.IconList`;
+  glyphs are drawn from scratch in `scripts\GenerateIcons.ps1` (GDI+, no source
+  asset, fully original). Export success now uses an information icon, not the
+  caution triangle.
+
+### Added — pipeline groundwork (P1–P9)
 - **P1**: `RobotModel` immutable aggregate (`Build/Model/`) + `RobotModelBuilder` + `UrdfSerializer` replaces inline string-concat in pipeline
 - **P3-math**: `InertialAggregator` applies `R·I·Rᵀ` per part; `Matrix3.FromQuaternion`/`Transpose`/`Mul`/`IsApproximatelyOrthonormal`/`Determinant`; `IUnitsContext` + `IdentityUnitsContext` + `UnitsScaler` (schema only — pipeline wiring deferred to P3-units)
 - **P4**: Real `QuickHull3D` convex hull collider; `ColliderStrategy { ConvexHull, Aabb }` enum; AABB retained as explicit opt-in fallback
 - **P5**: `IAppearanceSource` + `DefaultAppearanceSource` stub; `MaterialDef` with RGBA validation + name dedup; per-link `<material name>` URDF emit; `inc/materials.xacro` generated from `RobotModel.Materials`
 - **P6-data**: 7 sensor record types (`ImuSensor`/`GpuLidarSensor`/`CameraSensor`/`DepthCameraSensor`/`ForceTorqueSensor`/`ContactSensor`/`NavsatSensor`) + `SdfSensorBlocks` per-type SDF emit + `SdfSensorPlugins` world-level family plugin dedup + per-sensor `ros_gz_bridge` entries + `<gazebo reference>` URDF wrappers; `Sw2gzPipeline.Run(...,sensors)` 6-arg overload
 - **P9**: `RobotModelValidator` — 12 structural checks (link/joint name uniqueness, tree connectivity, inertia PD, material/sensor/control ref resolution, frame orthonormality, ...); runs pre-write in `Sw2gzPipeline.Run`; errors throw `Sw2gzExportException`, warnings flow into the returned `ValidationReport`
-- Tests: 254 → 413 green
+- Tests: 254 → 542 green
 
 ### Changed
 - `Sw2gzPipeline` constructor: 3-arg (`mass`/`walker`/`tess`) → 4-arg (+`IAppearanceSource`); 3-arg kept as back-compat
-- `Sw2gzPipeline.Run`: 5-arg → 6-arg (+`IReadOnlyList<SensorDef> sensors`); 5-arg kept as back-compat
+- `Sw2gzPipeline.Run`: 5-arg → 6-arg (+`IReadOnlyList<SensorDef> sensors`) → 7th `modelOnly` flag for the bare-model wizard path; older arities kept as back-compat
+- `PackageNameSanitizer` — digit-prefixed names (e.g. `3r_arm`) now get a `pkg_` prefix instead of an ament-invalid leading underscore
 - `SdfWorldWriter` no longer unconditionally emits `gz-sim-imu-system` / `gz-sim-sensors-system` plugins; `SdfSensorPlugins` is now the single source of truth for sensor-family plugins
 
-### Deferred (next-version branch)
-- **P2** (joints from SW mates), **P3-units**, **P5-COM**, **P6-COM**: require SolidWorks workstation
-- **P7**: SDF serializer + legacy `ExportHelper`/`URDFRobot` retirement
+### Removed
+- Placeholder `assets/` design PNGs and the unused `ros_logo` image set
+
+### Deferred to Phase 2 / 3 (v2.2)
+- **Gz world mode** (`ExportMode.SdfWorld`) and **asset mode** (`ExportMode.SdfModel`) — wizard branches by Mode, reusing `SdfWorldWriter` / `SdfModelWriter`
+- Multi-component links currently mesh only the first component's visual
+- **P3-units**, **P5-COM**, **P6-COM**: require further SolidWorks-workstation validation
+- **P7**: SDF serializer + legacy `ExportHelper` / `URDFRobot` retirement
 - **P8**: WPF wizard UI (`SW2GZ.UI.Core` extraction)
+
+### Notes
+- `SW2GZ.dll` v2.1.0; installer `SW2GZ-Setup-2.1.0.exe`
 
 ## [v2.0.1] — 2026-05-30
 
