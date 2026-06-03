@@ -50,11 +50,18 @@ namespace SW2GZ.URDFExport
 
         // DataContractSerializer constructs instances via GetUninitializedObject,
         // which skips field/property initializers. Without this hook a config
-        // saved before the Stacks field existed would deserialize Stacks = null
-        // (→ NRE on first read). Seed the full-stack default here so legacy
-        // assemblies resume exactly as before; a present <Stacks> element in the
-        // XML overwrites this during member population.
+        // saved before a field existed would deserialize it to null (→ NRE on
+        // first read). Seed defaults here so legacy assemblies resume exactly as
+        // before; any present element in the XML overwrites these during member
+        // population. Stacks gets the full-stack default; Links/Joints get empty
+        // lists for defense-in-depth symmetry (no real persisted checkpoint omits
+        // them, but an unguarded .Count/enumeration on null would still throw).
         [OnDeserializing]
-        private void OnDeserializing(StreamingContext context) => Stacks = StackProfile.Default();
+        private void OnDeserializing(StreamingContext context)
+        {
+            Stacks = StackProfile.Default();
+            Links = new List<LinkDef>();
+            Joints = new List<JointDef>();
+        }
     }
 }

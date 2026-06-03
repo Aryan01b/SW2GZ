@@ -166,5 +166,25 @@ namespace SW2GZ.Test.URDFExport
             Assert.Equal(SW2GZ.Ros2.ActuationBackend.Ros2Control, restored.Stacks.Actuation);
             Assert.True(restored.Stacks.GzSim);
         }
+
+        [Fact]
+        public void Deserialize_LegacyXmlWithoutLinksAndJoints_DefaultsToEmptyLists()
+        {
+            // Simulates a config whose XML omits <Links>/<Joints>. Because
+            // DataContractSerializer builds instances via GetUninitializedObject
+            // (skipping initializers), an absent collection element deserializes to
+            // null — and any unguarded .Count/enumeration would NRE. The
+            // [OnDeserializing] hook must seed empty lists so these stay non-null.
+            string legacyXml =
+                "<Sw2gzExportConfig xmlns=\"\" xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">" +
+                "<PackageName>legacy_bot</PackageName></Sw2gzExportConfig>";
+
+            Sw2gzExportConfig restored = Sw2gzConfigCodec.FromXmlString(legacyXml);
+
+            Assert.NotNull(restored.Links);
+            Assert.Empty(restored.Links);
+            Assert.NotNull(restored.Joints);
+            Assert.Empty(restored.Joints);
+        }
     }
 }
