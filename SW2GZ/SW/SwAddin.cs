@@ -71,13 +71,12 @@ namespace SW2GZ.SW
         // docking state against it, so it must not collide with other groups.
         private const int sw2gzWizardUserID = 920;
         private const int sw2gzExportUserID = 921;
-        // Per-stack config buttons (the "Stacks" ribbon section). Stable user IDs,
-        // contiguous after the two existing buttons so SolidWorks docking state is
-        // persisted distinctly per button.
-        private const int sw2gzActuationUserID = 922;
-        private const int sw2gzSensorsUserID   = 923;
-        private const int sw2gzGazeboUserID     = 924;
-        private const int sw2gzBridgeUserID     = 925;
+        // NOTE: the per-stack "Stacks" ribbon buttons (Actuation/Sensors/Gazebo/
+        // Bridge, user IDs 922–925) are temporarily removed while the Create Model
+        // flow is sanity-checked. Their enable callback re-loaded the full config
+        // (a feature-tree COM walk + XML parse) on every ribbon poll and saturated
+        // the UI thread. Re-add with a cached/throttled enable gate. The
+        // StackConfigDialog / StackRibbonGate / StackProfile classes are kept intact.
 
         #region Event Handler Variables
 
@@ -317,8 +316,7 @@ namespace SW2GZ.SW
             // of merging old + new into duplicate buttons.
             bool ignorePrevious = false;
             object registryIDs;
-            int[] knownIDs = new int[] { sw2gzWizardUserID, sw2gzExportUserID,
-                sw2gzActuationUserID, sw2gzSensorsUserID, sw2gzGazeboUserID, sw2gzBridgeUserID };
+            int[] knownIDs = new int[] { sw2gzWizardUserID, sw2gzExportUserID };
             bool hadRegistryData = CmdMgr.GetGroupDataFromRegistry(sw2gzCmdGroupID, out registryIDs);
             if (hadRegistryData && !CompareIDs((int[])registryIDs, knownIDs))
             {
@@ -356,46 +354,9 @@ namespace SW2GZ.SW
                     logger.Error("Failed to add SW2GZ Export command item");
                 }
 
-                // Four per-stack config buttons (the "Stacks" ribbon section). Each
-                // opens a parameterized StackConfigDialog and shares one enable method
-                // (StacksEnable) — they're greyed until a model is saved in
-                // RobotPackage mode. Image index 0 = cube column of the strip
-                // (distinct per-stack icons are a deferred follow-up).
-                int actIndex = grp.AddCommandItem2("Actuation", -1,
-                    "Configure the actuation backend (none / Gz plugin / ros2_control)", "Actuation", 0,
-                    "LaunchActuationConfig", "StacksEnable", sw2gzActuationUserID,
-                    (int)swCommandItemType_e.swToolbarItem);
-                if (actIndex < 0)
-                {
-                    logger.Error("Failed to add SW2GZ Actuation command item");
-                }
-
-                int senIndex = grp.AddCommandItem2("Sensors", -1,
-                    "Configure sensors emitted into the Gz model", "Sensors", 0,
-                    "LaunchSensorsConfig", "StacksEnable", sw2gzSensorsUserID,
-                    (int)swCommandItemType_e.swToolbarItem);
-                if (senIndex < 0)
-                {
-                    logger.Error("Failed to add SW2GZ Sensors command item");
-                }
-
-                int gzIndex = grp.AddCommandItem2("Gazebo", -1,
-                    "Configure Gazebo simulation options", "Gazebo", 0,
-                    "LaunchGazeboConfig", "StacksEnable", sw2gzGazeboUserID,
-                    (int)swCommandItemType_e.swToolbarItem);
-                if (gzIndex < 0)
-                {
-                    logger.Error("Failed to add SW2GZ Gazebo command item");
-                }
-
-                int brIndex = grp.AddCommandItem2("Bridge", -1,
-                    "Configure the ros_gz_bridge topic selection", "Bridge", 0,
-                    "LaunchBridgeConfig", "StacksEnable", sw2gzBridgeUserID,
-                    (int)swCommandItemType_e.swToolbarItem);
-                if (brIndex < 0)
-                {
-                    logger.Error("Failed to add SW2GZ Bridge command item");
-                }
+                // Stacks ribbon section (Actuation/Sensors/Gazebo/Bridge) temporarily
+                // removed — see the user-ID note above. Re-add here with a cached
+                // enable gate when the Create Model flow is verified.
 
                 // Exactly ONE entry: the ribbon/toolbar button. HasMenu=false so the
                 // command group does NOT auto-create a duplicate Tools-menu item.
@@ -426,20 +387,12 @@ namespace SW2GZ.SW
                     {
                         int textBelow = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow;
 
-                        // Primary box: Create Model + Export.
+                        // Primary box: Create Model + Export. (The "Stacks" section
+                        // box is temporarily removed — see the user-ID note above.)
                         ICommandTabBox box = tab.AddCommandTabBox();
                         int[] cmdIds = new int[] { cmdId, exportCmdId };
                         int[] textTypes = new int[] { textBelow, textBelow };
                         box.AddCommands(cmdIds, textTypes);
-
-                        // Second box → renders as a distinct ribbon SECTION: the four
-                        // per-stack "Stacks" config buttons. Kept inside this try/catch
-                        // so a failure here still leaves the two main buttons working.
-                        ICommandTabBox box2 = tab.AddCommandTabBox();
-                        int[] stackIds = { grp.get_CommandID(actIndex), grp.get_CommandID(senIndex),
-                                           grp.get_CommandID(gzIndex), grp.get_CommandID(brIndex) };
-                        int[] stackText = { textBelow, textBelow, textBelow, textBelow };
-                        box2.AddCommands(stackIds, stackText);
 
                         logger.Info("Added SW2GZ command tab for assembly documents");
                     }
@@ -647,72 +600,13 @@ namespace SW2GZ.SW
                     modeldoc.GetType() == (int)swDocumentTypes_e.swDocASSEMBLY) ? 1 : 0;
         }
 
-        // Enable-state for the Stacks section buttons. They tune a robot package built
-        // from a saved model, so they're enabled only when the active doc is an assembly
-        // AND a model has been saved (Create Model run) AND the export Mode is
-        // RobotPackage. StackRibbonGate holds the pure rule; the assembly check is here.
-        // Never throw into the COM caller — any failure greys the buttons (return 0).
-        public int StacksEnable()
-        {
-            try
-            {
-                ModelDoc2 m = SwApp.ActiveDoc as ModelDoc2;
-                if (m == null || m.GetType() != (int)swDocumentTypes_e.swDocASSEMBLY) return 0;
-                Sw2gzExportConfig config = Sw2gzConfigSerialization.Load(m);
-                return SW2GZ.Ros2.StackRibbonGate.IsEnabled(config) ? 1 : 0;
-            }
-            catch (Exception e) { logger.Warn("StacksEnable failed", e); return 0; }
-        }
-
         #endregion UI Callbacks
 
-        #region Stacks Section Callbacks
-
-        // String-named launch handlers (resolved by SW via reflection — must stay public).
-        public void LaunchActuationConfig() => OpenStackConfig(StackTarget.Actuation);
-        public void LaunchSensorsConfig()   => OpenStackConfig(StackTarget.Sensors);
-        public void LaunchGazeboConfig()    => OpenStackConfig(StackTarget.Gazebo);
-        public void LaunchBridgeConfig()    => OpenStackConfig(StackTarget.Bridge);
-
-        // Open the per-stack config dialog for the active assembly, editing a CLONE of
-        // its saved StackProfile and persisting only if the user clicks OK. Guarded +
-        // logged; never throws into the COM caller.
-        private void OpenStackConfig(StackTarget target)
-        {
-            try
-            {
-                ModelDoc2 m = SwApp.ActiveDoc as ModelDoc2;
-                if (m == null || m.GetType() != (int)swDocumentTypes_e.swDocASSEMBLY)
-                {
-                    SwApp.SendMsgToUser("Open an assembly first.");
-                    return;
-                }
-                Sw2gzExportConfig config = Sw2gzConfigSerialization.Load(m);
-                if (!SW2GZ.Ros2.StackRibbonGate.IsEnabled(config))
-                {
-                    SwApp.SendMsgToUser("Run Create Model first (and set Mode = Robot Package).");
-                    return;
-                }
-                using (var dlg = new StackConfigDialog(target,
-                           config.Stacks ?? SW2GZ.Ros2.StackProfile.Default()))
-                {
-                    if (dlg.ShowDialog() == DialogResult.OK && dlg.Result != null)
-                    {
-                        config.Stacks = dlg.Result;
-                        Sw2gzConfigSerialization.Save((SldWorks)SwApp, m, config);
-                        logger.Info("Stacks: saved " + target + " -> Actuation=" + config.Stacks.Actuation
-                            + " GzSim=" + config.Stacks.GzSim + " Sensors=" + config.Stacks.SensorsEnabled);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                logger.Error("Stack config (" + target + ") failed", e);
-                MessageBox.Show("Stack config failed:\n" + e.Message);
-            }
-        }
-
-        #endregion Stacks Section Callbacks
+        // NOTE: the Stacks section callbacks (LaunchActuationConfig / LaunchSensorsConfig
+        // / LaunchGazeboConfig / LaunchBridgeConfig and the shared OpenStackConfig helper)
+        // were removed along with the Stacks ribbon buttons while the Create Model flow is
+        // sanity-checked. StackConfigDialog / StackRibbonGate / StackProfile are unchanged,
+        // so re-adding the buttons + a cached enable gate restores the feature.
 
         #region Event Methods
 
