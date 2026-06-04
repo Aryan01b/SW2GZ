@@ -1,7 +1,7 @@
-/*
-Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
+﻿/*
+Copyright (c) 2026 Aryan Arlikar. MIT License â€” see CONTRIBUTING.md.
 
-P2 — joint origin rpy emission. AppendJoint now converts the joint's
+P2 â€” joint origin rpy emission. AppendJoint now converts the joint's
 Origin.Rotation (quaternion) to roll/pitch/yaw via the single source of
 truth (Matrix3.FromQuaternion(q).ToRpy()). Identity rotation must still
 emit "0 0 0" byte-identically; a non-identity rotation must emit the
@@ -36,7 +36,7 @@ namespace SW2GZ.Write.Urdf.Tests
             var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") }, new[] { joint });
 
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             Assert.Contains("<origin xyz=\"0 0 0\" rpy=\"0 0 0\"/>", xml);
         }
@@ -53,7 +53,7 @@ namespace SW2GZ.Write.Urdf.Tests
             var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") }, new[] { joint });
 
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             // Expected rpy computed via the same single source of truth the
             // serializer uses, so the test stays in lockstep with ToRpy().
@@ -76,7 +76,7 @@ namespace SW2GZ.Write.Urdf.Tests
             var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") }, new[] { joint });
 
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             var (roll, pitch, yaw) = Matrix3.FromQuaternion(q).ToRpy();
             Assert.True(System.Math.Abs(roll - System.Math.PI / 2.0) < 1e-6);
@@ -93,7 +93,7 @@ namespace SW2GZ.Write.Urdf.Tests
             var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") }, new[] { joint });
 
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             Assert.Contains("type=\"planar\"", xml);
             Assert.Contains("<axis xyz=\"0 0 1\"/>", xml);
@@ -109,7 +109,7 @@ namespace SW2GZ.Write.Urdf.Tests
             var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") }, new[] { joint });
 
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             Assert.Contains("type=\"floating\"", xml);
             Assert.DoesNotContain("<axis", xml);

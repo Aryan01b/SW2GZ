@@ -1,9 +1,9 @@
-/*
-Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
+﻿/*
+Copyright (c) 2026 Aryan Arlikar. MIT License â€” see CONTRIBUTING.md.
 
-P1 — UrdfSerializer tests. Coverage:
-  * single empty link → expected fragment
-  * link with inertia + mesh files → expected fragment
+P1 â€” UrdfSerializer tests. Coverage:
+  * single empty link â†’ expected fragment
+  * link with inertia + mesh files â†’ expected fragment
   * joint serialization (fixed / revolute / continuous)
   * round-trip well-formedness via XDocument.Parse
   * package name with special chars gets XML-escaped
@@ -39,7 +39,7 @@ namespace SW2GZ.Write.Urdf.Tests
         public void SerializeBody_SingleLink_ProducesExpectedFragment()
         {
             var model = ModelWith(Link("base_link"));
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             // Substrings cover every required element. Whitespace/order verified
             // by the parity test below.
@@ -69,7 +69,7 @@ namespace SW2GZ.Write.Urdf.Tests
                 CollisionMeshFile: "arm_collision.stl");
 
             var model = RobotModelBuilder.Build(Meta(), new[] { link }, Array.Empty<UrdfJoint>());
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             Assert.Contains("<mass value=\"4.25\"/>", xml);
             Assert.Contains("ixx=\"1.5\"", xml);
@@ -86,7 +86,7 @@ namespace SW2GZ.Write.Urdf.Tests
             var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") },
                 new[] { joint });
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             Assert.Contains("<joint name=\"j_fixed\" type=\"fixed\">", xml);
             Assert.Contains("<parent link=\"base_link\"/>", xml);
@@ -105,7 +105,7 @@ namespace SW2GZ.Write.Urdf.Tests
             var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") },
                 new[] { joint });
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             Assert.Contains("<joint name=\"j_rev\" type=\"revolute\">", xml);
             Assert.Contains("<limit lower=\"-1.5\" upper=\"1.5\" effort=\"12\" velocity=\"2\"/>", xml);
@@ -119,7 +119,7 @@ namespace SW2GZ.Write.Urdf.Tests
             var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") },
                 new[] { joint });
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             Assert.Contains("<joint name=\"j_cont\" type=\"continuous\">", xml);
             Assert.Contains("<limit effort=\"8\" velocity=\"4\"/>", xml);
@@ -136,7 +136,7 @@ namespace SW2GZ.Write.Urdf.Tests
             var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1") },
                 new[] { joint });
-            string body = UrdfSerializer.SerializeBody(model);
+            string body = XacroGenerator.SerializeBody(model);
 
             // Wrap in <robot> so it's a single rooted document.
             string doc = "<?xml version=\"1.0\"?>\n<robot name=\"test\">\n" + body + "</robot>\n";
@@ -156,7 +156,7 @@ namespace SW2GZ.Write.Urdf.Tests
             // sanitizer doesn't touch (UrdfLink names are not sanitized).
             var link = new UrdfLink("a&b", 1.0, Vector3.Zero, Matrix3.Identity, null, null, "x.dae", "x.stl");
             var model = RobotModelBuilder.Build(Meta(), new[] { link }, Array.Empty<UrdfJoint>());
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             // SecurityElement.Escape turns '&' into '&amp;'.
             Assert.Contains("name=\"a&amp;b\"", xml);
@@ -168,7 +168,7 @@ namespace SW2GZ.Write.Urdf.Tests
         {
             // Hand-rolled reference matching the legacy Sw2gzPipeline.BuildUrdfBodyXml
             // output. If this test fails, the serializer's formatting drifted
-            // from the byte-identical contract — golden tests will break too.
+            // from the byte-identical contract â€” golden tests will break too.
             var link = Link("base_link", mass: 1.0,
                 visualFile: "base_link.dae", collisionFile: "base_link_collision.stl");
             var model = RobotModelBuilder.Build(Meta("test_pkg"),
@@ -191,7 +191,7 @@ namespace SW2GZ.Write.Urdf.Tests
                 .Append("  </link>").Append(nl)
                 .ToString();
 
-            string actual = UrdfSerializer.SerializeBody(model);
+            string actual = XacroGenerator.SerializeBody(model);
             Assert.Equal(expected, actual);
         }
 
@@ -201,7 +201,7 @@ namespace SW2GZ.Write.Urdf.Tests
             var model = RobotModelBuilder.Build(Meta(),
                 new[] { Link("base_link"), Link("arm1"), Link("arm2") },
                 Array.Empty<UrdfJoint>());
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             int i1 = xml.IndexOf("name=\"base_link\"", StringComparison.Ordinal);
             int i2 = xml.IndexOf("name=\"arm1\"", StringComparison.Ordinal);

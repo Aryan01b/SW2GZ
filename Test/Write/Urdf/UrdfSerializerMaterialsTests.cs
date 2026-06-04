@@ -1,7 +1,7 @@
-/*
-Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
+﻿/*
+Copyright (c) 2026 Aryan Arlikar. MIT License â€” see CONTRIBUTING.md.
 
-P5 — Materials emission tests for UrdfSerializer. Covers both the per-link
+P5 â€” Materials emission tests for XacroGenerator. Covers both the per-link
 <material name="..."/> reference in the body XML and the SerializeMaterialsXacro
 helper that produces inc/materials.xacro.
 */
@@ -45,7 +45,7 @@ namespace SW2GZ.Test.Write.Urdf
                 System.Array.Empty<SensorDef>(),
                 new ControlSpec(new List<string>(), ControlSpec.DefaultJointStateBroadcaster));
 
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             Assert.Contains("<material name=\"steel\"/>", xml);
             // The material ref lives inside the <visual> block, before </visual>.
@@ -67,7 +67,7 @@ namespace SW2GZ.Test.Write.Urdf
                 System.Array.Empty<SensorDef>(),
                 new ControlSpec(new List<string>(), ControlSpec.DefaultJointStateBroadcaster));
 
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             Assert.DoesNotContain("<material", xml);
         }
@@ -86,7 +86,7 @@ namespace SW2GZ.Test.Write.Urdf
                 System.Array.Empty<SensorDef>(),
                 new ControlSpec(new List<string>(), ControlSpec.DefaultJointStateBroadcaster));
 
-            string xml = UrdfSerializer.SerializeBody(model);
+            string xml = XacroGenerator.SerializeBody(model);
 
             Assert.Contains("<material name=\"ABS&amp;PLA\"/>", xml);
         }
@@ -94,7 +94,7 @@ namespace SW2GZ.Test.Write.Urdf
         [Fact]
         public void SerializeMaterialsXacro_Empty_EmitsPlaceholderComment()
         {
-            string xml = UrdfSerializer.SerializeMaterialsXacro(
+            string xml = XacroGenerator.SerializeMaterialsXacro(
                 System.Array.Empty<MaterialDef>());
 
             Assert.Contains("<!-- No named materials defined. -->", xml);
@@ -108,7 +108,7 @@ namespace SW2GZ.Test.Write.Urdf
         {
             var mats = new[] { new MaterialDef("red", 1.0, 0.0, 0.0, 1.0) };
 
-            string xml = UrdfSerializer.SerializeMaterialsXacro(mats);
+            string xml = XacroGenerator.SerializeMaterialsXacro(mats);
 
             Assert.Contains("<material name=\"red\">", xml);
             Assert.Contains("<color rgba=\"1 0 0 1\"/>", xml);
@@ -125,7 +125,7 @@ namespace SW2GZ.Test.Write.Urdf
                 new MaterialDef("gamma", 0.7, 0.8, 0.9, 1.0),
             };
 
-            string xml = UrdfSerializer.SerializeMaterialsXacro(mats);
+            string xml = XacroGenerator.SerializeMaterialsXacro(mats);
 
             int ia = xml.IndexOf("name=\"alpha\"");
             int ib = xml.IndexOf("name=\"beta\"");
@@ -144,7 +144,7 @@ namespace SW2GZ.Test.Write.Urdf
             // xUnit's default test parallelization).
             var mats = new[] { new MaterialDef("c", 0.5, 0.25, 0.75, 1.0) };
 
-            string xml = UrdfSerializer.SerializeMaterialsXacro(mats);
+            string xml = XacroGenerator.SerializeMaterialsXacro(mats);
 
             Assert.Contains("0.5 0.25 0.75 1", xml);
             Assert.DoesNotContain(",", xml.Split('\n').First(l => l.Contains("rgba")));
@@ -154,7 +154,7 @@ namespace SW2GZ.Test.Write.Urdf
         public void SerializeMaterialsXacro_NullMaterials_Throws()
         {
             Assert.Throws<System.ArgumentNullException>(() =>
-                UrdfSerializer.SerializeMaterialsXacro(null!));
+                XacroGenerator.SerializeMaterialsXacro(null!));
         }
     }
 }

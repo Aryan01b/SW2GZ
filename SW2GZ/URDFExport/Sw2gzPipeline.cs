@@ -455,17 +455,25 @@ namespace SW2GZ.URDFExport
                     "max " + budget + " to keep package files under Windows MAX_PATH=260). " +
                     "Choose a shorter output folder or package name.");
 
-            try
+            // Writability probe — write+delete a marker WITHOUT creating outputDir
+            // itself. If outputDir exists, probe there; otherwise probe the parent
+            // (which we just verified exists). Leaving outputDir uncreated preserves
+            // the invariant "pre-export failure touches nothing" — the write phase
+            // will create outputDir on demand via Directory.CreateDirectory(root).
+            string probeDir = Directory.Exists(fullOut) ? fullOut : parent;
+            if (!string.IsNullOrEmpty(probeDir))
             {
-                Directory.CreateDirectory(fullOut);
-                string probe = Path.Combine(fullOut, ".sw2gz_writeprobe");
-                File.WriteAllText(probe, "");
-                File.Delete(probe);
-            }
-            catch (Exception e)
-            {
-                throw new SW2GZ.Exceptions.Sw2gzExportException(
-                    "Output folder is not writable: " + fullOut + " (" + e.Message + ")");
+                try
+                {
+                    string probe = Path.Combine(probeDir, ".sw2gz_writeprobe");
+                    File.WriteAllText(probe, "");
+                    File.Delete(probe);
+                }
+                catch (Exception e)
+                {
+                    throw new SW2GZ.Exceptions.Sw2gzExportException(
+                        "Output folder is not writable: " + probeDir + " (" + e.Message + ")");
+                }
             }
         }
 

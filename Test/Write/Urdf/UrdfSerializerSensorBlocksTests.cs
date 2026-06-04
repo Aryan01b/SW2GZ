@@ -1,7 +1,7 @@
-/*
-Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
+﻿/*
+Copyright (c) 2026 Aryan Arlikar. MIT License â€” see CONTRIBUTING.md.
 
-P6-data — coverage for UrdfSerializer.SerializeGazeboSensorBlocks +
+P6-data â€” coverage for XacroGenerator.SerializeGazeboSensorBlocks +
 its integration into SerializeBody. Byte-parity check confirms no
 output when Sensors empty (golden tests pass unmodified).
 */
@@ -37,7 +37,7 @@ namespace SW2GZ.Test.Write.Urdf
         [Fact]
         public void SerializeBody_NoSensors_NoGazeboBlocks()
         {
-            string body = UrdfSerializer.SerializeBody(ModelWith());
+            string body = XacroGenerator.SerializeBody(ModelWith());
             Assert.DoesNotContain("<gazebo", body);
         }
 
@@ -45,7 +45,7 @@ namespace SW2GZ.Test.Write.Urdf
         public void SerializeBody_OneImu_EmitsGazeboReferenceBlock()
         {
             var imu = new ImuSensor("imu1", "base_link", Pose.Identity, "/imu", "base_link", 100.0, 0.01);
-            string body = UrdfSerializer.SerializeBody(ModelWith(imu));
+            string body = XacroGenerator.SerializeBody(ModelWith(imu));
             Assert.Contains("<gazebo reference=\"base_link\">", body);
             Assert.Contains("<sensor name=\"imu1\" type=\"imu\">", body);
             Assert.Contains("</gazebo>", body);
@@ -57,7 +57,7 @@ namespace SW2GZ.Test.Write.Urdf
             var imu = new ImuSensor("imu1", "base_link", Pose.Identity, "/imu", "base_link", 100.0, 0.0);
             var cam = new CameraSensor("cam1", "base_link", Pose.Identity, "/cam", "base_link", 30.0,
                 640, 480, 1.047, 0.1, 100.0);
-            string body = UrdfSerializer.SerializeBody(ModelWith(imu, cam));
+            string body = XacroGenerator.SerializeBody(ModelWith(imu, cam));
             // Single gazebo wrapper for base_link
             int gazeboCount = 0;
             int idx = 0;
@@ -74,8 +74,8 @@ namespace SW2GZ.Test.Write.Urdf
         [Fact]
         public void SerializeGazeboSensorBlocks_EmptyOrNull_EmptyString()
         {
-            Assert.Equal(string.Empty, UrdfSerializer.SerializeGazeboSensorBlocks(Array.Empty<SensorDef>()));
-            Assert.Equal(string.Empty, UrdfSerializer.SerializeGazeboSensorBlocks(null));
+            Assert.Equal(string.Empty, XacroGenerator.SerializeGazeboSensorBlocks(Array.Empty<SensorDef>()));
+            Assert.Equal(string.Empty, XacroGenerator.SerializeGazeboSensorBlocks(null));
         }
     }
 }
