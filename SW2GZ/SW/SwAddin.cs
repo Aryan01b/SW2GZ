@@ -509,13 +509,7 @@ namespace SW2GZ.SW
         {
             try
             {
-                ModelDoc2 modeldoc = SwApp.ActiveDoc;
-                if (modeldoc == null ||
-                    modeldoc.GetType() != (int)swDocumentTypes_e.swDocASSEMBLY)
-                {
-                    SwApp.SendMsgToUser("Open an assembly first.");
-                    return;
-                }
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
 
                 _exportWizard = new Sw2gzExportPmp((SldWorks)SwApp, modeldoc);
                 _exportWizard.Show();
@@ -535,17 +529,15 @@ namespace SW2GZ.SW
         {
             try
             {
-                ModelDoc2 modeldoc = SwApp.ActiveDoc;
-                if (modeldoc == null || modeldoc.GetType() != (int)swDocumentTypes_e.swDocASSEMBLY)
-                {
-                    SwApp.SendMsgToUser("Open an assembly first.");
-                    return;
-                }
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
 
                 Sw2gzExportConfig config = Sw2gzConfigSerialization.Load(modeldoc);
                 if (config.Links == null || config.Links.Count == 0)
                 {
-                    SwApp.SendMsgToUser("No model saved yet — run Create Model first.");
+                    SwApp.SendMsgToUser2(
+                        "No model saved yet — run Create Model first.",
+                        (int)swMessageBoxIcon_e.swMbInformation,
+                        (int)swMessageBoxBtn_e.swMbOk);
                     return;
                 }
 
@@ -592,12 +584,45 @@ namespace SW2GZ.SW
         }
 
         // Enable-state callback for the ribbon/menu command: enabled only when the
-        // active document is an assembly (the wizard targets assemblies).
+        // active document is an assembly. Null-safe against SW polling during
+        // addin connect/disconnect, when SwApp may briefly be null.
         public int WizardEnable()
         {
-            ModelDoc2 modeldoc = SwApp.ActiveDoc;
-            return (modeldoc != null &&
-                    modeldoc.GetType() == (int)swDocumentTypes_e.swDocASSEMBLY) ? 1 : 0;
+            try
+            {
+                if (SwApp == null) return 0;
+                ModelDoc2 modeldoc = SwApp.ActiveDoc;
+                return (modeldoc != null &&
+                        modeldoc.GetType() == (int)swDocumentTypes_e.swDocASSEMBLY) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                logger.Warn("WizardEnable poll threw — reporting disabled", e);
+                return 0;
+            }
+        }
+
+        // Shared precondition check for the ribbon callbacks. Returns false (with
+        // an informational popup) when the active doc is missing or not an assembly,
+        // so the ribbon button click is a no-op for non-assembly contexts. The
+        // ribbon-enable callback (WizardEnable) already greys the buttons in the
+        // normal case; this is the fallback for keyboard-shortcut / menu / poll-race
+        // paths where the click goes through anyway.
+        private bool TryGetActiveAssembly(out ModelDoc2 modeldoc)
+        {
+            modeldoc = null;
+            if (SwApp == null) return false;
+            modeldoc = SwApp.ActiveDoc;
+            if (modeldoc != null &&
+                modeldoc.GetType() == (int)swDocumentTypes_e.swDocASSEMBLY)
+            {
+                return true;
+            }
+            SwApp.SendMsgToUser2(
+                "Open an assembly document first — SW2GZ exports assemblies only.",
+                (int)swMessageBoxIcon_e.swMbInformation,
+                (int)swMessageBoxBtn_e.swMbOk);
+            return false;
         }
 
         #endregion UI Callbacks
@@ -769,15 +794,21 @@ namespace SW2GZ.SW
             return 0;
         }
 
+        // FileOpenPostNotify / OnFileNew walk the SW document list via
+        // AttachEventsToAllDocuments() — a COM call that can throw if a referenced
+        // doc was closed mid-walk. Exceptions returned to SW from a *Notify
+        // callback can destabilise the host; log and swallow.
         private int FileOpenPostNotify(string FileName)
         {
-            AttachEventsToAllDocuments();
+            try { AttachEventsToAllDocuments(); }
+            catch (Exception e) { logger.Warn("FileOpenPostNotify: AttachEventsToAllDocuments threw", e); }
             return 0;
         }
 
         public int OnFileNew(object newDoc, int docType, string templateName)
         {
-            AttachEventsToAllDocuments();
+            try { AttachEventsToAllDocuments(); }
+            catch (Exception e) { logger.Warn("OnFileNew: AttachEventsToAllDocuments threw", e); }
             return 0;
         }
 
