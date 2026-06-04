@@ -17,6 +17,7 @@ using System.IO;
 using System.Text;
 using SolidWorks.Interop.sldworks;
 using SW2GZ.Build;
+using SW2GZ.Build.Model;
 using SW2GZ.Ros2;
 
 namespace SW2GZ.URDFExport
@@ -34,12 +35,13 @@ namespace SW2GZ.URDFExport
             public string LaunchFileName { get; }
             public string LogText { get; }
             public string SummaryText { get; }
+            public string TfTreeText { get; }
             public SW2GZ.Validate.ValidationReport Report { get; }
 
             public PreviewResult(string tempDir, string workspaceDir, ExportMode mode,
                 string urdfOrSdfText, string urdfOrSdfFileName,
                 string launchText, string launchFileName,
-                string logText, string summaryText,
+                string logText, string summaryText, string tfTreeText,
                 SW2GZ.Validate.ValidationReport report)
             {
                 TempDir = tempDir;
@@ -51,6 +53,7 @@ namespace SW2GZ.URDFExport
                 LaunchFileName = launchFileName ?? string.Empty;
                 LogText = logText ?? string.Empty;
                 SummaryText = summaryText ?? string.Empty;
+                TfTreeText = tfTreeText ?? string.Empty;
                 Report = report;
             }
         }
@@ -109,9 +112,12 @@ namespace SW2GZ.URDFExport
             string launchText = SafeReadAll(launchPath);
             string logText = SafeReadAll(Path.Combine(workspace, "sw2gz_export.log"));
             string summary = BuildSummary(config, workspace, report);
+            string tfTree = config.Mode == ExportMode.RobotPackage
+                ? TfTreeFormatter.FormatUrdf(urdfText)
+                : TfTreeFormatter.FormatSdf(urdfText);
 
             return new PreviewResult(tempBase, workspace, config.Mode,
-                urdfText, urdfOrSdfRel, launchText, launchRel, logText, summary, report);
+                urdfText, urdfOrSdfRel, launchText, launchRel, logText, summary, tfTree, report);
         }
 
         private static string SafeReadAll(string path)

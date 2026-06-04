@@ -454,6 +454,7 @@
     <Compile Include="Build\Model\ControlSpec.cs" />
     <Compile Include="Build\Model\AxisDirection.cs" />
     <Compile Include="Build\Model\SwToRosRotation.cs" />
+    <Compile Include="Build\Model\TfTreeFormatter.cs" />
     <Compile Include="Build\Model\CoordinateConvention.cs" />
     <Compile Include="Build\Model\RobotMeta.cs" />
     <Compile Include="Build\Model\GazeboLinkProps.cs" />

@@ -30,6 +30,11 @@ No new features, no API breaks.
   convention). Approve → real export runs against the chosen output
   folder; "Back to edit" → returns to the dialog with fields preserved.
   Temp workspace is cleaned up on close (best-effort).
+- **TF frames tab in preview.** New `TfTreeFormatter` parses the
+  generated URDF (or SDF) and renders an ASCII tree of every link frame
+  with its joint type, `xyz`, `rpy` (radians AND degrees), axis, and
+  limits — so the SW→ROS rotation on `world_to_<root>` is visible at a
+  glance. Pulled into the PreviewDialog as a new "TF frames" tab.
 - **Wizard Links step — only one part assignable + cross-step reassignment.**
   Two regressions in one fix:
   - `OnFunnelChanged` → `linkTree.Rebuild()` was triggering

@@ -71,6 +71,7 @@ namespace SW2GZ.UI
             var tabs = new TabControl { Dock = DockStyle.Fill };
             tabs.TabPages.Add(MakeTab("Summary",
                 result.SummaryText + WarningsBlock(result.Report)));
+            tabs.TabPages.Add(MakeTab("TF frames", result.TfTreeText));
             tabs.TabPages.Add(MakeTab(result.UrdfOrSdfFileName, result.UrdfOrSdfText));
             tabs.TabPages.Add(MakeTab(result.LaunchFileName, result.LaunchText));
             tabs.TabPages.Add(MakeTab("sw2gz_export.log", result.LogText));
