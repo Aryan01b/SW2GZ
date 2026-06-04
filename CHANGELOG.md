@@ -23,6 +23,13 @@ No new features, no API breaks.
   (SDF Model / SDF World). One rotation at the world anchor — the rest of
   the robot stays in its native SW frame so meshes / link poses / joint
   axes remain self-consistent.
+- **Export preview.** New "Preview…" button on the Export dialog runs the
+  full pipeline against a temp directory and opens a modal showing the
+  generated URDF/xacro (or `model.sdf` for gz modes), the launch.py, the
+  `sw2gz_export.log`, and a summary (mode, link/joint counts, coordinate
+  convention). Approve → real export runs against the chosen output
+  folder; "Back to edit" → returns to the dialog with fields preserved.
+  Temp workspace is cleaned up on close (best-effort).
 - **Wizard Links step — only one part assignable + cross-step reassignment.**
   Two regressions in one fix:
   - `OnFunnelChanged` → `linkTree.Rebuild()` was triggering

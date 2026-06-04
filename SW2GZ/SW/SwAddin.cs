@@ -541,7 +541,7 @@ namespace SW2GZ.SW
                     return;
                 }
 
-                using (var dlg = new ExportDialog(config))
+                using (var dlg = new ExportDialog(config, (SldWorks)SwApp, modeldoc))
                 {
                     if (dlg.ShowDialog() != DialogResult.OK) return;
                 }

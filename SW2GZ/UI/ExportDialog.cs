@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
+using SolidWorks.Interop.sldworks;
 using SW2GZ.Build.Model;
 using SW2GZ.URDFExport;
 using SW2GZ.Utilities;
@@ -20,12 +21,19 @@ namespace SW2GZ.UI
     public sealed class ExportDialog : Form
     {
         private readonly Sw2gzExportConfig _cfg;
+        private readonly SldWorks _swApp;        // null when preview is disabled (e.g. testing)
+        private readonly ModelDoc2 _modelDoc;
         private readonly TextBox _out, _pkg, _author, _email;
         private readonly ComboBox _lic;
 
-        public ExportDialog(Sw2gzExportConfig config)
+        // Back-compat overload — no SW handles ⇒ preview button is disabled.
+        public ExportDialog(Sw2gzExportConfig config) : this(config, null, null) { }
+
+        public ExportDialog(Sw2gzExportConfig config, SldWorks swApp, ModelDoc2 modelDoc)
         {
             _cfg = config;
+            _swApp = swApp;
+            _modelDoc = modelDoc;
             Text = "SW2GZ — Export model";
             Width = 470; Height = 410;
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -62,16 +70,16 @@ namespace SW2GZ.UI
             Controls.Add(_lic);
             y += 38;
 
+            var preview = new Button { Text = "Preview…", Left = 148, Top = y, Width = 100 };
             var export = new Button { Text = "Export", Left = 256, Top = y, Width = 88, DialogResult = DialogResult.OK };
             var cancel = new Button { Text = "Cancel", Left = 352, Top = y, Width = 88, DialogResult = DialogResult.Cancel };
+
+            preview.Enabled = _swApp != null && _modelDoc != null;
+            preview.Click += (s, e) => RunPreview();
+
             export.Click += (s, e) =>
             {
-                _cfg.OutputFolder = _out.Text.Trim();
-                _cfg.PackageName  = _pkg.Text.Trim();
-                _cfg.Author       = _author.Text.Trim();
-                _cfg.Email        = _email.Text.Trim();
-                _cfg.License      = _lic.Text.Trim();
-
+                CollectFields();
                 // Persist user-stable fields across assemblies. PackageName is intentionally
                 // omitted — it should always be project-specific.
                 Sw2gzUserDefaults.Save(new Sw2gzUserDefaults.Values
@@ -82,10 +90,68 @@ namespace SW2GZ.UI
                     LastOutputFolder = _cfg.OutputFolder,
                 });
             };
+            Controls.Add(preview);
             Controls.Add(export);
             Controls.Add(cancel);
             AcceptButton = export;
             CancelButton = cancel;
+        }
+
+        // Pull the textbox contents into the config. Shared by Preview and Export
+        // so Preview shows EXACTLY what Export would write.
+        private void CollectFields()
+        {
+            _cfg.OutputFolder = _out.Text.Trim();
+            _cfg.PackageName  = _pkg.Text.Trim();
+            _cfg.Author       = _author.Text.Trim();
+            _cfg.Email        = _email.Text.Trim();
+            _cfg.License      = _lic.Text.Trim();
+        }
+
+        private void RunPreview()
+        {
+            CollectFields();
+
+            if (string.IsNullOrWhiteSpace(_cfg.OutputFolder))
+            {
+                MessageBox.Show("Set an output folder before previewing.",
+                    "SW2GZ Preview", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_cfg.PackageName))
+            {
+                MessageBox.Show("Set a package name before previewing.",
+                    "SW2GZ Preview", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            Sw2gzModelPreviewer.PreviewResult result;
+            Cursor = Cursors.WaitCursor;
+            try
+            {
+                result = Sw2gzModelPreviewer.RunPreview(_swApp, _modelDoc, _cfg);
+            }
+            catch (Exception ex)
+            {
+                Cursor = Cursors.Default;
+                MessageBox.Show("Preview failed:\n" + ex.Message,
+                    "SW2GZ Preview", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            Cursor = Cursors.Default;
+
+            using (var dlg = new PreviewDialog(result))
+            {
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    // User confirmed → bubble the OK up so SwAddin runs the
+                    // real export. (The temp preview workspace is already
+                    // cleaned up by PreviewDialog.FormClosed.)
+                    DialogResult = DialogResult.OK;
+                    Close();
+                }
+                // Cancel → return to ExportDialog for further edits.
+            }
         }
 
         // 4-line preview header: counts on line 1, link names on line 2, joint

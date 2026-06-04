@@ -16,6 +16,14 @@ namespace SW2GZ.URDFExport
     public static class Sw2gzModelExporter
     {
         public static SW2GZ.Validate.ValidationReport Run(SldWorks swApp, ModelDoc2 model, Sw2gzExportConfig config)
+            => RunCore(swApp, model, config, config.OutputFolder);
+
+        // outputDirOverride lets the Preview path direct the same pipeline to a
+        // temp directory without touching the user's chosen output folder. The
+        // rest of `config` (package name, author, mode, links, joints, coord
+        // convention) is honoured unchanged.
+        internal static SW2GZ.Validate.ValidationReport RunCore(
+            SldWorks swApp, ModelDoc2 model, Sw2gzExportConfig config, string outputDirOverride)
         {
             var mass = new SolidWorksMassProperties(swApp, (AssemblyDoc)model);
             var tess = new SolidWorksMeshTessellator(swApp, (AssemblyDoc)model);
@@ -40,7 +48,7 @@ namespace SW2GZ.URDFExport
                 LengthScale: 1.0);
 
             return new Sw2gzPipeline(mass, walker, tess, appearances).Run(
-                config.OutputFolder, config.PackageName, config.Author, config.Email, config.License,
+                outputDirOverride, config.PackageName, config.Author, config.Email, config.License,
                 System.Array.Empty<SensorDef>(), profile, config.Mode, coord);
         }
 
