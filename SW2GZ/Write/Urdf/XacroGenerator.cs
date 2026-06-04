@@ -76,11 +76,23 @@ namespace SW2GZ.Write.Urdf
             if (!string.IsNullOrEmpty(anchor))
             {
                 string anchorEsc = SecurityElement.Escape(anchor);
+                // Apply the SW→ROS rotation HERE (and only here). The robot
+                // body inside this fixed joint stays in its native SW frame —
+                // meshes, link/joint poses, joint axes — all consistent with
+                // each other. The rotation aligns SW's "up" with world Z and
+                // SW's "forward" with world X. CoordinateConvention.Identity
+                // emits the legacy "rpy=0 0 0" output (golden parity).
+                (double roll, double pitch, double yaw) =
+                    model.Meta.Frame.SwToRos.ToRpy();
+                string rpyStr =
+                    roll.ToString("0.######", CultureInfo.InvariantCulture)  + " " +
+                    pitch.ToString("0.######", CultureInfo.InvariantCulture) + " " +
+                    yaw.ToString("0.######", CultureInfo.InvariantCulture);
                 sb.AppendLine("  <link name=\"world\"/>");
                 sb.AppendLine($"  <joint name=\"world_to_{anchorEsc}\" type=\"fixed\">");
                 sb.AppendLine("    <parent link=\"world\"/>");
                 sb.AppendLine($"    <child link=\"{anchorEsc}\"/>");
-                sb.AppendLine("    <origin xyz=\"0 0 0\" rpy=\"0 0 0\"/>");
+                sb.AppendLine($"    <origin xyz=\"0 0 0\" rpy=\"{rpyStr}\"/>");
                 sb.AppendLine("  </joint>");
             }
 

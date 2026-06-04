@@ -74,7 +74,7 @@ namespace SW2GZ.UI.Services.Sw
             // ignore the actuation backend.
             SW2GZ.Validate.ValidationReport report = pipeline.Run(
                 outputDir, meta.PackageName, meta.Author, meta.Email, meta.License,
-                model.Sensors, StackProfile.Default(), mode);
+                model.Sensors, StackProfile.Default(), mode, meta.Frame);
 
             var messages = report.Issues.Select(i => i.Message).ToList();
             return new ExportResult(!report.HasErrors, report.Errors.Count(), messages);

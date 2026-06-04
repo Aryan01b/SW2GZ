@@ -88,10 +88,17 @@ namespace SW2GZ.URDFExport
         public SW2GZ.Validate.ValidationReport Run(string outputDir, string packageName,
                                     string author, string email, string license,
                                     IReadOnlyList<SensorDef> sensors, StackProfile profile,
-                                    ExportMode mode = ExportMode.RobotPackage)
+                                    ExportMode mode = ExportMode.RobotPackage,
+                                    CoordinateConvention coord = null)
         {
             if (sensors == null) throw new ArgumentNullException(nameof(sensors));
             if (profile == null) throw new ArgumentNullException(nameof(profile));
+            // Default to Identity (no rotation) for back-compat with callers
+            // that haven't been updated yet. SW-side callers compute the
+            // convention from Sw2gzExportConfig.SwUpAxis/SwForwardAxis and
+            // pass it in; the test suite uses Identity to keep golden output
+            // stable for any test that doesn't specifically exercise rotation.
+            if (coord == null) coord = CoordinateConvention.Identity;
             // D1: actuation == Ros2Control reproduces the legacy full-stack output; every other backend (incl. GzPlugin, whose own writer lands in D3) falls through to the legacy model-only output. This single flag == today's !modelOnly.
             bool fullStack = profile.Actuation == ActuationBackend.Ros2Control;
             // ── Step 1: Sanitize ──────────────────────────────────────────────
@@ -168,7 +175,7 @@ namespace SW2GZ.URDFExport
             // P5: query IAppearanceSource per primary part, get back the tagged
             // ModelLinks + deduped Materials, then build the model via the
             // ModelLink overload so the material refs survive.
-            RobotMeta meta = new RobotMeta(pkg, author, email, license, CoordinateConvention.Identity);
+            RobotMeta meta = new RobotMeta(pkg, author, email, license, coord);
             var (modelLinks, materials) =
                 RobotModelBuilder.AssembleLinksWithMaterials(linksWithPaths, _appearances);
 
@@ -253,17 +260,24 @@ namespace SW2GZ.URDFExport
 
                     SdfModelWriter.Write(model, modelDir);
 
+                    // SDF doesn't have URDF's world-link trick, so the SW→ROS
+                    // rotation rides on the spawn command (-R -P -Y) for SdfModel
+                    // and on the world-include <pose> for SdfWorld.
+                    (double sdfRoll, double sdfPitch, double sdfYaw) =
+                        coord.SwToRos.ToRpy();
+
                     if (mode == ExportMode.SdfModel)
                     {
                         File.WriteAllText(Path.Combine(root, "worlds", "empty.sdf"),
                             SdfWorldWriter.Write(new SdfWorldInput("empty"), model.Sensors));
                         File.WriteAllText(Path.Combine(root, "launch", $"{pkg}.launch.py"),
-                            LaunchPyWriter.GzAsset(pkg));
+                            LaunchPyWriter.GzAsset(pkg, sdfRoll, sdfPitch, sdfYaw));
                     }
                     else // ExportMode.SdfWorld
                     {
                         File.WriteAllText(Path.Combine(root, "worlds", $"{pkg}.sdf"),
-                            SdfWorldWriter.WriteWithModel(new SdfWorldInput(pkg), pkg));
+                            SdfWorldWriter.WriteWithModel(new SdfWorldInput(pkg), pkg,
+                                sdfRoll, sdfPitch, sdfYaw));
                         File.WriteAllText(Path.Combine(root, "launch", $"{pkg}.launch.py"),
                             LaunchPyWriter.GzWorld(pkg, pkg));
                     }

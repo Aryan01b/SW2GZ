@@ -9,6 +9,34 @@ focused round of hardening on the boundary code paths most likely to bite a
 real user: ribbon callbacks, the Export dialog, and the export pipeline.
 No new features, no API breaks.
 
+### Fixed (post-tag patches before release)
+
+- **SolidWorks→ROS coordinate frame.** The `CoordinateConvention.SwToRos`
+  field existed but was never applied: every export wrote SW-native
+  coordinates straight into URDF/SDF, leaving the robot on its side in
+  Gz / RViz (SW Y-up vs ROS Z-up). Now configurable per-assembly via
+  `Sw2gzExportConfig.SwUpAxis` / `SwForwardAxis` (defaults: `+Y` up,
+  `+Z` forward — the stock SW template), built into a rotation matrix by
+  the new pure `SwToRosRotation` helper, threaded through
+  `Sw2gzPipeline.Run`, and applied on the `world_to_<root>` fixed joint
+  (URDF) or `ros_gz_sim create -R -P -Y` + world-include `<pose>`
+  (SDF Model / SDF World). One rotation at the world anchor — the rest of
+  the robot stays in its native SW frame so meshes / link poses / joint
+  axes remain self-consistent.
+- **Wizard Links step — only one part assignable + cross-step reassignment.**
+  Two regressions in one fix:
+  - `OnFunnelChanged` → `linkTree.Rebuild()` was triggering
+    `ActiveLinkChanged` → `LoadLinkSelection` → `model.ClearSelection2(true)`
+    on every viewport pick, racing the user's next click and breaking
+    accumulating multi-part picks.
+  - `OnSelectionboxListChanged` kept firing on Joints/Review (the funnel
+    handler still ran on any viewport pick), silently reassigning parts to
+    the cached `activeLink`.
+  Now `OnFunnelChanged` early-returns when `currentStep != StepLinks`,
+  `LoadLinkSelection` is suppressed during Rebuild-triggered ActiveLinkChanged,
+  and `ShowStep` clears the viewport selection + nulls `activeLink` when
+  leaving the Links step.
+
 ### Added
 
 - **`Sw2gz_export.log`** written into every successful workspace

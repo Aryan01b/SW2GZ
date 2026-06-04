@@ -30,9 +30,18 @@ namespace SW2GZ.URDFExport
             // ExportMode (config.Mode) selects the artifact — Robot Package vs
             // gz asset/world; the StackProfile selects which stacks emit. gz
             // modes ignore the actuation backend (no ros2_control).
+            //
+            // CoordinateConvention rotates the robot at the world anchor so
+            // SW's "up" lands on ROS Z and the robot faces +ROS X. Built from
+            // the user-selected SwUpAxis / SwForwardAxis (defaults: +Y up,
+            // +Z forward — the stock SW template).
+            var coord = new CoordinateConvention(
+                SwToRosRotation.Build(config.SwUpAxis, config.SwForwardAxis),
+                LengthScale: 1.0);
+
             return new Sw2gzPipeline(mass, walker, tess, appearances).Run(
                 config.OutputFolder, config.PackageName, config.Author, config.Email, config.License,
-                System.Array.Empty<SensorDef>(), profile, config.Mode);
+                System.Array.Empty<SensorDef>(), profile, config.Mode, coord);
         }
 
         public static string WorkspacePath(string outputFolder, string packageName) =>

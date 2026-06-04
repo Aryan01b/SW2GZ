@@ -57,7 +57,8 @@ namespace SW2GZ.Gz
             return sb.ToString();
         }
 
-        public static string WriteWithModel(SdfWorldInput input, string modelName)
+        public static string WriteWithModel(SdfWorldInput input, string modelName,
+            double roll = 0, double pitch = 0, double yaw = 0)
         {
             if (input == null) throw new ArgumentNullException(nameof(input));
             if (string.IsNullOrWhiteSpace(input.WorldName))
@@ -68,10 +69,19 @@ namespace SW2GZ.Gz
             string baseWorld = Write(input);                  // ground + sun + physics, no model
             string nameEsc = SecurityElement.Escape(modelName);
             string nl = Environment.NewLine;
+            // Pose only when the rotation is non-identity. Keeps the legacy
+            // identity case byte-identical for the golden test.
+            string poseLine = (roll == 0 && pitch == 0 && yaw == 0)
+                ? string.Empty
+                : "      <pose>0 0 0 " +
+                  roll.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)  + " " +
+                  pitch.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture) + " " +
+                  yaw.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)   + "</pose>" + nl;
             string include =
                 "    <include>" + nl +
                 $"      <uri>model://{nameEsc}</uri>" + nl +
                 $"      <name>{nameEsc}</name>" + nl +
+                poseLine +
                 "    </include>" + nl;
             // Splice the include immediately before the closing </world>.
             return baseWorld.Replace("  </world>", include + "  </world>");

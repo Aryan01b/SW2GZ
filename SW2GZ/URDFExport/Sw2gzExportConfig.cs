@@ -23,6 +23,17 @@ namespace SW2GZ.URDFExport
         // Step 1 — what to generate. Drives the output file/folder layout.
         [DataMember] public ExportMode Mode { get; set; } = ExportMode.RobotPackage;
 
+        // Coordinate convention. Describes which SW axis the user's assembly
+        // treats as "up" (gravity-opposed) and which axis the robot "faces".
+        // Defaults match the stock SW template: Y up, Z out of the screen.
+        // SwToRosRotation.Build(SwUpAxis, SwForwardAxis) yields the rotation
+        // applied on the world_to_<root> joint in the URDF (and the include
+        // pose / spawn -R -P -Y in SDF modes).
+        [DataMember] public SW2GZ.Build.Model.AxisDirection SwUpAxis { get; set; }
+            = SW2GZ.Build.Model.AxisDirection.PlusY;
+        [DataMember] public SW2GZ.Build.Model.AxisDirection SwForwardAxis { get; set; }
+            = SW2GZ.Build.Model.AxisDirection.PlusZ;
+
         // Step 2 — output destination, package identity, and package metadata.
         [DataMember] public string OutputFolder { get; set; } = string.Empty;
         [DataMember] public string PackageName { get; set; } = string.Empty;
@@ -62,6 +73,12 @@ namespace SW2GZ.URDFExport
             Stacks = StackProfile.Default();
             Links = new List<LinkDef>();
             Joints = new List<JointDef>();
+            // Field-not-present defaults: legacy checkpoints saved before the
+            // coordinate-convention fields existed deserialize them to the
+            // enum default (PlusX = 0), which is the wrong "up". Seed the
+            // SW-default convention here so old checkpoints behave correctly.
+            SwUpAxis = SW2GZ.Build.Model.AxisDirection.PlusY;
+            SwForwardAxis = SW2GZ.Build.Model.AxisDirection.PlusZ;
         }
     }
 }

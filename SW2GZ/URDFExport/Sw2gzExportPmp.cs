@@ -1123,11 +1123,17 @@ namespace SW2GZ.URDFExport
                 var walker = new WizardAssemblyWalker((AssemblyDoc)model, config.Links, config.Joints);
                 var appearances = new DefaultAppearanceSource();
 
+                // CoordinateConvention rotates the robot at the world anchor so
+                // SW "up" lands on ROS Z. Defaults: +Y up, +Z forward.
+                var coord = new CoordinateConvention(
+                    SwToRosRotation.Build(config.SwUpAxis, config.SwForwardAxis),
+                    LengthScale: 1.0);
+
                 SW2GZ.Validate.ValidationReport report =
                     new Sw2gzPipeline(mass, walker, tess, appearances).Run(
                         config.OutputFolder, config.PackageName, config.Author, config.Email, config.License,
                         System.Array.Empty<SensorDef>(),
-                        config.Stacks ?? SW2GZ.Ros2.StackProfile.Default(), config.Mode);
+                        config.Stacks ?? SW2GZ.Ros2.StackProfile.Default(), config.Mode, coord);
 
                 string ws = Path.Combine(config.OutputFolder, pkg + "_ws");
                 if (report.HasErrors)
