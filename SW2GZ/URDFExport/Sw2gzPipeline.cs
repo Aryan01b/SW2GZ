@@ -193,22 +193,30 @@ namespace SW2GZ.URDFExport
                     "Pre-write validation failed: " + preWrite.Errors.First().Message);
             }
 
-            // ── Step 5: Write package tree (atomic) ───────────────────────────
+            // ── Step 5: Write package tree ────────────────────────────────────
             // v2.0 layout: <outputDir>/<pkg>_ws/src/<pkg>/...
             // Ready for `cd <pkg>_ws && colcon build` without further restructuring.
             //
-            // Atomicity: all writes go to a sibling staging directory; on success
-            // we swap it into place via Directory.Move so any prior successful
-            // export survives a mid-run failure intact. Any leftover staging dir
-            // from a previous crash is cleared before we start.
+            // Atomicity strategy:
+            //   - Fresh export (workspace did not exist): write directly to
+            //     workspaceDir. On failure, delete it (clean rollback).
+            //   - Re-export (workspace existed): write to a sibling staging dir
+            //     and swap on success, so a mid-run failure leaves the prior
+            //     successful export intact.
+            // Direct-write for the common fresh case avoids a Directory.Move on
+            // every export — that rename briefly desyncs file visibility on
+            // Windows, which broke parallel test runs.
             string workspaceDir = Path.Combine(outputDir, $"{pkg}_ws");
-            string stageDir = workspaceDir + ".sw2gz.tmp";
-            string srcDir = Path.Combine(stageDir, "src");
+            bool hadPriorWorkspace = Directory.Exists(workspaceDir);
+            string writeBaseDir = hadPriorWorkspace
+                ? workspaceDir + ".sw2gz.tmp"
+                : workspaceDir;
+            string srcDir = Path.Combine(writeBaseDir, "src");
             string root = Path.Combine(srcDir, pkg);
             try
             {
-                if (Directory.Exists(stageDir))
-                    Directory.Delete(stageDir, recursive: true);
+                if (hadPriorWorkspace && Directory.Exists(writeBaseDir))
+                    Directory.Delete(writeBaseDir, recursive: true);
                 Directory.CreateDirectory(root);
                 bool gz = mode != ExportMode.RobotPackage;
                 if (gz)
@@ -358,59 +366,60 @@ namespace SW2GZ.URDFExport
                     preWrite.Warnings.Concat(jointIssues).Concat(postWrite.Issues).ToList());
 
                 // ── Step 7: Per-run summary log ───────────────────────────────────
-                // Written inside the staging dir so it survives the swap and ships
-                // with the workspace. Best-effort: a log-write failure must not
-                // sink an otherwise-successful export.
+                // Written inside the write base so it ships with the workspace.
+                // Best-effort: a log-write failure must not sink an otherwise-successful export.
                 try
                 {
                     File.WriteAllText(
-                        Path.Combine(stageDir, "sw2gz_export.log"),
+                        Path.Combine(writeBaseDir, "sw2gz_export.log"),
                         BuildSummaryLog(mode, pkg, author, email, license, outputDir,
                             links.Count, joints.Count, sensors.Count, finalReport));
                 }
                 catch (Exception logEx)
                 {
-                    // Surface as a warning but don't fail the export.
                     System.Diagnostics.Debug.WriteLine(
                         "sw2gz_export.log write failed: " + logEx.Message);
                 }
 
-                // ── Step 8: Atomic swap stage → workspace ─────────────────────────
-                // Prior workspace (from a successful earlier export) is held in
-                // <ws>.sw2gz.bak until the new workspace is in place, then deleted.
-                // If the swap itself fails, the prior workspace is restored.
-                string bakDir = workspaceDir + ".sw2gz.bak";
-                if (Directory.Exists(bakDir))
-                    Directory.Delete(bakDir, recursive: true);
-                bool hadPrior = Directory.Exists(workspaceDir);
-                if (hadPrior)
+                // ── Step 8: Re-export swap (only when prior workspace existed) ────
+                // Prior workspace held in <ws>.sw2gz.bak during the swap so a
+                // rename failure can restore it. Fresh exports skip this entirely —
+                // writeBaseDir already IS workspaceDir.
+                if (hadPriorWorkspace)
+                {
+                    string bakDir = workspaceDir + ".sw2gz.bak";
+                    if (Directory.Exists(bakDir))
+                        Directory.Delete(bakDir, recursive: true);
                     Directory.Move(workspaceDir, bakDir);
-                try
-                {
-                    Directory.Move(stageDir, workspaceDir);
-                }
-                catch
-                {
-                    if (hadPrior && Directory.Exists(bakDir) && !Directory.Exists(workspaceDir))
-                        Directory.Move(bakDir, workspaceDir);
-                    throw;
-                }
-                if (Directory.Exists(bakDir))
-                {
-                    try { Directory.Delete(bakDir, recursive: true); }
-                    catch { /* best-effort — the new workspace is already in place */ }
+                    try
+                    {
+                        Directory.Move(writeBaseDir, workspaceDir);
+                    }
+                    catch
+                    {
+                        if (Directory.Exists(bakDir) && !Directory.Exists(workspaceDir))
+                            Directory.Move(bakDir, workspaceDir);
+                        throw;
+                    }
+                    if (Directory.Exists(bakDir))
+                    {
+                        try { Directory.Delete(bakDir, recursive: true); }
+                        catch { /* best-effort — new workspace already in place */ }
+                    }
                 }
 
                 return finalReport;
             }
             catch
             {
-                // Stage-dir-only cleanup: the prior workspace (if any) was never
-                // touched until the swap, so a mid-export failure leaves the last
-                // good export intact.
-                if (Directory.Exists(stageDir))
+                // Fresh-export rollback: delete the workspace we just created so
+                // a mid-run failure leaves nothing behind.
+                // Re-export rollback: delete the staging dir; the prior workspace
+                // was never touched (the swap only runs after success).
+                string toDelete = hadPriorWorkspace ? writeBaseDir : workspaceDir;
+                if (Directory.Exists(toDelete))
                 {
-                    try { Directory.Delete(stageDir, recursive: true); }
+                    try { Directory.Delete(toDelete, recursive: true); }
                     catch { /* best-effort cleanup; surface the original failure */ }
                 }
                 throw;
@@ -463,16 +472,22 @@ namespace SW2GZ.URDFExport
             string probeDir = Directory.Exists(fullOut) ? fullOut : parent;
             if (!string.IsNullOrEmpty(probeDir))
             {
+                // Unique probe filename — concurrent exports (including parallel
+                // test runs) into a shared parent must not race on a fixed name.
+                string probe = Path.Combine(probeDir,
+                    ".sw2gz_writeprobe_" + Path.GetRandomFileName());
                 try
                 {
-                    string probe = Path.Combine(probeDir, ".sw2gz_writeprobe");
                     File.WriteAllText(probe, "");
-                    File.Delete(probe);
                 }
                 catch (Exception e)
                 {
                     throw new SW2GZ.Exceptions.Sw2gzExportException(
                         "Output folder is not writable: " + probeDir + " (" + e.Message + ")");
+                }
+                finally
+                {
+                    try { File.Delete(probe); } catch { /* best-effort */ }
                 }
             }
         }

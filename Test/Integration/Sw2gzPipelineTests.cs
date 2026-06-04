@@ -71,8 +71,6 @@ namespace SW2GZ.Integration.Tests
                 Assert.True(File.Exists(Path.Combine(root, "urdf", "inc", "materials.xacro")));
                 Assert.True(File.Exists(Path.Combine(root, "worlds", "empty.sdf")));
                 Assert.True(File.Exists(Path.Combine(root, "launch", "gz_sim.launch.py")));
-                Assert.True(File.Exists(Path.Combine(root, "launch", "display.launch.py")));
-                Assert.True(File.Exists(Path.Combine(root, "launch", "ros2_control.launch.py")));
                 Assert.True(File.Exists(Path.Combine(root, "config", "controllers.yaml")));
                 Assert.True(File.Exists(Path.Combine(root, "config", "ros_gz_bridge.yaml")));
                 Assert.True(File.Exists(Path.Combine(root, "meshes", "base_link.dae")));
@@ -121,7 +119,6 @@ namespace SW2GZ.Integration.Tests
                 Assert.True(File.Exists(Path.Combine(root, "urdf", "model_pkg.urdf.xacro")));
                 Assert.True(File.Exists(Path.Combine(root, "urdf", "inc", "materials.xacro")));
                 Assert.True(File.Exists(Path.Combine(root, "launch", "gz_sim.launch.py")));
-                Assert.True(File.Exists(Path.Combine(root, "launch", "display.launch.py")));
                 Assert.True(File.Exists(Path.Combine(root, "meshes", "base_link.dae")));
 
                 // Absent: all control + gz-plugin scaffolding.

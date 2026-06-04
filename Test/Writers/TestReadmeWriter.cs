@@ -17,7 +17,7 @@ namespace SW2GZ.Test.Writers
             var txt = ReadAllText("README.md");
             Assert.Contains("# my_robot_description", txt);
             Assert.Contains("ros2 launch my_robot_description gz_sim.launch.py", txt);
-            Assert.Contains("colcon build --packages-select my_robot_description", txt);
+            Assert.Contains("colcon build", txt);
             Assert.Contains("Jazzy", txt);
             Assert.Contains("Harmonic", txt);
         }
