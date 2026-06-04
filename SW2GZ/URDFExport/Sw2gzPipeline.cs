@@ -16,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using SW2GZ.Build;
 using SW2GZ.Build.Model;
 using SW2GZ.Build.Urdf;
@@ -95,6 +96,12 @@ namespace SW2GZ.URDFExport
             bool fullStack = profile.Actuation == ActuationBackend.Ros2Control;
             // ── Step 1: Sanitize ──────────────────────────────────────────────
             string pkg = PackageNameSanitizer.Sanitize(packageName).Value;
+
+            // ── Step 1.5: Preflight — validate output path BEFORE any work ────
+            // Catches MAX_PATH overrun, missing parent, and non-writable targets
+            // up front so the user gets a friendly error instead of a half-written
+            // package after several seconds of mesh tessellation.
+            ValidatePreflight(outputDir, pkg);
 
             // ── Step 2: PreExport — walk + mass-check (no I/O yet) ────────────
             IReadOnlyList<LinkSpec> specs = _walker.WalkActive();
@@ -186,15 +193,22 @@ namespace SW2GZ.URDFExport
                     "Pre-write validation failed: " + preWrite.Errors.First().Message);
             }
 
-            // ── Step 5: Write package tree ────────────────────────────────────
+            // ── Step 5: Write package tree (atomic) ───────────────────────────
             // v2.0 layout: <outputDir>/<pkg>_ws/src/<pkg>/...
             // Ready for `cd <pkg>_ws && colcon build` without further restructuring.
+            //
+            // Atomicity: all writes go to a sibling staging directory; on success
+            // we swap it into place via Directory.Move so any prior successful
+            // export survives a mid-run failure intact. Any leftover staging dir
+            // from a previous crash is cleared before we start.
             string workspaceDir = Path.Combine(outputDir, $"{pkg}_ws");
-            bool createdWorkspace = !Directory.Exists(workspaceDir);
-            string srcDir = Path.Combine(workspaceDir, "src");
+            string stageDir = workspaceDir + ".sw2gz.tmp";
+            string srcDir = Path.Combine(stageDir, "src");
             string root = Path.Combine(srcDir, pkg);
             try
             {
+                if (Directory.Exists(stageDir))
+                    Directory.Delete(stageDir, recursive: true);
                 Directory.CreateDirectory(root);
                 bool gz = mode != ExportMode.RobotPackage;
                 if (gz)
@@ -340,19 +354,164 @@ namespace SW2GZ.URDFExport
                 // never reach here (they throw above).
                 SW2GZ.Validate.ValidationReport postWrite =
                     new SW2GZ.Validate.OutputValidator().Run(root, pkg);
-                return new SW2GZ.Validate.ValidationReport(
+                var finalReport = new SW2GZ.Validate.ValidationReport(
                     preWrite.Warnings.Concat(jointIssues).Concat(postWrite.Issues).ToList());
+
+                // ── Step 7: Per-run summary log ───────────────────────────────────
+                // Written inside the staging dir so it survives the swap and ships
+                // with the workspace. Best-effort: a log-write failure must not
+                // sink an otherwise-successful export.
+                try
+                {
+                    File.WriteAllText(
+                        Path.Combine(stageDir, "sw2gz_export.log"),
+                        BuildSummaryLog(mode, pkg, author, email, license, outputDir,
+                            links.Count, joints.Count, sensors.Count, finalReport));
+                }
+                catch (Exception logEx)
+                {
+                    // Surface as a warning but don't fail the export.
+                    System.Diagnostics.Debug.WriteLine(
+                        "sw2gz_export.log write failed: " + logEx.Message);
+                }
+
+                // ── Step 8: Atomic swap stage → workspace ─────────────────────────
+                // Prior workspace (from a successful earlier export) is held in
+                // <ws>.sw2gz.bak until the new workspace is in place, then deleted.
+                // If the swap itself fails, the prior workspace is restored.
+                string bakDir = workspaceDir + ".sw2gz.bak";
+                if (Directory.Exists(bakDir))
+                    Directory.Delete(bakDir, recursive: true);
+                bool hadPrior = Directory.Exists(workspaceDir);
+                if (hadPrior)
+                    Directory.Move(workspaceDir, bakDir);
+                try
+                {
+                    Directory.Move(stageDir, workspaceDir);
+                }
+                catch
+                {
+                    if (hadPrior && Directory.Exists(bakDir) && !Directory.Exists(workspaceDir))
+                        Directory.Move(bakDir, workspaceDir);
+                    throw;
+                }
+                if (Directory.Exists(bakDir))
+                {
+                    try { Directory.Delete(bakDir, recursive: true); }
+                    catch { /* best-effort — the new workspace is already in place */ }
+                }
+
+                return finalReport;
             }
             catch
             {
-                if (createdWorkspace && Directory.Exists(workspaceDir))
+                // Stage-dir-only cleanup: the prior workspace (if any) was never
+                // touched until the swap, so a mid-export failure leaves the last
+                // good export intact.
+                if (Directory.Exists(stageDir))
                 {
-                    try { Directory.Delete(workspaceDir, recursive: true); }
+                    try { Directory.Delete(stageDir, recursive: true); }
                     catch { /* best-effort cleanup; surface the original failure */ }
                 }
                 throw;
             }
         }
 
+        // Conservative MAX_PATH ceiling for the workspace base. The deepest
+        // in-package file the pipeline writes is something like
+        //   <ws>/src/<pkg>/urdf/inc/ros2_control.xacro  (≈ 45 chars after <ws>)
+        // We add a generous safety margin so long link names ("base_link_revolute_drive.dae")
+        // don't blow MAX_PATH=260 on Windows.
+        private const int InPackageReserveChars = 90;
+
+        private static void ValidatePreflight(string outputDir, string sanitizedPkg)
+        {
+            if (string.IsNullOrWhiteSpace(outputDir))
+                throw new SW2GZ.Exceptions.Sw2gzExportException(
+                    "Output folder is empty — set a target directory in the Export dialog.");
+
+            string fullOut;
+            try
+            {
+                fullOut = Path.GetFullPath(outputDir);
+            }
+            catch (Exception e)
+            {
+                throw new SW2GZ.Exceptions.Sw2gzExportException(
+                    "Output folder is not a valid path: " + outputDir + " (" + e.Message + ")");
+            }
+
+            string parent = Path.GetDirectoryName(fullOut);
+            if (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
+                throw new SW2GZ.Exceptions.Sw2gzExportException(
+                    "Output folder parent does not exist: " + parent +
+                    " — create it (or pick a different output folder) and retry.");
+
+            string workspaceDir = Path.Combine(fullOut, sanitizedPkg + "_ws");
+            int budget = 260 - InPackageReserveChars;
+            if (workspaceDir.Length > budget)
+                throw new SW2GZ.Exceptions.Sw2gzExportException(
+                    "Workspace path is too long (" + workspaceDir.Length + " chars; " +
+                    "max " + budget + " to keep package files under Windows MAX_PATH=260). " +
+                    "Choose a shorter output folder or package name.");
+
+            try
+            {
+                Directory.CreateDirectory(fullOut);
+                string probe = Path.Combine(fullOut, ".sw2gz_writeprobe");
+                File.WriteAllText(probe, "");
+                File.Delete(probe);
+            }
+            catch (Exception e)
+            {
+                throw new SW2GZ.Exceptions.Sw2gzExportException(
+                    "Output folder is not writable: " + fullOut + " (" + e.Message + ")");
+            }
+        }
+
+        private static string BuildSummaryLog(ExportMode mode, string pkg, string author,
+            string email, string license, string outputDir,
+            int linkCount, int jointCount, int sensorCount,
+            SW2GZ.Validate.ValidationReport report)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("SW2GZ Export Log");
+            sb.AppendLine("================");
+            sb.AppendLine("Timestamp:    " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+            sb.AppendLine("Mode:         " + mode);
+            sb.AppendLine("Package:      " + pkg);
+            sb.AppendLine("Author:       " + (string.IsNullOrEmpty(author) ? "(unset)" : author));
+            sb.AppendLine("Email:        " + (string.IsNullOrEmpty(email) ? "(unset)" : email));
+            sb.AppendLine("License:      " + (string.IsNullOrEmpty(license) ? "(unset)" : license));
+            sb.AppendLine("Output:       " + outputDir);
+            sb.AppendLine("Links:        " + linkCount);
+            sb.AppendLine("Joints:       " + jointCount);
+            sb.AppendLine("Sensors:      " + sensorCount);
+            sb.AppendLine();
+            sb.AppendLine("Warnings (" + report.Warnings.Count() + "):");
+            if (report.Warnings.Any())
+            {
+                foreach (SW2GZ.Validate.ValidationIssue w in report.Warnings)
+                    sb.AppendLine("  - [" + w.Code + "] " + w.Message);
+            }
+            else
+            {
+                sb.AppendLine("  (none)");
+            }
+            sb.AppendLine();
+            sb.AppendLine("Errors (" + report.Errors.Count() + "):");
+            if (report.Errors.Any())
+            {
+                foreach (SW2GZ.Validate.ValidationIssue e in report.Errors)
+                    sb.AppendLine("  - [" + e.Code + "] " + e.Message);
+            }
+            else
+            {
+                sb.AppendLine("  (none)");
+            }
+            sb.AppendLine();
+            sb.AppendLine("Status: " + (report.HasErrors ? "ERRORS (see above)" : "SUCCESS"));
+            return sb.ToString();
+        }
     }
 }
