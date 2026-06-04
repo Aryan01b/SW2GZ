@@ -215,6 +215,13 @@ namespace SW2GZ.URDFExport
         // Index of the current step (0-based).
         private int currentStep;
 
+        // Set while OnFunnelChanged is rebuilding the link tree, so the
+        // SelectByLinkName → ActiveLinkChanged → LoadLinkSelection chain does
+        // NOT clear and reselect the SW selection. The selection is already in
+        // the correct state (the user just made it); the clear/reselect cycle
+        // would compete with the next viewport click and break multi-part picks.
+        private bool suppressLinkSelectionLoad;
+
         public Sw2gzExportPmp(SldWorks swApp, ModelDoc2 model)
         {
             this.swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
@@ -501,7 +508,10 @@ namespace SW2GZ.URDFExport
                 activeLink = l;
                 if (activeLink != null) UpdateMassReadout(activeLink);
                 UpdateValidationLabel();
-                LoadLinkSelection(activeLink);   // show + highlight this link's parts
+                // Skip the viewport sync when this fire was caused by a Rebuild
+                // from OnFunnelChanged — the selection is already correct, and
+                // re-clearing it here loses the user's accumulating multi-pick.
+                if (!suppressLinkSelectionLoad) LoadLinkSelection(activeLink);
             };
             linkTree.LinksChanged += (s, e) => UpdateValidationLabel();
 
@@ -558,8 +568,14 @@ namespace SW2GZ.URDFExport
         // (and viewport-highlights) what's assigned, and editing it reassigns. When
         // the box and the link already agree (e.g. after a programmatic reselect),
         // nothing happens — that guard breaks the select<->event feedback loop.
+        //
+        // Gated on the Links step: SW keeps routing OnSelectionboxListChanged to
+        // this handler even after the Links group is hidden, which silently
+        // reassigned parts to the cached activeLink while the user was on Joints
+        // or Review.
         private void OnFunnelChanged()
         {
+            if (currentStep != WizardStepPlan.StepLinks) return;
             if (activeLink == null || linkTree == null) return;
             List<string> box = ReadSelectionBoxNames();
             if (SameSet(box, activeLink.ComponentIds)) return;
@@ -570,7 +586,14 @@ namespace SW2GZ.URDFExport
                     if (l != activeLink) l.ComponentIds.Remove(id);
             activeLink.ComponentIds = box;   // box is the source of truth (adds + removes)
 
-            linkTree.Rebuild();              // refreshes [N parts] + colors; re-selects active
+            // Rebuild refreshes [N parts] + colors, but its SelectByLinkName fires
+            // ActiveLinkChanged. Suppress the viewport sync inside that handler so
+            // we don't clear the SW selection (which would break the user's next
+            // accumulating click).
+            suppressLinkSelectionLoad = true;
+            try { linkTree.Rebuild(); }
+            finally { suppressLinkSelectionLoad = false; }
+
             UpdateMassReadout(activeLink);
             UpdateValidationLabel();
         }
@@ -984,6 +1007,21 @@ namespace SW2GZ.URDFExport
             step = WizardStepPlan.Snap(config.Mode, step);
             int pos = WizardStepPlan.Position(config.Mode, step);
             int reachCount = WizardStepPlan.Count(config.Mode);
+
+            // Leaving the Links step: clear the viewport selection under our
+            // LinkSelectionMark so subsequent viewport clicks (on Joints/Review)
+            // don't keep landing in the now-hidden parts box and silently
+            // reassigning components to the cached activeLink.
+            if (currentStep == WizardStepPlan.StepLinks && step != WizardStepPlan.StepLinks)
+            {
+                try
+                {
+                    if (model != null) model.ClearSelection2(true);
+                    activeLink = null;
+                }
+                catch (Exception ex) { logger.Warn("Links step exit: ClearSelection2 failed", ex); }
+            }
+
             currentStep = step;
 
             logger.Info($"ShowStep req={step} pos={pos}/{reachCount} mode={config.Mode}");
