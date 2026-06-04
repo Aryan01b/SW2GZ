@@ -19,6 +19,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Forms;
+using System.Windows.Forms.Integration;
 using SW2GZ.URDFExport;
 
 namespace SW2GZ.UI
@@ -71,6 +72,7 @@ namespace SW2GZ.UI
             var tabs = new TabControl { Dock = DockStyle.Fill };
             tabs.TabPages.Add(MakeTab("Summary",
                 result.SummaryText + WarningsBlock(result.Report)));
+            tabs.TabPages.Add(Make3DTab(result));
             tabs.TabPages.Add(MakeTab("TF frames", result.TfTreeText));
             tabs.TabPages.Add(MakeTab(result.UrdfOrSdfFileName, result.UrdfOrSdfText));
             tabs.TabPages.Add(MakeTab(result.LaunchFileName, result.LaunchText));
@@ -79,6 +81,34 @@ namespace SW2GZ.UI
             Controls.SetChildIndex(tabs, 0);   // fill below header, above buttons
 
             FormClosed += (s, e) => CleanupTempDir();
+        }
+
+        // Embeds a WPF Viewport3D (Robot3DViewport) via ElementHost. WPF refs
+        // are already on the csproj for TreeMergeWPF; WindowsFormsIntegration
+        // gives us ElementHost. Best-effort: a constructor failure (e.g. STL
+        // could not be read) shows a label instead of crashing the tab.
+        private static TabPage Make3DTab(Sw2gzModelPreviewer.PreviewResult result)
+        {
+            var page = new TabPage("3D");
+            try
+            {
+                var host = new ElementHost
+                {
+                    Dock = DockStyle.Fill,
+                    Child = new Robot3DViewport(result.MeshesDir, result.UrdfOrSdfText),
+                };
+                page.Controls.Add(host);
+            }
+            catch (Exception ex)
+            {
+                page.Controls.Add(new Label
+                {
+                    Dock = DockStyle.Fill,
+                    TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                    Text = "3D preview unavailable: " + ex.Message,
+                });
+            }
+            return page;
         }
 
         private TabPage MakeTab(string title, string text)

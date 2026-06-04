@@ -28,6 +28,7 @@ namespace SW2GZ.URDFExport
         {
             public string TempDir { get; }
             public string WorkspaceDir { get; }
+            public string MeshesDir { get; }
             public ExportMode Mode { get; }
             public string UrdfOrSdfText { get; }
             public string UrdfOrSdfFileName { get; }
@@ -38,7 +39,7 @@ namespace SW2GZ.URDFExport
             public string TfTreeText { get; }
             public SW2GZ.Validate.ValidationReport Report { get; }
 
-            public PreviewResult(string tempDir, string workspaceDir, ExportMode mode,
+            public PreviewResult(string tempDir, string workspaceDir, string meshesDir, ExportMode mode,
                 string urdfOrSdfText, string urdfOrSdfFileName,
                 string launchText, string launchFileName,
                 string logText, string summaryText, string tfTreeText,
@@ -46,6 +47,7 @@ namespace SW2GZ.URDFExport
             {
                 TempDir = tempDir;
                 WorkspaceDir = workspaceDir;
+                MeshesDir = meshesDir ?? string.Empty;
                 Mode = mode;
                 UrdfOrSdfText = urdfOrSdfText ?? string.Empty;
                 UrdfOrSdfFileName = urdfOrSdfFileName ?? string.Empty;
@@ -90,7 +92,7 @@ namespace SW2GZ.URDFExport
             // Per-mode file selection. The URDF (Robot Package) and SDF (gz
             // model / world) paths use different filenames; pick the most
             // representative artifact for each.
-            string urdfOrSdfPath, urdfOrSdfRel, launchPath, launchRel;
+            string urdfOrSdfPath, urdfOrSdfRel, launchPath, launchRel, meshesDir;
             switch (config.Mode)
             {
                 case ExportMode.SdfModel:
@@ -99,12 +101,14 @@ namespace SW2GZ.URDFExport
                     urdfOrSdfRel = "models/" + pkg + "/model.sdf";
                     launchPath = Path.Combine(root, "launch", pkg + ".launch.py");
                     launchRel = "launch/" + pkg + ".launch.py";
+                    meshesDir = Path.Combine(root, "models", pkg, "meshes");
                     break;
                 default: // RobotPackage
                     urdfOrSdfPath = Path.Combine(root, "urdf", pkg + ".urdf.xacro");
                     urdfOrSdfRel = "urdf/" + pkg + ".urdf.xacro";
                     launchPath = Path.Combine(root, "launch", "gz_sim.launch.py");
                     launchRel = "launch/gz_sim.launch.py";
+                    meshesDir = Path.Combine(root, "meshes");
                     break;
             }
 
@@ -116,7 +120,7 @@ namespace SW2GZ.URDFExport
                 ? TfTreeFormatter.FormatUrdf(urdfText)
                 : TfTreeFormatter.FormatSdf(urdfText);
 
-            return new PreviewResult(tempBase, workspace, config.Mode,
+            return new PreviewResult(tempBase, workspace, meshesDir, config.Mode,
                 urdfText, urdfOrSdfRel, launchText, launchRel, logText, summary, tfTree, report);
         }
 

@@ -70,6 +70,8 @@
     <Compile Include="..\SW2GZ\Build\Model\AxisDirection.cs"        Link="Sources\Build\Model\AxisDirection.cs" />
     <Compile Include="..\SW2GZ\Build\Model\SwToRosRotation.cs"      Link="Sources\Build\Model\SwToRosRotation.cs" />
     <Compile Include="..\SW2GZ\Build\Model\TfTreeFormatter.cs"      Link="Sources\Build\Model\TfTreeFormatter.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\StlBinaryParser.cs"      Link="Sources\Build\Model\StlBinaryParser.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\UrdfTransforms.cs"       Link="Sources\Build\Model\UrdfTransforms.cs" />
     <Compile Include="..\SW2GZ\Build\Model\CoordinateConvention.cs" Link="Sources\Build\Model\CoordinateConvention.cs" />
     <Compile Include="..\SW2GZ\Build\Model\RobotMeta.cs"          Link="Sources\Build\Model\RobotMeta.cs" />
     <Compile Include="..\SW2GZ\Build\Model\GazeboLinkProps.cs"    Link="Sources\Build\Model\GazeboLinkProps.cs" />

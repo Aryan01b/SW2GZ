@@ -312,6 +312,7 @@
     </Reference>
     <Reference Include="System.Xml.Linq" />
     <Reference Include="WindowsBase" />
+    <Reference Include="WindowsFormsIntegration" />
     <Reference Include="xunit.abstractions, Version=2.0.0.0, Culture=neutral, PublicKeyToken=8d05b1bb7a6fdb6c, processorArchitecture=MSIL">
       <HintPath>..\packages\xunit.abstractions.2.0.3\lib\net35\xunit.abstractions.dll</HintPath>
     </Reference>
@@ -455,6 +456,8 @@
     <Compile Include="Build\Model\AxisDirection.cs" />
     <Compile Include="Build\Model\SwToRosRotation.cs" />
     <Compile Include="Build\Model\TfTreeFormatter.cs" />
+    <Compile Include="Build\Model\StlBinaryParser.cs" />
+    <Compile Include="Build\Model\UrdfTransforms.cs" />
     <Compile Include="Build\Model\CoordinateConvention.cs" />
     <Compile Include="Build\Model\RobotMeta.cs" />
     <Compile Include="Build\Model\GazeboLinkProps.cs" />
@@ -506,6 +509,7 @@
     <Compile Include="URDFExport\Sw2gzModelPreviewer.cs" />
     <Compile Include="UI\ExportDialog.cs" />
     <Compile Include="UI\PreviewDialog.cs" />
+    <Compile Include="UI\Robot3DViewport.cs" />
     <Compile Include="UI\StackConfigDialog.cs" />
     <Compile Include="SwSurface\Abstractions\IMeshTessellator.cs" />
     <Compile Include="SwSurface\SolidWorksMeshTessellator.cs" />

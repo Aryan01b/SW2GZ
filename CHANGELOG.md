@@ -35,6 +35,13 @@ No new features, no API breaks.
   with its joint type, `xyz`, `rpy` (radians AND degrees), axis, and
   limits — so the SW→ROS rotation on `world_to_<root>` is visible at a
   glance. Pulled into the PreviewDialog as a new "TF frames" tab.
+- **3D render tab in preview.** New WPF `Robot3DViewport`
+  (`UrdfTransforms` + `StlBinaryParser`) loads each link's collision STL,
+  applies the URDF joint-chain transforms to position it in the world
+  frame, and renders the assembled robot via `System.Windows.Media.Media3D`.
+  Z-up world axes drawn as colored cylinders (X red, Y lime, Z deep sky).
+  Mouse: left-drag orbits, wheel zooms. Embedded as a new "3D" tab in
+  the PreviewDialog via `ElementHost`. No external 3D dependency.
 - **Wizard Links step — only one part assignable + cross-step reassignment.**
   Two regressions in one fix:
   - `OnFunnelChanged` → `linkTree.Rebuild()` was triggering
