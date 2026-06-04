@@ -330,6 +330,8 @@ namespace SW2GZ.URDFExport
                             Path.Combine(root, "config", "ros_gz_bridge.yaml"),
                             RosGzBridgeYaml.Write(pkg, model.Sensors));
                     }
+
+                    new ReadmeWriter(pkg, new TargetProfile { Mode = mode }).Write(root);
                 }
 
                 // ── Step 6: Validate ──────────────────────────────────────────────

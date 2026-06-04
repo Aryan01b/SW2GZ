@@ -350,3 +350,6 @@ patch_urdf.sh
 
 # Local agent tooling
 .superpowers/
+
+# Local export sandbox — re-generated from the add-in, not source of truth
+examples/
