@@ -334,6 +334,7 @@
     <Compile Include="UI\MessageBoxHelper.cs" />
     <Compile Include="URDF\Mimic.cs" />
     <Compile Include="Utilities\Logger.cs" />
+    <Compile Include="Utilities\Sw2gzUserDefaults.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>

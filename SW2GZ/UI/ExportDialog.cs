@@ -10,6 +10,7 @@ wizard, which only defines the structure.
 using System;
 using System.Windows.Forms;
 using SW2GZ.URDFExport;
+using SW2GZ.Utilities;
 
 namespace SW2GZ.UI
 {
@@ -28,6 +29,15 @@ namespace SW2GZ.UI
             StartPosition = FormStartPosition.CenterScreen;
             MaximizeBox = false; MinimizeBox = false;
 
+            // Fill empty per-doc fields from cross-assembly user defaults so a brand-new
+            // assembly inherits the user's identity instead of starting blank. The per-doc
+            // checkpoint still wins when populated; user defaults only paper over empties.
+            Sw2gzUserDefaults.Values defaults = Sw2gzUserDefaults.Load();
+            string seedOut    = !string.IsNullOrEmpty(config.OutputFolder) ? config.OutputFolder : defaults.LastOutputFolder;
+            string seedAuthor = !string.IsNullOrEmpty(config.Author)       ? config.Author       : defaults.Author;
+            string seedEmail  = !string.IsNullOrEmpty(config.Email)        ? config.Email        : defaults.Email;
+            string seedLic    = !string.IsNullOrEmpty(config.License)      ? config.License      : defaults.License;
+
             int links = config.Links != null ? config.Links.Count : 0;
             int joints = config.Joints != null ? config.Joints.Count : 0;
             Controls.Add(new Label
@@ -38,15 +48,15 @@ namespace SW2GZ.UI
             });
 
             int y = 58;
-            _out    = Row("Output folder", config.OutputFolder, ref y, browse: true);
-            _pkg    = Row("Package name",  config.PackageName,  ref y);
-            _author = Row("Author",        config.Author,       ref y);
-            _email  = Row("Email",         config.Email,        ref y);
+            _out    = Row("Output folder", seedOut,            ref y, browse: true);
+            _pkg    = Row("Package name",  config.PackageName, ref y);
+            _author = Row("Author",        seedAuthor,         ref y);
+            _email  = Row("Email",         seedEmail,          ref y);
 
             Controls.Add(new Label { Left = 12, Top = y + 3, Width = 110, Text = "License" });
             _lic = new ComboBox { Left = 128, Top = y, Width = 312 };
             _lic.Items.AddRange(new object[] { "", "MIT", "Apache-2.0", "BSD-3-Clause", "GPL-3.0-only", "Proprietary" });
-            _lic.Text = config.License ?? "";
+            _lic.Text = seedLic ?? "";
             Controls.Add(_lic);
             y += 38;
 
@@ -59,6 +69,16 @@ namespace SW2GZ.UI
                 _cfg.Author       = _author.Text.Trim();
                 _cfg.Email        = _email.Text.Trim();
                 _cfg.License      = _lic.Text.Trim();
+
+                // Persist user-stable fields across assemblies. PackageName is intentionally
+                // omitted — it should always be project-specific.
+                Sw2gzUserDefaults.Save(new Sw2gzUserDefaults.Values
+                {
+                    Author = _cfg.Author,
+                    Email = _cfg.Email,
+                    License = _cfg.License,
+                    LastOutputFolder = _cfg.OutputFolder,
+                });
             };
             Controls.Add(export);
             Controls.Add(cancel);
