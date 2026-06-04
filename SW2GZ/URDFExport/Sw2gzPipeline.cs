@@ -133,10 +133,30 @@ namespace SW2GZ.URDFExport
 
             foreach (LinkSpec spec in specs)
             {
-                // Tessellate primary part (first in list) for the visual mesh.
-                // v2.0: use first part path as the visual source; multi-body flattening deferred.
-                string primaryPath = spec.FlattenedPartPaths[0];
-                MeshData visual = _tess.Tessellate(primaryPath, TessellationLod.Fine);
+                // BUG FIX: tessellate ALL parts assigned to this link and union
+                // their meshes — assembly-frame vertices (the tessellator now
+                // bakes Component2.Transform2). Previous code took only the
+                // first part, silently dropping every other part's geometry.
+                MeshData visual;
+                if (spec.FlattenedPartPaths.Count == 1)
+                {
+                    visual = _tess.Tessellate(spec.FlattenedPartPaths[0], TessellationLod.Fine);
+                }
+                else
+                {
+                    var unionV = new List<System.Numerics.Vector3>();
+                    var unionT = new List<int>();
+                    System.Drawing.Color? unionColor = null;
+                    foreach (string partPath in spec.FlattenedPartPaths)
+                    {
+                        MeshData m = _tess.Tessellate(partPath, TessellationLod.Fine);
+                        int baseIdx = unionV.Count;
+                        unionV.AddRange(m.Vertices);
+                        foreach (int idx in m.Triangles) unionT.Add(baseIdx + idx);
+                        if (unionColor == null) unionColor = m.MaterialColor;
+                    }
+                    visual = new MeshData(unionV.ToArray(), unionT.ToArray(), unionColor);
+                }
 
                 // Build real convex hull (QuickHull) collision mesh from the visual mesh.
                 MeshData collision = ConvexHullCollider.Build(visual, ColliderStrategy.ConvexHull);
@@ -151,7 +171,8 @@ namespace SW2GZ.URDFExport
 
                 UrdfLink link = LinkBuilder.Build(spec.Name, agg, visual, collision);
                 links.Add(link);
-                linksWithPaths.Add((link, primaryPath));
+                // First part path drives appearance lookup (DefaultAppearanceSource).
+                linksWithPaths.Add((link, spec.FlattenedPartPaths[0]));
             }
 
             // ── Step 4: Joints (P2) ──────────────────────────────────────────

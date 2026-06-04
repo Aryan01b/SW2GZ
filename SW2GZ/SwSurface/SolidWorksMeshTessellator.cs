@@ -138,6 +138,31 @@ namespace SW2GZ.SwSurface
                     throw new Sw2gzMeshException(
                         "Tessellation produced no geometry for component: " + componentPathName);
 
+                // BUG FIX: ITessellation.GetVertexPoint returns coords in the
+                // PART's local origin — ignores the component's placement in
+                // the assembly. Without this, every part stacks at world (0,0,0).
+                // Apply Component2.Transform2 to each vertex → assembly frame.
+                // ArrayData layout: [0..8] rotation 3x3 row-major, [9..11]
+                // translation, [12] scale, [13..15] padding. Matches the
+                // convention already used by SolidWorksAssemblyWalker.RotateByComponent.
+                MathTransform xform = comp.Transform2;
+                double[] d = xform?.ArrayData as double[];
+                if (d != null && d.Length >= 12)
+                {
+                    double sc = (d.Length >= 13 && d[12] > 1e-9) ? d[12] : 1.0;
+                    for (int vi = 0; vi < verts.Count; vi++)
+                    {
+                        System.Numerics.Vector3 v = verts[vi];
+                        double rx = d[0] * v.X + d[1] * v.Y + d[2] * v.Z;
+                        double ry = d[3] * v.X + d[4] * v.Y + d[5] * v.Z;
+                        double rz = d[6] * v.X + d[7] * v.Y + d[8] * v.Z;
+                        verts[vi] = new System.Numerics.Vector3(
+                            (float)(rx * sc + d[9]),
+                            (float)(ry * sc + d[10]),
+                            (float)(rz * sc + d[11]));
+                    }
+                }
+
                 // Extract material color from the model doc (same source as v1 ExportHelperExtension).
                 // ModelDoc2.MaterialPropertyValues → double[9]
                 // [ R, G, B, Ambient, Diffuse, Specular, Shininess, Transparency, Emission ]

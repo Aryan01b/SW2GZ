@@ -35,6 +35,20 @@ No new features, no API breaks.
   with its joint type, `xyz`, `rpy` (radians AND degrees), axis, and
   limits — so the SW→ROS rotation on `world_to_<root>` is visible at a
   glance. Pulled into the PreviewDialog as a new "TF frames" tab.
+- **Mesh export: assembly-frame vertices + multi-part link union.**
+  Two long-standing bugs caused the 3D preview to render every link as a
+  small blob at world origin:
+  - `SolidWorksMeshTessellator` returned vertices in each part's **local**
+    origin, ignoring the component's placement in the assembly
+    (`Component2.Transform2`). Now baked in via the same row-major
+    `MathTransform.ArrayData` convention used by
+    `SolidWorksAssemblyWalker.RotateByComponent`.
+  - `Sw2gzPipeline` tessellated only the **first** part of a multi-part
+    link (`spec.FlattenedPartPaths[0]`), silently dropping every other
+    part's geometry. Now loops all parts and unions vertices + indices.
+  Joint origins still emit identity until the wizard captures them from
+  the selected mate's reference geometry — that's the follow-up that
+  makes Gz articulation correct. For now spawn-pose visual is correct.
 - **3D render tab in preview.** New WPF `Robot3DViewport`
   (`UrdfTransforms` + `StlBinaryParser`) loads each link's collision STL,
   applies the URDF joint-chain transforms to position it in the world
