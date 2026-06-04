@@ -33,7 +33,8 @@ def generate_launch_description():
                parameters=[{'robot_description': robot_desc, 'use_sim_time': True}])
 
     spawn = Node(package='ros_gz_sim', executable='create',
-                 arguments=['-topic', 'robot_description', '-name', 'three_dof_arm_description'],
+                 arguments=['-topic', 'robot_description', '-name', 'three_dof_arm_description',
+                            '-R', '0', '-P', '0', '-Y', '0'],
                  output='screen')
 
     bridge = Node(package='ros_gz_bridge', executable='parameter_bridge',

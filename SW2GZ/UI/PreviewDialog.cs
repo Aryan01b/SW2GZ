@@ -1,16 +1,15 @@
 /*
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
-Read-only preview of what Sw2gzModelExporter would write. Driven by
-Sw2gzModelPreviewer (which runs the real pipeline against a temp dir so the
-user sees the authoritative output, not a hand-rolled summary).
+3D-only preview of what Sw2gzModelExporter would write. The pipeline runs
+against a temp directory; this dialog renders the resulting collision STLs
+in a WPF Viewport3D (Robot3DViewport) — same code path as the real export,
+so what you see is what you get.
 
-Tabs:
-  - Summary  — mode/pkg/links/joints/coord convention + output paths.
-  - URDF/SDF — the .urdf.xacro (Robot Package) or model.sdf (Gz modes).
-  - Launch   — the per-mode launch.py.
-  - Log      — sw2gz_export.log produced by the pipeline.
-  - Warnings — validation issues (warnings only; errors throw before preview).
+Buttons:
+  - Open temp folder    — Explorer on the workspace (for browsing files).
+  - Back to edit        — close, return to ExportDialog.
+  - Looks good — Export — close OK, ExportDialog proceeds to real export.
 
 Closing the dialog deletes the temp workspace (best-effort).
 */
@@ -32,20 +31,23 @@ namespace SW2GZ.UI
         {
             _result = result ?? throw new ArgumentNullException(nameof(result));
 
-            Text = "SW2GZ — Export preview (read-only)";
-            Width = 880; Height = 620;
+            Text = "SW2GZ — 3D preview";
+            Width = 960; Height = 720;
             StartPosition = FormStartPosition.CenterScreen;
-            MinimumSize = new System.Drawing.Size(620, 420);
+            MinimumSize = new System.Drawing.Size(640, 480);
             FormBorderStyle = FormBorderStyle.Sizable;
             MaximizeBox = true; MinimizeBox = false;
+
+            int warnings = 0;
+            if (result.Report != null) foreach (var _ in result.Report.Warnings) warnings++;
+            string warnSuffix = warnings > 0 ? "  |  " + warnings + " warning(s)" : "";
 
             var header = new Label
             {
                 Dock = DockStyle.Top,
-                Height = 36,
-                Padding = new Padding(12, 8, 12, 0),
-                Text = "Preview of " + result.Mode + " — review before exporting. " +
-                       "Files shown are the actual output of the pipeline, written to a temp folder.",
+                Height = 28,
+                Padding = new Padding(12, 6, 12, 0),
+                Text = result.Mode + "  ·  " + System.IO.Path.GetFileName(result.WorkspaceDir) + warnSuffix,
             };
             Controls.Add(header);
 
@@ -69,79 +71,28 @@ namespace SW2GZ.UI
             AcceptButton = confirm;
             CancelButton = back;
 
-            var tabs = new TabControl { Dock = DockStyle.Fill };
-            tabs.TabPages.Add(MakeTab("Summary",
-                result.SummaryText + WarningsBlock(result.Report)));
-            tabs.TabPages.Add(Make3DTab(result));
-            tabs.TabPages.Add(MakeTab("TF frames", result.TfTreeText));
-            tabs.TabPages.Add(MakeTab(result.UrdfOrSdfFileName, result.UrdfOrSdfText));
-            tabs.TabPages.Add(MakeTab(result.LaunchFileName, result.LaunchText));
-            tabs.TabPages.Add(MakeTab("sw2gz_export.log", result.LogText));
-            Controls.Add(tabs);
-            Controls.SetChildIndex(tabs, 0);   // fill below header, above buttons
-
-            FormClosed += (s, e) => CleanupTempDir();
-        }
-
-        // Embeds a WPF Viewport3D (Robot3DViewport) via ElementHost. WPF refs
-        // are already on the csproj for TreeMergeWPF; WindowsFormsIntegration
-        // gives us ElementHost. Best-effort: a constructor failure (e.g. STL
-        // could not be read) shows a label instead of crashing the tab.
-        private static TabPage Make3DTab(Sw2gzModelPreviewer.PreviewResult result)
-        {
-            var page = new TabPage("3D");
+            Control viewport;
             try
             {
-                var host = new ElementHost
+                viewport = new ElementHost
                 {
                     Dock = DockStyle.Fill,
                     Child = new Robot3DViewport(result.MeshesDir, result.UrdfOrSdfText),
                 };
-                page.Controls.Add(host);
             }
             catch (Exception ex)
             {
-                page.Controls.Add(new Label
+                viewport = new Label
                 {
                     Dock = DockStyle.Fill,
                     TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
                     Text = "3D preview unavailable: " + ex.Message,
-                });
+                };
             }
-            return page;
-        }
+            Controls.Add(viewport);
+            Controls.SetChildIndex(viewport, 0);   // fill between header and buttons
 
-        private TabPage MakeTab(string title, string text)
-        {
-            var page = new TabPage(title);
-            var tb = new TextBox
-            {
-                Dock = DockStyle.Fill,
-                Multiline = true,
-                ReadOnly = true,
-                ScrollBars = ScrollBars.Both,
-                WordWrap = false,
-                Font = new System.Drawing.Font(System.Drawing.FontFamily.GenericMonospace, 9.0f),
-                Text = text ?? string.Empty,
-            };
-            page.Controls.Add(tb);
-            return page;
-        }
-
-        private static string WarningsBlock(SW2GZ.Validate.ValidationReport report)
-        {
-            if (report == null) return string.Empty;
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine();
-            sb.AppendLine("Warnings:");
-            bool any = false;
-            foreach (SW2GZ.Validate.ValidationIssue w in report.Warnings)
-            {
-                sb.AppendLine("  - [" + w.Code + "] " + w.Message);
-                any = true;
-            }
-            if (!any) sb.AppendLine("  (none)");
-            return sb.ToString();
+            FormClosed += (s, e) => CleanupTempDir();
         }
 
         private void OpenTempFolder()

@@ -65,6 +65,15 @@ namespace SW2GZ.Write.Urdf
         /// limits. Used by the full-stack export path; tests of pure
         /// `SerializeBody(model)` remain byte-identical.
         public static string SerializeBodyForRobot(RobotModel model, string rootLink)
+            => SerializeBodyForRobot(model, rootLink, emitWorldLink: false);
+
+        /// `emitWorldLink` controls whether the body is prefixed with
+        /// `<link name="world"/>` + a `world_to_<root>` fixed joint. ROS REP-105
+        /// convention is that `base_link` IS the root (no world frame in URDF);
+        /// external `static_transform_publisher` provides world placement when
+        /// needed. Set true to embed the world frame for fixed-base manipulators
+        /// (Gz anchoring via the URDF itself rather than launch-side spawn args).
+        public static string SerializeBodyForRobot(RobotModel model, string rootLink, bool emitWorldLink)
         {
             if (model == null) throw new System.ArgumentNullException(nameof(model));
             string pkgEsc = SecurityElement.Escape(model.Meta.PackageName);
@@ -73,15 +82,12 @@ namespace SW2GZ.Write.Urdf
             string anchor = string.IsNullOrEmpty(rootLink) && model.Links.Count > 0
                 ? model.Links[0].Link.Name
                 : rootLink;
-            if (!string.IsNullOrEmpty(anchor))
+            if (emitWorldLink && !string.IsNullOrEmpty(anchor))
             {
                 string anchorEsc = SecurityElement.Escape(anchor);
-                // Apply the SW→ROS rotation HERE (and only here). The robot
-                // body inside this fixed joint stays in its native SW frame —
-                // meshes, link/joint poses, joint axes — all consistent with
-                // each other. The rotation aligns SW's "up" with world Z and
-                // SW's "forward" with world X. CoordinateConvention.Identity
-                // emits the legacy "rpy=0 0 0" output (golden parity).
+                // SW→ROS rotation rides on this fixed joint. Mesh frames and
+                // joint origins inside the body stay in native SW frame; this
+                // single rotation puts the whole robot into ROS world.
                 (double roll, double pitch, double yaw) =
                     model.Meta.Frame.SwToRos.ToRpy();
                 string rpyStr =

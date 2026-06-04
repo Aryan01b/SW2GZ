@@ -89,7 +89,8 @@ namespace SW2GZ.URDFExport
                                     string author, string email, string license,
                                     IReadOnlyList<SensorDef> sensors, StackProfile profile,
                                     ExportMode mode = ExportMode.RobotPackage,
-                                    CoordinateConvention coord = null)
+                                    CoordinateConvention coord = null,
+                                    bool emitWorldLink = false)
         {
             if (sensors == null) throw new ArgumentNullException(nameof(sensors));
             if (profile == null) throw new ArgumentNullException(nameof(profile));
@@ -347,13 +348,19 @@ namespace SW2GZ.URDFExport
                         StlWriter.Write(link.CollisionMesh, Path.Combine(meshesDir, link.CollisionMeshFile));
                     }
 
-                    // Full-stack body: prepend world link + fixed joint to root
-                    // (so the robot doesn't fall in Gz) and apply nonzero defaults
-                    // to zero-effort/velocity joint limits. Model-only export keeps
-                    // the legacy bare-bones SerializeBody.
+                    // Full-stack body: optionally prepend world link + fixed joint
+                    // (REP-105 default is no world link — base_link is root). Apply
+                    // nonzero defaults to zero effort/velocity joint limits.
+                    // Model-only export keeps the legacy bare-bones SerializeBody.
                     string bodyXml = fullStack
-                        ? XacroGenerator.SerializeBodyForRobot(model, rootLink)
+                        ? XacroGenerator.SerializeBodyForRobot(model, rootLink, emitWorldLink)
                         : XacroGenerator.SerializeBody(model);
+
+                    // SW→ROS rotation. If the URDF embeds a world link the rotation
+                    // is already on world_to_<root> — pass identity to the launch.
+                    // Otherwise the launch's spawn -R -P -Y carries it (REP-105 path).
+                    (double urdfRoll, double urdfPitch, double urdfYaw) =
+                        emitWorldLink ? (0.0, 0.0, 0.0) : coord.SwToRos.ToRpy();
 
                     // package.xml
                     File.WriteAllText(
@@ -405,7 +412,9 @@ namespace SW2GZ.URDFExport
                     // off the spawn action inside gz_sim.launch.py).
                     string launchDir = Path.Combine(root, "launch");
                     File.WriteAllText(Path.Combine(launchDir, "gz_sim.launch.py"),
-                        fullStack ? LaunchPyWriter.GzSim(pkg) : LaunchPyWriter.GzSimModelOnly(pkg));
+                        fullStack
+                            ? LaunchPyWriter.GzSim(pkg, urdfRoll, urdfPitch, urdfYaw)
+                            : LaunchPyWriter.GzSimModelOnly(pkg, urdfRoll, urdfPitch, urdfYaw));
 
                     if (fullStack)
                     {

@@ -1133,7 +1133,8 @@ namespace SW2GZ.URDFExport
                     new Sw2gzPipeline(mass, walker, tess, appearances).Run(
                         config.OutputFolder, config.PackageName, config.Author, config.Email, config.License,
                         System.Array.Empty<SensorDef>(),
-                        config.Stacks ?? SW2GZ.Ros2.StackProfile.Default(), config.Mode, coord);
+                        config.Stacks ?? SW2GZ.Ros2.StackProfile.Default(), config.Mode, coord,
+                        config.EmitWorldLink);
 
                 string ws = Path.Combine(config.OutputFolder, pkg + "_ws");
                 if (report.HasErrors)

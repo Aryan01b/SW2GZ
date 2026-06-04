@@ -49,7 +49,7 @@ namespace SW2GZ.URDFExport
 
             return new Sw2gzPipeline(mass, walker, tess, appearances).Run(
                 outputDirOverride, config.PackageName, config.Author, config.Email, config.License,
-                System.Array.Empty<SensorDef>(), profile, config.Mode, coord);
+                System.Array.Empty<SensorDef>(), profile, config.Mode, coord, config.EmitWorldLink);
         }
 
         public static string WorkspacePath(string outputFolder, string packageName) =>

@@ -34,6 +34,15 @@ namespace SW2GZ.URDFExport
         [DataMember] public SW2GZ.Build.Model.AxisDirection SwForwardAxis { get; set; }
             = SW2GZ.Build.Model.AxisDirection.PlusZ;
 
+        // Whether to emit a synthetic <link name="world"/> + world_to_<root>
+        // fixed joint that anchors the robot to a known ROS frame. False by
+        // default (REP-105 convention: base_link IS the root; an external
+        // static_transform_publisher handles world placement if needed). Set
+        // true for fixed-base manipulators where you want the world frame in
+        // the URDF itself (Gz still anchors via Gazebo &lt;static&gt; or a
+        // separate fixed joint when off).
+        [DataMember] public bool EmitWorldLink { get; set; } = false;
+
         // Step 2 — output destination, package identity, and package metadata.
         [DataMember] public string OutputFolder { get; set; } = string.Empty;
         [DataMember] public string PackageName { get; set; } = string.Empty;
@@ -79,6 +88,7 @@ namespace SW2GZ.URDFExport
             // SW-default convention here so old checkpoints behave correctly.
             SwUpAxis = SW2GZ.Build.Model.AxisDirection.PlusY;
             SwForwardAxis = SW2GZ.Build.Model.AxisDirection.PlusZ;
+            EmitWorldLink = false;
         }
     }
 }
