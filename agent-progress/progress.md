@@ -1,10 +1,16 @@
 # Progress
 
-Current: **v2.1.0** on `main`. Phase 1 shipped; Phase 2/3 mode wiring done,
-wizard UI for new modes is next.
+Current: **v2.1.1** stabilization on `v2.1.1-stabilization` branch (pending PR
+→ `main`, then tag + GitHub release). Phase 1 shipped in 2.1.0; v2.1.1 is the
+first GitHub release after v2.0.0 (v2.1.0 folded in).
 
 ## Done
 
+- **v2.1.1 stabilization** (7 items shipped on `v2.1.1-stabilization`):
+  ribbon null-safety + DRY, ExportDialog cross-assembly defaults + named
+  link/joint summary, pipeline preflight + atomic re-export + per-run log,
+  COM-boundary catch-all, stale-test cleanup, golden refresh. Test suite
+  605/605 green, Release DLL builds.
 - **Phase 1 — RobotPackage export** (v2.1.0, CHANGELOG.md). Wizard +
   one-click Export → turn-key ROS 2 Jazzy / Gz Harmonic package.
 - **Pipeline groundwork P1–P9**: `RobotModel` aggregate, inertial math,
