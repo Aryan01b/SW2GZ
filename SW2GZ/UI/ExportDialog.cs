@@ -8,7 +8,10 @@ wizard, which only defines the structure.
 */
 #if SW_INTEROP
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows.Forms;
+using SW2GZ.Build.Model;
 using SW2GZ.URDFExport;
 using SW2GZ.Utilities;
 
@@ -24,7 +27,7 @@ namespace SW2GZ.UI
         {
             _cfg = config;
             Text = "SW2GZ — Export model";
-            Width = 470; Height = 360;
+            Width = 470; Height = 410;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterScreen;
             MaximizeBox = false; MinimizeBox = false;
@@ -42,12 +45,11 @@ namespace SW2GZ.UI
             int joints = config.Joints != null ? config.Joints.Count : 0;
             Controls.Add(new Label
             {
-                Left = 12, Top = 12, Width = 432, Height = 38,
-                Text = "Implemented:  " + links + " link(s), " + joints + " joint(s).\r\n" +
-                       "Export type:  bare robot model — no control, no Gazebo plugins.",
+                Left = 12, Top = 12, Width = 432, Height = 86,
+                Text = SummaryText(config, links, joints),
             });
 
-            int y = 58;
+            int y = 106;
             _out    = Row("Output folder", seedOut,            ref y, browse: true);
             _pkg    = Row("Package name",  config.PackageName, ref y);
             _author = Row("Author",        seedAuthor,         ref y);
@@ -84,6 +86,60 @@ namespace SW2GZ.UI
             Controls.Add(cancel);
             AcceptButton = export;
             CancelButton = cancel;
+        }
+
+        // 4-line preview header: counts on line 1, link names on line 2, joint
+        // edges on line 3, export-type note on line 4. Names/edges are truncated
+        // with "+N more" so the dialog stays a fixed size even for big assemblies.
+        private static string SummaryText(Sw2gzExportConfig config, int linkCount, int jointCount)
+        {
+            string linkLine = "  Links:    " + FormatLinkNames(config.Links);
+            string jointLine = "  Joints:   " + FormatJointEdges(config.Joints);
+            return "Implemented:  " + linkCount + " link(s), " + jointCount + " joint(s).\r\n" +
+                   linkLine + "\r\n" +
+                   jointLine + "\r\n" +
+                   "Export type:  bare robot model — no control, no Gazebo plugins.";
+        }
+
+        private static string FormatLinkNames(List<LinkDef> links)
+        {
+            if (links == null || links.Count == 0) return "(none)";
+            return TruncateList(links.Select(l => l.Name ?? "?"), maxChars: 70);
+        }
+
+        private static string FormatJointEdges(List<JointDef> joints)
+        {
+            if (joints == null || joints.Count == 0) return "(none)";
+            return TruncateList(
+                joints.Select(j =>
+                    (string.IsNullOrEmpty(j.ParentLink) ? "?" : j.ParentLink) + "→" +
+                    (string.IsNullOrEmpty(j.ChildLink) ? "?" : j.ChildLink) +
+                    " (" + j.Type + ")"),
+                maxChars: 70);
+        }
+
+        // Joins items with ", " until adding the next would exceed maxChars; the
+        // remainder gets summarised as "+N more" so long lists never wrap the dialog.
+        private static string TruncateList(IEnumerable<string> items, int maxChars)
+        {
+            var list = items.ToList();
+            if (list.Count == 0) return "(none)";
+            var sb = new System.Text.StringBuilder();
+            int shown = 0;
+            for (int i = 0; i < list.Count; i++)
+            {
+                string sep = (shown == 0) ? "" : ", ";
+                int projected = sb.Length + sep.Length + list[i].Length;
+                int remaining = list.Count - i;
+                // Reserve room for ", +N more" if more items would follow.
+                int reserve = (remaining > 1) ? (", +" + (remaining - 1) + " more").Length : 0;
+                if (projected + reserve > maxChars && shown > 0) break;
+                sb.Append(sep).Append(list[i]);
+                shown++;
+            }
+            if (shown < list.Count)
+                sb.Append(", +").Append(list.Count - shown).Append(" more");
+            return sb.ToString();
         }
 
         private TextBox Row(string label, string value, ref int y, bool browse = false)
