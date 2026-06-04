@@ -145,7 +145,7 @@ namespace SW2GZ.URDFExport
             // return an empty list (no mates / skeleton walker) — joints then stay
             // empty, identical to the pre-P2 behaviour (links export at origin).
             IReadOnlyList<MateSpec> mates = _walker.WalkMates();
-            var (graphJoints, _root, jointWarnings) = JointGraphBuilder.Build(links, mates);
+            var (graphJoints, rootLink, jointWarnings) = JointGraphBuilder.Build(links, mates);
             var joints = new List<UrdfJoint>(graphJoints);
 
             // JointGraphBuilder warnings are non-fatal — collect them as
@@ -260,10 +260,13 @@ namespace SW2GZ.URDFExport
                         StlWriter.Write(link.CollisionMesh, Path.Combine(meshesDir, link.CollisionMeshFile));
                     }
 
-                    // Body XML routed through the dedicated serializer. The legacy
-                    // BuildUrdfBodyXml helper is gone — UrdfSerializer reproduces
-                    // its bytes exactly for the same input.
-                    string bodyXml = UrdfSerializer.SerializeBody(model);
+                    // Full-stack body: prepend world link + fixed joint to root
+                    // (so the robot doesn't fall in Gz) and apply nonzero defaults
+                    // to zero-effort/velocity joint limits. Model-only export keeps
+                    // the legacy bare-bones SerializeBody.
+                    string bodyXml = fullStack
+                        ? XacroGenerator.SerializeBodyForRobot(model, rootLink)
+                        : XacroGenerator.SerializeBody(model);
 
                     // package.xml
                     File.WriteAllText(
@@ -286,7 +289,7 @@ namespace SW2GZ.URDFExport
                     // empty list emits a placeholder comment so the file still parses).
                     File.WriteAllText(
                         Path.Combine(root, "urdf", "inc", "materials.xacro"),
-                        UrdfSerializer.SerializeMaterialsXacro(model.Materials));
+                        XacroGenerator.SerializeMaterialsXacro(model.Materials));
 
                     var jointNames = new List<string>();
                     foreach (UrdfJoint j in joints) jointNames.Add(j.Name);
@@ -309,20 +312,16 @@ namespace SW2GZ.URDFExport
                         Path.Combine(root, "worlds", "empty.sdf"),
                         SdfWorldWriter.Write(new SdfWorldInput("empty"), model.Sensors));
 
-                    // launch/
+                    // launch/ — single gz_sim.launch.py is the only entry point.
+                    // No rviz (Gz is the viewport), no separate display launch, no
+                    // standalone ros2_control launch (controller spawners chain
+                    // off the spawn action inside gz_sim.launch.py).
                     string launchDir = Path.Combine(root, "launch");
-                    File.WriteAllText(Path.Combine(launchDir, "display.launch.py"), LaunchPyWriter.Display(pkg));
-                    // gated by actuation backend (D1: Ros2Control == full stack)
                     File.WriteAllText(Path.Combine(launchDir, "gz_sim.launch.py"),
                         fullStack ? LaunchPyWriter.GzSim(pkg) : LaunchPyWriter.GzSimModelOnly(pkg));
 
-                    // gated by actuation backend (D1: Ros2Control == full stack)
                     if (fullStack)
                     {
-                        File.WriteAllText(Path.Combine(launchDir, "ros2_control.launch.py"),
-                            LaunchPyWriter.Ros2Control(pkg));
-
-                        // config/
                         File.WriteAllText(
                             Path.Combine(root, "config", "controllers.yaml"),
                             ControllersYaml.Write(new ControllersInput(pkg, jointNames)));

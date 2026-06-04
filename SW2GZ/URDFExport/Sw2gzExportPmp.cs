@@ -128,6 +128,14 @@ namespace SW2GZ.URDFExport
         // All mates in the assembly, backing the mate list (indexed by position).
         private List<MateInfo> allMates = new List<MateInfo>();
 
+        // Indices into allMates currently shown in the (filtered) mate list, in
+        // order — translates a list-row click back to an allMates entry.
+        private List<int> visibleMateIndices = new List<int>();
+
+        // Guards against SW firing OnListboxSelectionChanged during Clear/AddItems
+        // (which would mis-assign the first visible mate to the joint).
+        private bool suppressMateListEvents = false;
+
         // Step model — placeholder headings + descriptions only (no real controls).
         private static readonly string[] StepNames =
         {
@@ -767,12 +775,36 @@ namespace SW2GZ.URDFExport
             PopulateJointList();
         }
 
+        // Shows only mates that span the active joint's parent + child link (in
+        // either order). Falls back to "all mates" when no joint is selected or
+        // the mate's two link names weren't captured (older COM path).
         private void PopulateMateList()
         {
             if (PMListMates == null) return;
-            PMListMates.Clear();
-            foreach (MateInfo m in allMates)
-                PMListMates.AddItems(m.Name + "  [" + m.Kind + "]");
+            suppressMateListEvents = true;
+            try
+            {
+                PMListMates.Clear();
+                visibleMateIndices.Clear();
+
+                JointDef j = ActiveJoint();
+                string p = j?.ParentLink, c = j?.ChildLink;
+                bool filter = j != null && !string.IsNullOrEmpty(p) && !string.IsNullOrEmpty(c);
+
+                for (int i = 0; i < allMates.Count; i++)
+                {
+                    MateInfo m = allMates[i];
+                    if (filter)
+                    {
+                        if (string.IsNullOrEmpty(m.LinkA) || string.IsNullOrEmpty(m.LinkB)) continue;
+                        bool spans = (m.LinkA == p && m.LinkB == c) || (m.LinkA == c && m.LinkB == p);
+                        if (!spans) continue;
+                    }
+                    visibleMateIndices.Add(i);
+                    PMListMates.AddItems(m.Name + "  [" + m.Kind + "]");
+                }
+            }
+            finally { suppressMateListEvents = false; }
         }
 
         // Refreshes the joint list — each row shows the joint name + assigned mate.
@@ -816,6 +848,7 @@ namespace SW2GZ.URDFExport
                 PMLabelDetailLimits.Caption = (j == null || !limited) ? ""
                     : "Limits:  lower " + Fmt(j.LimitLower) + ",  upper " + Fmt(j.LimitUpper);
 
+            PopulateMateList();
             HighlightActiveMate();
         }
 
@@ -826,18 +859,26 @@ namespace SW2GZ.URDFExport
         private void HighlightActiveMate()
         {
             JointDef j = ActiveJoint();
-            if (j == null || string.IsNullOrEmpty(j.MateName)) return;
-            try { new SolidWorksAssemblyWalker((AssemblyDoc)model).HighlightMate(j.MateName); }
-            catch (Exception e) { logger.Warn("Could not highlight mate in the viewport.", e); }
+            if (j == null) { logger.Info("[HL] HighlightActiveMate: no active joint"); return; }
+            if (string.IsNullOrEmpty(j.MateName)) { logger.Info("[HL] HighlightActiveMate: joint '" + j.Name + "' has no mate assigned"); return; }
+            logger.Info("[HL] HighlightActiveMate: joint='" + j.Name + "' mate='" + j.MateName + "'");
+            try
+            {
+                bool ok = new SolidWorksAssemblyWalker((AssemblyDoc)model).HighlightMate(j.MateName);
+                logger.Info("[HL] HighlightActiveMate: walker returned " + ok);
+            }
+            catch (Exception e) { logger.Warn("[HL] HighlightActiveMate threw.", e); }
         }
 
         // Assigns the mate at 'mateIndex' to the selected joint: the mate's kind
         // sets the joint type, and its axis/limits are copied in. The mate is then
         // highlighted in the viewport (via the details refresh) to verify it.
-        private void AssignMateToActiveJoint(int mateIndex)
+        private void AssignMateToActiveJoint(int visibleIndex)
         {
             JointDef j = ActiveJoint();
             if (j == null) { swApp.SendMsgToUser("Select a joint first, then a mate."); return; }
+            if (visibleIndex < 0 || visibleIndex >= visibleMateIndices.Count) return;
+            int mateIndex = visibleMateIndices[visibleIndex];
             if (mateIndex < 0 || mateIndex >= allMates.Count) return;
 
             MateInfo m = allMates[mateIndex];
@@ -1186,7 +1227,11 @@ namespace SW2GZ.URDFExport
         void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item)
         {
             if (Id == ListJointsID) { activeJointIndex = Item; UpdateJointDetails(); }
-            else if (Id == ListMatesID) AssignMateToActiveJoint(Item);
+            else if (Id == ListMatesID)
+            {
+                if (suppressMateListEvents) return;
+                AssignMateToActiveJoint(Item);
+            }
         }
         void IPropertyManagerPage2Handler9.OnListboxRMBUp(int Id, int PosX, int PosY) { }
         void IPropertyManagerPage2Handler9.OnGroupCheck(int Id, bool Checked) { }

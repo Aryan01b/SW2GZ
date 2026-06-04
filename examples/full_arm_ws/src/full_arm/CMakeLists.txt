@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(three_dof_arm_description)
+project(full_arm)
 
 find_package(ament_cmake REQUIRED)
 

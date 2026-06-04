@@ -458,7 +458,7 @@
     <Compile Include="Build\Model\RobotModel.cs" />
     <Compile Include="Build\Model\GeometryAssignment.cs" />
     <Compile Include="Build\RobotModelBuilder.cs" />
-    <Compile Include="Write\Urdf\UrdfSerializer.cs" />
+    <Compile Include="Write\Urdf\XacroGenerator.cs" />
     <Compile Include="Build\LinkBuilder.cs" />
     <Compile Include="Build\MateSpec.cs" />
     <Compile Include="Build\JointBuilder.cs" />

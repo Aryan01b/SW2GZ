@@ -1,29 +1,25 @@
 /*
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
-P1 — RobotModel keystone: URDF body serializer. Consumes the immutable
-RobotModel and emits the children of <robot>...</robot> (i.e. the
-fragment that XacroWriter wraps).
+XacroGenerator (formerly UrdfSerializer) — RobotModel → xacro/URDF emitter.
+Consumes the immutable RobotModel and emits the children of <robot>...</robot>
+(the fragment that XacroWriter wraps).
 
-Design decision (byte-parity):
-  The legacy Sw2gzPipeline.BuildUrdfBodyXml used StringBuilder.AppendLine
-  with explicit formatting (per-line CultureInfo.InvariantCulture floats,
-  SecurityElement.Escape on every dynamic value, two-space indent).
-  Golden tests compare URDF output, and although the existing golden
-  for `<link name="base_link"/>` is normalized to LF, the pipeline-fed
-  tests (Sw2gzPipelineTests / BugAcceptanceTests) check substrings, not
-  whitespace. To guarantee byte-for-byte compatibility with the legacy
-  output (and avoid xml-library quirks like attribute reordering and
-  self-closing-vs-explicit-close differences), this serializer keeps the
-  StringBuilder pattern. XElement-based emission was considered but
-  rejected — the legacy two-space indent + AppendLine output is small,
-  audited, and trivially reproducible; reaching the same bytes via
-  XElement requires custom XmlWriterSettings tweaks that buy nothing
-  beyond what StringBuilder already gives us.
+Output paths:
+  SerializeBody(model)             — bare URDF body; byte-identical to legacy
+                                     output, preserved for golden tests.
+  SerializeBodyForRobot(model, r)  — full-stack robot URDF: prepends a world
+                                     link + fixed joint to the root (so the
+                                     robot is anchored in Gz), and applies
+                                     nonzero defaults to zero effort/velocity
+                                     joint limits (ros2_control + Gz physics
+                                     reject zero).
+  SerializeMaterialsXacro(mats)    — inc/materials.xacro contents.
+  SerializeGazeboSensorBlocks(s)   — <gazebo reference=link> sensor blocks.
 
-Joints: serializes standard URDF <joint> blocks if model.Joints is
-non-empty. v2.1 pipeline still passes empty joints, so this exists
-for P2 (joint-graph pass) — covered by direct unit tests now.
+Formatting: StringBuilder with explicit two-space indent + InvariantCulture
+floats + SecurityElement.Escape. XElement was considered but rejected for
+the same byte-parity reason the original serializer kept it.
 */
 using System.Collections.Generic;
 using System.Globalization;
@@ -36,7 +32,7 @@ using SW2GZ.Math;
 
 namespace SW2GZ.Write.Urdf
 {
-    public static class UrdfSerializer
+    public static class XacroGenerator
     {
         /// Returns the URDF body XML (children of &lt;robot&gt;...). Byte-identical
         /// to the legacy Sw2gzPipeline.BuildUrdfBodyXml output for the same input,
@@ -50,13 +46,51 @@ namespace SW2GZ.Write.Urdf
                 AppendLink(sb, ml, pkgEsc);
 
             foreach (UrdfJoint j in model.Joints)
-                AppendJoint(sb, j);
+                AppendJoint(sb, j, DefaultEffort, DefaultVelocity, applyDefaults: false);
 
-            // P6-data — emit <gazebo reference="$link"> blocks for any sensors
-            // attached to each link. Empty Sensors -> empty string -> byte-
-            // identical body output (golden parity).
             sb.Append(SerializeGazeboSensorBlocks(model.Sensors));
 
+            return sb.ToString();
+        }
+
+        // Defaults applied to revolute/prismatic/continuous joints when the
+        // source mate carried zero limits — URDF accepts zero but ros2_control
+        // JTC + Gz physics treat them as "no actuation possible".
+        private const double DefaultEffort   = 100.0;
+        private const double DefaultVelocity = 1.0;
+
+        /// Robot-ready URDF body: prepends a `<link name="world"/>` plus a fixed
+        /// joint anchoring the root link to it (so the robot doesn't fall in Gz),
+        /// and applies nonzero defaults to any zero-effort / zero-velocity joint
+        /// limits. Used by the full-stack export path; tests of pure
+        /// `SerializeBody(model)` remain byte-identical.
+        public static string SerializeBodyForRobot(RobotModel model, string rootLink)
+        {
+            if (model == null) throw new System.ArgumentNullException(nameof(model));
+            string pkgEsc = SecurityElement.Escape(model.Meta.PackageName);
+            var sb = new StringBuilder();
+
+            string anchor = string.IsNullOrEmpty(rootLink) && model.Links.Count > 0
+                ? model.Links[0].Link.Name
+                : rootLink;
+            if (!string.IsNullOrEmpty(anchor))
+            {
+                string anchorEsc = SecurityElement.Escape(anchor);
+                sb.AppendLine("  <link name=\"world\"/>");
+                sb.AppendLine($"  <joint name=\"world_to_{anchorEsc}\" type=\"fixed\">");
+                sb.AppendLine("    <parent link=\"world\"/>");
+                sb.AppendLine($"    <child link=\"{anchorEsc}\"/>");
+                sb.AppendLine("    <origin xyz=\"0 0 0\" rpy=\"0 0 0\"/>");
+                sb.AppendLine("  </joint>");
+            }
+
+            foreach (ModelLink ml in model.Links)
+                AppendLink(sb, ml, pkgEsc);
+
+            foreach (UrdfJoint j in model.Joints)
+                AppendJoint(sb, j, DefaultEffort, DefaultVelocity, applyDefaults: true);
+
+            sb.Append(SerializeGazeboSensorBlocks(model.Sensors));
             return sb.ToString();
         }
 
@@ -71,7 +105,6 @@ namespace SW2GZ.Write.Urdf
             if (sensors == null || sensors.Count == 0)
                 return string.Empty;
 
-            // Preserve first-seen-link order while grouping.
             var order = new List<string>();
             var groups = new Dictionary<string, List<SensorDef>>(System.StringComparer.Ordinal);
             foreach (SensorDef s in sensors)
@@ -92,10 +125,6 @@ namespace SW2GZ.Write.Urdf
                 sb.AppendLine($"  <gazebo reference=\"{linkEsc}\">");
                 foreach (SensorDef s in groups[linkName])
                 {
-                    // SdfSensorBlocks defaults to 6-space indent which lines up
-                    // with the legacy two-space indent doubled-then-some inside
-                    // the <gazebo> wrapper. Pass 4 so the sensor sits at
-                    // <gazebo>(2) -> <sensor>(4).
                     sb.Append(SdfSensorBlocks.Write(s, indentSpaces: 4));
                 }
                 sb.AppendLine("  </gazebo>");
@@ -159,17 +188,12 @@ namespace SW2GZ.Write.Urdf
             sb.AppendLine("    </inertial>");
             if (ml.MaterialName == null)
             {
-                // Legacy byte-identical path: no <material> tag.
                 sb.AppendLine("    <visual><geometry>");
                 sb.AppendLine($"      <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.VisualMeshFile)}\"/>");
                 sb.AppendLine("    </geometry></visual>");
             }
             else
             {
-                // P5: emit <material name="..."/> reference inside <visual>.
-                // The full color block lives in inc/materials.xacro and is
-                // pulled in by the xacro include — URDF best practice is to
-                // reference by name, not duplicate the color inline.
                 string matEsc = SecurityElement.Escape(ml.MaterialName);
                 sb.AppendLine("    <visual>");
                 sb.AppendLine("      <geometry>");
@@ -185,9 +209,14 @@ namespace SW2GZ.Write.Urdf
         }
 
         // Standard URDF joint block. Optional limit attrs omitted when null
-        // for revolute/prismatic; effort/velocity always emitted.
-        private static void AppendJoint(StringBuilder sb, UrdfJoint j)
+        // for revolute/prismatic; effort/velocity always emitted. When
+        // applyDefaults is true, zero-valued effort/velocity are replaced with
+        // the robot-ready nonzero defaults — ros2_control + Gz won't actuate
+        // joints whose limit fields say "0".
+        private static void AppendJoint(StringBuilder sb, UrdfJoint j, double defEffort, double defVelocity, bool applyDefaults)
         {
+            double effort   = applyDefaults && j.LimitEffort   == 0.0 ? defEffort   : j.LimitEffort;
+            double velocity = applyDefaults && j.LimitVelocity == 0.0 ? defVelocity : j.LimitVelocity;
             string nameEsc = SecurityElement.Escape(j.Name);
             string typeStr = JointTypeString(j.Type);
             string parentEsc = SecurityElement.Escape(j.ParentLink);
@@ -197,18 +226,12 @@ namespace SW2GZ.Write.Urdf
             sb.AppendLine($"    <parent link=\"{parentEsc}\"/>");
             sb.AppendLine($"    <child link=\"{childEsc}\"/>");
 
-            // Origin: position + rpy. Quaternion → rpy via the single source of
-            // truth (Matrix3.FromQuaternion(q).ToRpy(), ZYX Tait-Bryan). ToRpy
-            // collapses IEEE -0 to +0, so an identity rotation emits "0 0 0"
-            // byte-identically to the prior hard-coded path.
             var pos = j.Origin.Position;
             var (roll, pitch, yaw) = Matrix3.FromQuaternion(j.Origin.Rotation).ToRpy();
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
                 "    <origin xyz=\"{0} {1} {2}\" rpy=\"{3} {4} {5}\"/>",
                 pos.X, pos.Y, pos.Z, roll, pitch, yaw));
 
-            // URDF axis applies to revolute/continuous/prismatic/planar (planar's
-            // axis is the plane normal). Fixed and floating have no axis.
             if (j.Type != UrdfJointType.Fixed && j.Type != UrdfJointType.Floating)
             {
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
@@ -216,21 +239,19 @@ namespace SW2GZ.Write.Urdf
                     j.Axis.X, j.Axis.Y, j.Axis.Z));
             }
 
-            // Limits. Revolute/prismatic need lower/upper; continuous omits them.
-            // effort and velocity are always emitted.
             if (j.Type == UrdfJointType.Revolute || j.Type == UrdfJointType.Prismatic)
             {
                 double lower = j.LimitLower ?? 0.0;
                 double upper = j.LimitUpper ?? 0.0;
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
                     "    <limit lower=\"{0}\" upper=\"{1}\" effort=\"{2}\" velocity=\"{3}\"/>",
-                    lower, upper, j.LimitEffort, j.LimitVelocity));
+                    lower, upper, effort, velocity));
             }
             else if (j.Type == UrdfJointType.Continuous)
             {
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
                     "    <limit effort=\"{0}\" velocity=\"{1}\"/>",
-                    j.LimitEffort, j.LimitVelocity));
+                    effort, velocity));
             }
 
             sb.AppendLine("  </joint>");

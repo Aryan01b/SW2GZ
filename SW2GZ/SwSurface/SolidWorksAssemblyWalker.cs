@@ -19,6 +19,7 @@ using System.Text.RegularExpressions;
 using System.Numerics;
 using SW2GZ.Build.Urdf;
 using SW2GZ.Math;
+using SW2GZ.Utilities;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 #endif
@@ -231,7 +232,32 @@ namespace SW2GZ.SwSurface
                 }
 
                 Vector3 axis = kind == MateKind.Fixed ? new Vector3(0, 0, 1) : MateAxisDirection(mate);
-                sink.Add(new MateInfo(feat.Name, kind, axis, lower, upper));
+
+                // Two top-level component names this mate spans — same mapping the
+                // joint list uses (ParentLink/ChildLink), so the PMP can filter the
+                // mate list to just the joint's pair.
+                string linkA = null, linkB = null;
+                int n2 = mate.GetMateEntityCount();
+                for (int i = 0; i < n2 && linkB == null; i++)
+                {
+                    MateEntity2 ent = mate.MateEntity(i);
+                    if (ent == null) continue;
+                    try
+                    {
+                        Component2 comp = ent.ReferenceComponent;
+                        if (comp == null) continue;
+                        try
+                        {
+                            string name = SanitizeComponentName(TopLevelName(comp));
+                            if (linkA == null) linkA = name;
+                            else if (name != linkA) linkB = name;
+                        }
+                        finally { Marshal.ReleaseComObject(comp); }
+                    }
+                    finally { Marshal.ReleaseComObject(ent); }
+                }
+
+                sink.Add(new MateInfo(feat.Name, kind, axis, lower, upper, linkA, linkB));
             }
             finally { Marshal.ReleaseComObject(mate); }
         }
@@ -240,24 +266,39 @@ namespace SW2GZ.SwSurface
         // name, so the user can verify the mate they assigned to a joint. COM-only.
         public bool HighlightMate(string mateName)
         {
-            if (string.IsNullOrEmpty(mateName)) return false;
+            var log = Logger.GetLogger();
+            log.Info("[HL] HighlightMate(\"" + mateName + "\") entry");
+            if (string.IsNullOrEmpty(mateName)) { log.Info("[HL] empty name -> bail"); return false; }
             var model = (IModelDoc2)_doc;
-            model.ClearSelection2(true);
+            try { model.ClearSelection2(false); log.Info("[HL] ClearSelection2(false) ok"); }
+            catch (System.Exception ex) { log.Info("[HL] ClearSelection2 threw: " + ex.GetType().Name + ": " + ex.Message); }
 
+            int mateGroupsSeen = 0, subsSeen = 0;
+            bool nameMatched = false;
             bool selected = false;
             Feature feat = (Feature)model.FirstFeature();
             try
             {
                 while (feat != null && !selected)
                 {
-                    if (feat.GetTypeName2() == "MateGroup")
+                    string tn = null; try { tn = feat.GetTypeName2(); } catch { }
+                    if (tn == "MateGroup")
                     {
+                        mateGroupsSeen++;
                         Feature sub = (Feature)feat.GetFirstSubFeature();
                         try
                         {
                             while (sub != null && !selected)
                             {
-                                if (sub.Name == mateName) selected = SelectMateReferences(sub);
+                                subsSeen++;
+                                string sn = null; try { sn = sub.Name; } catch { }
+                                if (sn == mateName)
+                                {
+                                    nameMatched = true;
+                                    log.Info("[HL] matched mate \"" + sn + "\" — selecting refs");
+                                    selected = SelectMateReferences(model, sub);
+                                    log.Info("[HL] SelectMateReferences returned " + selected);
+                                }
                                 Feature nextSub = (Feature)sub.GetNextSubFeature();
                                 Marshal.ReleaseComObject(sub);
                                 sub = nextSub;
@@ -273,37 +314,70 @@ namespace SW2GZ.SwSurface
             }
             finally { if (feat != null) Marshal.ReleaseComObject(feat); }
 
+            log.Info("[HL] walk done: MateGroups=" + mateGroupsSeen + " subs=" + subsSeen +
+                     " nameMatched=" + nameMatched + " selected=" + selected);
+
+            if (selected)
+            {
+                try { model.GraphicsRedraw2(); log.Info("[HL] GraphicsRedraw2 ok"); }
+                catch (System.Exception ex) { log.Info("[HL] GraphicsRedraw2 threw: " + ex.GetType().Name + ": " + ex.Message); }
+            }
             return selected;
         }
 
-        private static bool SelectMateReferences(Feature feat)
+        // Selects each MateEntity reference (face / edge / axis / vertex) so SW
+        // highlights them in the viewport — same visual as SW's native mate PMP.
+        // No feat.Select2 (broke wizard Next), no Component2.Select4 (selected
+        // whole components, broke Step 2 Links picker that reads selection state).
+        private static bool SelectMateReferences(IModelDoc2 model, Feature feat)
         {
+            var log = Logger.GetLogger();
             object specific = feat.GetSpecificFeature2();
             var mate = specific as Mate2;
-            if (mate == null) { if (specific != null) Marshal.ReleaseComObject(specific); return false; }
+            if (mate == null)
+            {
+                log.Info("[HL]   GetSpecificFeature2 not Mate2 (was " + (specific?.GetType().Name ?? "null") + ")");
+                if (specific != null) Marshal.ReleaseComObject(specific);
+                return false;
+            }
 
+            bool any = false;
             try
             {
-                bool any = false;
                 int n = mate.GetMateEntityCount();
+                log.Info("[HL]   mate has " + n + " entities");
                 for (int i = 0; i < n; i++)
                 {
                     MateEntity2 ent = mate.MateEntity(i);
-                    if (ent == null) continue;
+                    if (ent == null) { log.Info("[HL]   ent[" + i + "] null"); continue; }
                     try
                     {
-                        object refGeom = ent.Reference;
+                        object refGeom = null;
+                        try { refGeom = ent.Reference; }
+                        catch (System.Exception ex) { log.Info("[HL]   ent[" + i + "].Reference threw: " + ex.GetType().Name + ": " + ex.Message); }
+                        string refTy = refGeom?.GetType().Name ?? "null";
                         if (refGeom is Entity sel)
                         {
-                            try { if (sel.Select4(true, null)) any = true; } catch { }
+                            try
+                            {
+                                bool es = sel.Select4(true, null);
+                                log.Info("[HL]   ent[" + i + "] ref=" + refTy + " Select4 -> " + es);
+                                if (es) any = true;
+                            }
+                            catch (System.Exception ex) { log.Info("[HL]   ent[" + i + "].Select4 threw: " + ex.GetType().Name + ": " + ex.Message); }
+                        }
+                        else
+                        {
+                            log.Info("[HL]   ent[" + i + "] ref=" + refTy + " (not Entity)");
                         }
                         if (refGeom != null) Marshal.ReleaseComObject(refGeom);
                     }
                     finally { Marshal.ReleaseComObject(ent); }
                 }
-                return any;
             }
             finally { Marshal.ReleaseComObject(mate); }
+
+            return any;
         }
 
         // Best-effort axis direction for a moving mate: read the first mate

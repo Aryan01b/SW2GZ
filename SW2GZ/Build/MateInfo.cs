@@ -16,5 +16,7 @@ namespace SW2GZ.Build
         MateKind Kind,
         Vector3 Axis,
         double? LimitLower,
-        double? LimitUpper);
+        double? LimitUpper,
+        string LinkA = null,
+        string LinkB = null);
 }

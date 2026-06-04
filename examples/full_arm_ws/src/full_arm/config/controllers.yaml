@@ -9,9 +9,8 @@ controller_manager:
 joint_trajectory_controller:
   ros__parameters:
     joints:
-      - shoulder
-      - elbow
-      - wrist
+      - link1_1_link1_2_joint
+      - link1_2_link1_3_joint
     command_interfaces:
       - position
     state_interfaces:
