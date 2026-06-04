@@ -458,7 +458,12 @@
     <Compile Include="Build\Model\TfTreeFormatter.cs" />
     <Compile Include="Build\Model\StlBinaryParser.cs" />
     <Compile Include="Build\Model\UrdfTransforms.cs" />
+    <Compile Include="Build\Model\LinkAnchorMap.cs" />
+    <Compile Include="Build\Model\MeshRebase.cs" />
+    <Compile Include="Build\Model\JointOriginResolver.cs" />
     <Compile Include="Build\Model\CoordinateConvention.cs" />
+    <Compile Include="Math\PoseMath.cs" />
+    <Compile Include="SwSurface\Abstractions\IComponentPoseSource.cs" />
     <Compile Include="Build\Model\RobotMeta.cs" />
     <Compile Include="Build\Model\GazeboLinkProps.cs" />
     <Compile Include="Build\Model\ModelLink.cs" />

@@ -72,7 +72,12 @@
     <Compile Include="..\SW2GZ\Build\Model\TfTreeFormatter.cs"      Link="Sources\Build\Model\TfTreeFormatter.cs" />
     <Compile Include="..\SW2GZ\Build\Model\StlBinaryParser.cs"      Link="Sources\Build\Model\StlBinaryParser.cs" />
     <Compile Include="..\SW2GZ\Build\Model\UrdfTransforms.cs"       Link="Sources\Build\Model\UrdfTransforms.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\LinkAnchorMap.cs"        Link="Sources\Build\Model\LinkAnchorMap.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\MeshRebase.cs"           Link="Sources\Build\Model\MeshRebase.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\JointOriginResolver.cs"  Link="Sources\Build\Model\JointOriginResolver.cs" />
     <Compile Include="..\SW2GZ\Build\Model\CoordinateConvention.cs" Link="Sources\Build\Model\CoordinateConvention.cs" />
+    <Compile Include="..\SW2GZ\Math\PoseMath.cs"                    Link="Sources\Math\PoseMath.cs" />
+    <Compile Include="..\SW2GZ\SwSurface\Abstractions\IComponentPoseSource.cs" Link="Sources\SwSurface\Abstractions\IComponentPoseSource.cs" />
     <Compile Include="..\SW2GZ\Build\Model\RobotMeta.cs"          Link="Sources\Build\Model\RobotMeta.cs" />
     <Compile Include="..\SW2GZ\Build\Model\GazeboLinkProps.cs"    Link="Sources\Build\Model\GazeboLinkProps.cs" />
     <Compile Include="..\SW2GZ\Build\Model\ModelLink.cs"          Link="Sources\Build\Model\ModelLink.cs" />

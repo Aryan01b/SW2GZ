@@ -125,6 +125,18 @@ namespace SW2GZ.URDFExport
                 }
             }
 
+            // ── Step 2.5: Per-link anchor poses ───────────────────────────────
+            // Each link is anchored at its first part's assembly-frame placement
+            // (Component2.Transform2). Mesh vertices are rebased into the
+            // link-local frame, and joint origins are computed as
+            // parentAnchor⁻¹ ∘ childAnchor — so hinges sit in the right place
+            // in space when Gz rotates them. Test mocks of IAssemblyWalker
+            // don't implement IComponentPoseSource → all anchors fall back to
+            // Pose.Identity → legacy byte-identical output for existing goldens.
+            IComponentPoseSource poseSource = _walker as IComponentPoseSource;
+            IReadOnlyDictionary<string, Pose> linkAnchors =
+                LinkAnchorMap.Build(specs, poseSource);
+
             // ── Step 3: Build links ───────────────────────────────────────────
             var links = new List<UrdfLink>(specs.Count);
             // P5 — parallel list of (link, primary part path) for appearance lookup.
@@ -158,6 +170,11 @@ namespace SW2GZ.URDFExport
                     visual = new MeshData(unionV.ToArray(), unionT.ToArray(), unionColor);
                 }
 
+                // Rebase assembly-frame mesh vertices into the link-local frame.
+                // No-op when the walker isn't an IComponentPoseSource (test paths).
+                Pose anchor = linkAnchors.TryGetValue(spec.Name, out Pose a) ? a : Pose.Identity;
+                visual = MeshRebase.Apply(visual, anchor);
+
                 // Build real convex hull (QuickHull) collision mesh from the visual mesh.
                 MeshData collision = ConvexHullCollider.Build(visual, ColliderStrategy.ConvexHull);
 
@@ -181,7 +198,20 @@ namespace SW2GZ.URDFExport
             // empty, identical to the pre-P2 behaviour (links export at origin).
             IReadOnlyList<MateSpec> mates = _walker.WalkMates();
             var (graphJoints, rootLink, jointWarnings) = JointGraphBuilder.Build(links, mates);
-            var joints = new List<UrdfJoint>(graphJoints);
+            var joints = new List<UrdfJoint>(graphJoints.Count);
+
+            // Patch each joint's <origin> and <axis> using the link anchors.
+            // Origin = parentAnchor⁻¹ ∘ childAnchor (parent-frame transform to
+            // child frame). Axis = assembly-frame axis re-expressed in child
+            // (= joint) frame. Identity anchors → joint emerges byte-identical
+            // to JointGraphBuilder's output for back-compat with tests.
+            foreach (UrdfJoint j in graphJoints)
+            {
+                Pose pA = linkAnchors.TryGetValue(j.ParentLink, out Pose pp) ? pp : Pose.Identity;
+                Pose cA = linkAnchors.TryGetValue(j.ChildLink,  out Pose cc) ? cc : Pose.Identity;
+                JointOriginResolver.Resolved r = JointOriginResolver.Compute(pA, cA, j.Axis);
+                joints.Add(j with { Origin = r.Origin, Axis = r.AxisInJointFrame });
+            }
 
             // JointGraphBuilder warnings are non-fatal — collect them as
             // ValidationIssue warnings to merge into the final report below.

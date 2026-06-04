@@ -35,6 +35,20 @@ No new features, no API breaks.
   with its joint type, `xyz`, `rpy` (radians AND degrees), axis, and
   limits — so the SW→ROS rotation on `world_to_<root>` is visible at a
   glance. Pulled into the PreviewDialog as a new "TF frames" tab.
+- **Link anchors + per-joint URDF origins.** Per-link anchor =
+  first part's `Component2.Transform2` (assembly-frame pose). Mesh
+  vertices rebased into link-local frame; joint `<origin xyz rpy>` =
+  parentAnchor⁻¹ ∘ childAnchor; joint `<axis xyz>` expressed in child
+  (joint) frame. New pure helpers: `PoseMath` (compose/inverse/relative),
+  `LinkAnchorMap`, `MeshRebase`, `JointOriginResolver`. New optional
+  `IComponentPoseSource` boundary (separate interface so existing
+  Mock&lt;IAssemblyWalker&gt; tests stay green); `WizardAssemblyWalker`
+  implements it via Component2.Transform2 → Pose with quaternion
+  extracted by Shepperd's method. Walkers that don't implement the new
+  interface fall back to identity anchors → byte-identical legacy output.
+  Hinges in Gz now rotate about the child's first-part origin instead
+  of the world origin. Mate-geometry pivot extraction (so the hinge sits
+  on the actual mate axis) is the next layer — separate change.
 - **Mesh export: assembly-frame vertices + multi-part link union.**
   Two long-standing bugs caused the 3D preview to render every link as a
   small blob at world origin:
