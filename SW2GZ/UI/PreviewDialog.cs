@@ -1,24 +1,27 @@
 /*
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
-3D-only preview of what Sw2gzModelExporter would write. The pipeline runs
-against a temp directory; this dialog renders the resulting collision STLs
-in a WPF Viewport3D (Robot3DViewport) — same code path as the real export,
-so what you see is what you get.
+Browser-backed preview. The pipeline writes a real export to a temp dir;
+this dialog spins up a local HttpListener (PreviewServer) on a random
+127.0.0.1 port, opens the default browser at that URL, and lets the user
+review the three.js render. Joint values stream from SW live via the
+server's /joint_states endpoint — move a mate in SW, the browser updates
+on the next ~100 ms poll.
 
-Buttons:
-  - Open temp folder    — Explorer on the workspace (for browsing files).
+The dialog itself stays open as the control center:
+  - Open temp folder    — Explorer on the workspace.
+  - Reopen browser      — relaunch the tab if the user closed it.
   - Back to edit        — close, return to ExportDialog.
   - Looks good — Export — close OK, ExportDialog proceeds to real export.
 
-Closing the dialog deletes the temp workspace (best-effort).
+Closing the dialog stops the server and deletes the temp workspace.
 */
 #if SW_INTEROP
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Windows.Forms;
-using System.Windows.Forms.Integration;
 using SW2GZ.URDFExport;
 
 namespace SW2GZ.UI
@@ -26,73 +29,113 @@ namespace SW2GZ.UI
     public sealed class PreviewDialog : Form
     {
         private readonly Sw2gzModelPreviewer.PreviewResult _result;
+        private PreviewServer _server;
 
         public PreviewDialog(Sw2gzModelPreviewer.PreviewResult result)
         {
             _result = result ?? throw new ArgumentNullException(nameof(result));
 
-            Text = "SW2GZ — 3D preview";
-            Width = 960; Height = 720;
+            Text = "SW2GZ — 3D preview (browser)";
+            Width = 520; Height = 280;
             StartPosition = FormStartPosition.CenterScreen;
-            MinimumSize = new System.Drawing.Size(640, 480);
-            FormBorderStyle = FormBorderStyle.Sizable;
-            MaximizeBox = true; MinimizeBox = false;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false; MinimizeBox = false;
 
             int warnings = 0;
             if (result.Report != null) foreach (var _ in result.Report.Warnings) warnings++;
-            string warnSuffix = warnings > 0 ? "  |  " + warnings + " warning(s)" : "";
+
+            // Spin up the local server before showing the dialog so we can
+            // surface "running on http://127.0.0.1:PORT" in the status label.
+            string assetsDir = Path.Combine(
+                Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "preview");
+            string urdfForBrowser = StripXacroIncludes(result.UrdfOrSdfText);
+
+            string statusText;
+            try
+            {
+                _server = new PreviewServer(assetsDir, result.MeshesDir, urdfForBrowser, result.JointSampler);
+                _server.Start();
+                statusText = "Preview server: " + _server.Url + Environment.NewLine +
+                             "Move mates in SolidWorks → browser updates live (~100 ms).";
+                OpenBrowser(_server.Url);
+            }
+            catch (Exception ex)
+            {
+                statusText = "Preview server failed to start: " + ex.Message;
+            }
 
             var header = new Label
             {
                 Dock = DockStyle.Top,
-                Height = 28,
-                Padding = new Padding(12, 6, 12, 0),
-                Text = result.Mode + "  ·  " + System.IO.Path.GetFileName(result.WorkspaceDir) + warnSuffix,
+                Height = 60,
+                Padding = new Padding(12, 10, 12, 0),
+                Text = result.Mode + "  ·  " + Path.GetFileName(result.WorkspaceDir) +
+                       (warnings > 0 ? "  ·  " + warnings + " warning(s)" : "") +
+                       Environment.NewLine + Environment.NewLine + statusText,
             };
             Controls.Add(header);
 
-            var buttons = new Panel { Dock = DockStyle.Bottom, Height = 44 };
+            var buttons = new Panel { Dock = DockStyle.Bottom, Height = 80, Padding = new Padding(12, 8, 12, 8) };
             Controls.Add(buttons);
 
-            var openFolder = new Button { Text = "Open temp folder", Left = 12, Top = 10, Width = 140 };
+            var openFolder = new Button { Text = "Open temp folder", Left = 12, Top = 8, Width = 140 };
             openFolder.Click += (s, e) => OpenTempFolder();
             buttons.Controls.Add(openFolder);
 
-            var back = new Button { Text = "Back to edit",
-                Left = buttons.ClientSize.Width - 256, Top = 10, Width = 124,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                DialogResult = DialogResult.Cancel };
-            var confirm = new Button { Text = "Looks good — Export",
-                Left = buttons.ClientSize.Width - 128, Top = 10, Width = 116,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                DialogResult = DialogResult.OK };
+            var reopen = new Button { Text = "Reopen browser tab", Left = 160, Top = 8, Width = 150 };
+            reopen.Click += (s, e) => { if (_server != null) OpenBrowser(_server.Url); };
+            buttons.Controls.Add(reopen);
+
+            var back = new Button
+            {
+                Text = "Back to edit",
+                Left = 12, Top = 42, Width = 150,
+                DialogResult = DialogResult.Cancel,
+            };
+            var confirm = new Button
+            {
+                Text = "Looks good — Export",
+                Left = 168, Top = 42, Width = 150,
+                DialogResult = DialogResult.OK,
+            };
             buttons.Controls.Add(back);
             buttons.Controls.Add(confirm);
             AcceptButton = confirm;
             CancelButton = back;
 
-            Control viewport;
+            FormClosed += (s, e) =>
+            {
+                try { _server?.Stop(); } catch { }
+                CleanupTempDir();
+            };
+        }
+
+        // URDFLoader on the browser side doesn't process xacro:include /
+        // xacro:* macros. Strip them out before serving so the parser sees
+        // only standard URDF links/joints.
+        private static string StripXacroIncludes(string urdfXml)
+        {
+            if (string.IsNullOrEmpty(urdfXml)) return string.Empty;
+            return System.Text.RegularExpressions.Regex.Replace(urdfXml,
+                @"<xacro:[^>]*\/>|<xacro:[^>]*>[\s\S]*?<\/xacro:[^>]*>", string.Empty);
+        }
+
+        private static void OpenBrowser(string url)
+        {
             try
             {
-                viewport = new ElementHost
+                Process.Start(new ProcessStartInfo
                 {
-                    Dock = DockStyle.Fill,
-                    Child = new Robot3DViewport(result.MeshesDir, result.UrdfOrSdfText),
-                };
+                    FileName = url,
+                    UseShellExecute = true,   // hand off to default browser
+                });
             }
             catch (Exception ex)
             {
-                viewport = new Label
-                {
-                    Dock = DockStyle.Fill,
-                    TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
-                    Text = "3D preview unavailable: " + ex.Message,
-                };
+                MessageBox.Show("Could not open browser: " + ex.Message + Environment.NewLine +
+                    "Manually open: " + url,
+                    "SW2GZ Preview", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            Controls.Add(viewport);
-            Controls.SetChildIndex(viewport, 0);   // fill between header and buttons
-
-            FormClosed += (s, e) => CleanupTempDir();
         }
 
         private void OpenTempFolder()
@@ -111,14 +154,14 @@ namespace SW2GZ.UI
 
         private void CleanupTempDir()
         {
-            // Best-effort cleanup. If "Open temp folder" was clicked, Explorer
-            // may still have a handle; ignore and let the OS reap on shutdown.
+            // Best-effort. Browser may still be holding mesh file handles; the
+            // OS reaps once the tab is closed.
             try
             {
                 if (Directory.Exists(_result.TempDir))
                     Directory.Delete(_result.TempDir, recursive: true);
             }
-            catch { /* swallow — temp dir cleanup is best-effort */ }
+            catch { /* swallow */ }
         }
     }
 }

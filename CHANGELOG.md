@@ -35,6 +35,16 @@ No new features, no API breaks.
   with its joint type, `xyz`, `rpy` (radians AND degrees), axis, and
   limits — so the SW→ROS rotation on `world_to_<root>` is visible at a
   glance. Pulled into the PreviewDialog as a new "TF frames" tab.
+- **Browser-backed 3D preview with live SW sync.** WPF Viewport3D removed.
+  Pipeline still writes to a temp dir; new `PreviewServer` (HttpListener
+  on 127.0.0.1:&lt;random&gt;) serves the workspace + a three.js scene that
+  loads DAE visual meshes via `urdf-loader`. Move a mate in SW → browser
+  updates within ~100 ms via /joint_states poll (live read of
+  Component2.Transform2 → swing-twist angle around joint axis). Toggles
+  for visual / collision / axes / grid / live-poll. `PreviewDialog` is
+  now the control center (Open temp folder · Reopen browser · Back ·
+  Looks good). New: `PreviewServer`, `SwJointStateSampler`, `SwingTwist`,
+  `UI/PreviewWeb/index.html`. Deleted: `Robot3DViewport.cs` (WPF).
 - **Link anchors + per-joint URDF origins.** Per-link anchor =
   first part's `Component2.Transform2` (assembly-frame pose). Mesh
   vertices rebased into link-local frame; joint `<origin xyz rpy>` =

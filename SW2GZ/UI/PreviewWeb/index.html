@@ -1,0 +1,230 @@
+<!doctype html>
+<!--
+Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
+
+Browser-side preview for SW2GZ. Loads the URDF served at /robot.urdf,
+fetches DAE/STL meshes from /meshes/, renders via three.js + urdf-loader,
+and live-syncs joint values from /joint_states (HTTP poll @ 10 Hz).
+
+Conventions:
+  - Z-up world (REP-103). Camera up = +Z. Axes overlay X red / Y green / Z blue.
+  - Mouse: left-drag orbit, wheel zoom, right-drag (or shift+drag) pan.
+
+Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
+-->
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>SW2GZ — 3D preview</title>
+  <style>
+    html, body { margin:0; padding:0; height:100%; background:#1d1f24; color:#cfd3da;
+                 font-family: 'Segoe UI', sans-serif; overflow:hidden; }
+    #viewer { position:absolute; inset:0; }
+    #status { position:absolute; left:10px; bottom:8px; font-size:12px;
+              background:rgba(0,0,0,0.4); padding:4px 10px; border-radius:4px; }
+    #toggles { position:absolute; right:10px; top:10px; background:rgba(0,0,0,0.5);
+               padding:8px 10px; border-radius:6px; font-size:12px; min-width:140px; }
+    #toggles label { display:block; cursor:pointer; margin:2px 0; }
+    #toggles input { vertical-align:middle; margin-right:6px; }
+    .err { color:#ff8080; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "urdf-loader": "https://unpkg.com/urdf-loader@0.12.7/src/URDFLoader.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="viewer"></div>
+  <div id="toggles">
+    <label><input type="checkbox" id="showVisual" checked/> Visual meshes (DAE)</label>
+    <label><input type="checkbox" id="showCollision"/> Collision hulls (STL)</label>
+    <label><input type="checkbox" id="showAxes" checked/> World axes</label>
+    <label><input type="checkbox" id="showGrid" checked/> Grid (XY)</label>
+    <label><input type="checkbox" id="livePoll" checked/> Live SW sync</label>
+  </div>
+  <div id="status">Loading…</div>
+
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js';
+  import { STLLoader }     from 'three/addons/loaders/STLLoader.js';
+  import URDFLoader        from 'urdf-loader';
+
+  const statusEl = document.getElementById('status');
+  const setStatus = (txt, isErr) => {
+    statusEl.textContent = txt;
+    statusEl.className = isErr ? 'err' : '';
+  };
+
+  // ── Scene + camera + lights ──────────────────────────────────────────────
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1d1f24);
+
+  const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.001, 100);
+  camera.up.set(0, 0, 1);   // Z-up
+  camera.position.set(0.5, -0.5, 0.5);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(devicePixelRatio);
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  document.getElementById('viewer').appendChild(renderer.domElement);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0, 0);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+  sun.position.set(2, 2, 3);
+  scene.add(sun);
+  const fill = new THREE.DirectionalLight(0xa0b8ff, 0.4);
+  fill.position.set(-2, -1, 1);
+  scene.add(fill);
+
+  // World axes + ground grid (Z-up world → grid lives in XY plane).
+  const axes = new THREE.AxesHelper(0.5);
+  scene.add(axes);
+  const grid = new THREE.GridHelper(2, 20, 0x4a4a4a, 0x2c2c2c);
+  grid.rotation.x = Math.PI / 2;   // XZ → XY
+  scene.add(grid);
+
+  // Toggle wiring
+  document.getElementById('showAxes').onchange = e => axes.visible = e.target.checked;
+  document.getElementById('showGrid').onchange = e => grid.visible = e.target.checked;
+
+  // ── URDF load ────────────────────────────────────────────────────────────
+  let robot = null;
+  let visualGroup = null, collisionGroup = null;
+
+  const loader = new URDFLoader();
+  // package:// resolution: package name → URL prefix. Filled in after we read
+  // <robot name="..."> from the served URDF. Default '/' so meshes/* paths
+  // resolve at the same origin the page is served from.
+  loader.packages = { '': '/' };
+  loader.loadMeshCb = (path, manager, onLoad) => {
+    const lower = path.toLowerCase();
+    if (lower.endsWith('.dae')) {
+      new ColladaLoader(manager).load(path, dae => onLoad(dae.scene));
+    } else if (lower.endsWith('.stl')) {
+      new STLLoader(manager).load(path, geom => {
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0xb8c0d0, roughness: 0.6, metalness: 0.1,
+        });
+        onLoad(new THREE.Mesh(geom, mat));
+      });
+    } else {
+      console.warn('Unknown mesh format:', path);
+      onLoad(new THREE.Object3D());
+    }
+  };
+
+  async function loadUrdf() {
+    setStatus('Fetching URDF…');
+    let urdfText;
+    try {
+      const r = await fetch('/robot.urdf');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      urdfText = await r.text();
+    } catch (e) {
+      setStatus('Could not load /robot.urdf: ' + e.message, true);
+      return;
+    }
+
+    // Strip xacro:include / xacro:* etc. — URDFLoader doesn't process xacro.
+    // The visible mesh + joint topology is pure URDF and parses fine.
+    urdfText = urdfText.replace(/<xacro:[^>]*\/>/g, '')
+                       .replace(/<xacro:[^>]*>[\s\S]*?<\/xacro:[^>]*>/g, '');
+
+    // Read package name → use as packages map key. Loader strips
+    // `package://<name>/` and replaces with packages[name].
+    const m = urdfText.match(/<robot[^>]*\sname="([^"]+)"/);
+    const pkg = m ? m[1] : '';
+    loader.packages = { [pkg]: '/' };
+
+    setStatus('Building scene…');
+    try {
+      robot = loader.parse(urdfText);
+    } catch (e) {
+      setStatus('URDF parse failed: ' + e.message, true);
+      return;
+    }
+    scene.add(robot);
+    splitVisualCollision();
+    fitCamera();
+    const nL = Object.keys(robot.links || {}).length;
+    const nJ = Object.keys(robot.joints || {}).length;
+    setStatus(`${nL} link(s) · ${nJ} joint(s) · drag orbit, wheel zoom`);
+  }
+
+  // urdf-loader builds both visual + collision under each link. We collect
+  // them into two groups so the toggle hides/shows each cleanly.
+  function splitVisualCollision() {
+    if (!robot) return;
+    visualGroup = new THREE.Group();
+    collisionGroup = new THREE.Group();
+    robot.traverse(o => {
+      if (o.isURDFVisual) {
+        visualGroup.add(o);
+      } else if (o.isURDFCollider) {
+        o.visible = false;
+        collisionGroup.add(o);
+      }
+    });
+    document.getElementById('showVisual').onchange = e =>
+      robot.traverse(o => { if (o.isURDFVisual) o.visible = e.target.checked; });
+    document.getElementById('showCollision').onchange = e =>
+      robot.traverse(o => { if (o.isURDFCollider) o.visible = e.target.checked; });
+  }
+
+  function fitCamera() {
+    const box = new THREE.Box3().setFromObject(robot);
+    if (!isFinite(box.min.x)) return;   // empty / not yet meshed
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const r = Math.max(size.length() * 0.6, 0.3);
+    controls.target.copy(center);
+    camera.position.set(center.x + r, center.y - r, center.z + r * 0.6);
+    camera.near = r * 0.001;
+    camera.far  = r * 1000;
+    camera.updateProjectionMatrix();
+    controls.update();
+  }
+
+  // ── Live joint poll ──────────────────────────────────────────────────────
+  let pollTimer = null;
+  const livePollChk = document.getElementById('livePoll');
+  async function pollJoints() {
+    if (!robot || !livePollChk.checked) return;
+    try {
+      const r = await fetch('/joint_states');
+      if (!r.ok) return;
+      const states = await r.json();
+      for (const [name, value] of Object.entries(states))
+        if (robot.joints[name]) robot.setJointValue(name, value);
+    } catch (e) { /* swallow — addin may have closed */ }
+  }
+  pollTimer = setInterval(pollJoints, 100);
+
+  // ── Render loop + resize ─────────────────────────────────────────────────
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  function tick() {
+    requestAnimationFrame(tick);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  tick();
+  loadUrdf();
+</script>
+</body>
+</html>

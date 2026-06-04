@@ -75,6 +75,7 @@
     <Compile Include="..\SW2GZ\Build\Model\LinkAnchorMap.cs"        Link="Sources\Build\Model\LinkAnchorMap.cs" />
     <Compile Include="..\SW2GZ\Build\Model\MeshRebase.cs"           Link="Sources\Build\Model\MeshRebase.cs" />
     <Compile Include="..\SW2GZ\Build\Model\JointOriginResolver.cs"  Link="Sources\Build\Model\JointOriginResolver.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\SwingTwist.cs"           Link="Sources\Build\Model\SwingTwist.cs" />
     <Compile Include="..\SW2GZ\Build\Model\CoordinateConvention.cs" Link="Sources\Build\Model\CoordinateConvention.cs" />
     <Compile Include="..\SW2GZ\Math\PoseMath.cs"                    Link="Sources\Math\PoseMath.cs" />
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\IComponentPoseSource.cs" Link="Sources\SwSurface\Abstractions\IComponentPoseSource.cs" />

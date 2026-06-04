@@ -13,6 +13,7 @@ honest preview; double-execution on accept is acceptable for v1.
 */
 #if SW_INTEROP
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using SolidWorks.Interop.sldworks;
@@ -38,12 +39,16 @@ namespace SW2GZ.URDFExport
             public string SummaryText { get; }
             public string TfTreeText { get; }
             public SW2GZ.Validate.ValidationReport Report { get; }
+            /// Reads live joint values from SW each call. PreviewServer hands
+            /// this to /joint_states. Returns empty dict if unavailable.
+            public Func<IReadOnlyDictionary<string, double>> JointSampler { get; }
 
             public PreviewResult(string tempDir, string workspaceDir, string meshesDir, ExportMode mode,
                 string urdfOrSdfText, string urdfOrSdfFileName,
                 string launchText, string launchFileName,
                 string logText, string summaryText, string tfTreeText,
-                SW2GZ.Validate.ValidationReport report)
+                SW2GZ.Validate.ValidationReport report,
+                Func<IReadOnlyDictionary<string, double>> jointSampler)
             {
                 TempDir = tempDir;
                 WorkspaceDir = workspaceDir;
@@ -57,6 +62,7 @@ namespace SW2GZ.URDFExport
                 SummaryText = summaryText ?? string.Empty;
                 TfTreeText = tfTreeText ?? string.Empty;
                 Report = report;
+                JointSampler = jointSampler ?? (() => new Dictionary<string, double>());
             }
         }
 
@@ -120,8 +126,21 @@ namespace SW2GZ.URDFExport
                 ? TfTreeFormatter.FormatUrdf(urdfText)
                 : TfTreeFormatter.FormatSdf(urdfText);
 
+            // Build the live joint sampler so the PreviewServer's /joint_states
+            // endpoint streams real SW mate angles to the browser. Failures here
+            // are non-fatal: the preview just renders with all joints at zero.
+            Func<IReadOnlyDictionary<string, double>> sampler = () => new Dictionary<string, double>();
+            try
+            {
+                var swSampler = SwJointStateSampler.Build(
+                    (AssemblyDoc)model, config.Links, config.Joints);
+                sampler = swSampler.ReadAll;
+            }
+            catch { /* swallow — preview without live sync still useful */ }
+
             return new PreviewResult(tempBase, workspace, meshesDir, config.Mode,
-                urdfText, urdfOrSdfRel, launchText, launchRel, logText, summary, tfTree, report);
+                urdfText, urdfOrSdfRel, launchText, launchRel, logText, summary, tfTree, report,
+                sampler);
         }
 
         private static string SafeReadAll(string path)
