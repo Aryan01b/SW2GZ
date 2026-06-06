@@ -54,5 +54,46 @@ namespace SW2GZ.Tests.UI
             Assert.Single(live.Robot.Links);
             Assert.Equal("a", live.Robot.Links[0]);
         }
+
+        [Fact]
+        public void Restore_RestoresWorldAndAssetSubtrees()
+        {
+            var live = new Sw2gzDoc();
+            live.World.Ground = "ground.STL";
+            live.World.Assets.Add("tree<1>");
+            live.World.Assets.Add("rock<1>");
+            live.World.PhysicsEngine = "bullet";
+            live.World.MaxStepSize = 0.002;
+            live.World.RealTimeFactor = 0.5;
+            live.Asset.BodyPart = "prop.SLDPRT";
+            live.Asset.FrictionMu = 1.2;
+            live.Asset.IsStatic = false;
+
+            var snap = Sw2gzDocSnapshot.Clone(live);
+
+            // Simulate PMP edits across every World + Asset field
+            live.World.Ground = "";
+            live.World.Assets.Clear();
+            live.World.PhysicsEngine = "ode";
+            live.World.MaxStepSize = 0.01;
+            live.World.RealTimeFactor = 1.0;
+            live.Asset.BodyPart = "";
+            live.Asset.FrictionMu = 0.3;
+            live.Asset.IsStatic = true;
+
+            // Cancel → restore
+            Sw2gzDocSnapshot.Restore(snap, live);
+
+            Assert.Equal("ground.STL", live.World.Ground);
+            Assert.Equal(2, live.World.Assets.Count);
+            Assert.Equal("tree<1>", live.World.Assets[0]);
+            Assert.Equal("rock<1>", live.World.Assets[1]);
+            Assert.Equal("bullet", live.World.PhysicsEngine);
+            Assert.Equal(0.002, live.World.MaxStepSize);
+            Assert.Equal(0.5, live.World.RealTimeFactor);
+            Assert.Equal("prop.SLDPRT", live.Asset.BodyPart);
+            Assert.Equal(1.2, live.Asset.FrictionMu);
+            Assert.False(live.Asset.IsStatic);
+        }
     }
 }
