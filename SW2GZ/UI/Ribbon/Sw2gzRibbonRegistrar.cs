@@ -93,7 +93,20 @@ namespace SW2GZ.UI.Ribbon
             grp.MainIconList = _mainIcons;
 
             int toolbar = (int)swCommandItemType_e.swToolbarItem;
-            int img = 0;   // strip column — single-glyph fallback until per-mode art lands.
+
+            // Strip column indices — match the column order in
+            // scripts\GenerateIcons.ps1 ($drawers list).
+            //
+            // 0 ModeFlyout | 1 Robot | 2 World | 3 Asset |
+            // 4 Coord | 5 Preview | 6 Export |
+            // 7 Links | 8 Joints | 9 Inertia | 10 Sensors | 11 Actuation | 12 Stack |
+            // 13 Ground | 14 Assets | 15 Physics | 16 Scene |
+            // 17 Body | 18 Surface
+            const int IMG_COORD = 4, IMG_PREVIEW = 5, IMG_EXPORT = 6;
+            const int IMG_LINKS = 7, IMG_JOINTS = 8, IMG_INERTIA = 9;
+            const int IMG_SENSORS = 10, IMG_ACTUATION = 11, IMG_STACK = 12;
+            const int IMG_GROUND = 13, IMG_ASSETS = 14, IMG_PHYSICS = 15, IMG_SCENE = 16;
+            const int IMG_BODY = 17, IMG_SURFACE = 18;
 
             // Mode is a flyout-group dropdown (L3b design). The visible "Mode ▾"
             // button hosts a dropdown of Robot/World/Asset sub-items, each wired
@@ -108,27 +121,27 @@ namespace SW2GZ.UI.Ribbon
             BuildModeFlyout();
 
             // Common cluster
-            AddItem(grp, RibbonCommandIds.CoordPmp,   "Coord",   "Coordinate convention (advanced)", "OpenCoordPmp",   "AssemblyEnable", img, toolbar);
-            AddItem(grp, RibbonCommandIds.PreviewPmp, "Preview", "Browser-based 3D preview",        "OpenPreviewPmp", "AssemblyEnable", img, toolbar);
-            AddItem(grp, RibbonCommandIds.ExportPmp,  "Export",  "Export ROS 2 / Gz package",       "OpenExportPmp",  "AssemblyEnable", img, toolbar);
+            AddItem(grp, RibbonCommandIds.CoordPmp,   "Coord",   "Coordinate convention (advanced)", "OpenCoordPmp",   "AssemblyEnable", IMG_COORD,   toolbar);
+            AddItem(grp, RibbonCommandIds.PreviewPmp, "Preview", "Browser-based 3D preview",         "OpenPreviewPmp", "AssemblyEnable", IMG_PREVIEW, toolbar);
+            AddItem(grp, RibbonCommandIds.ExportPmp,  "Export",  "Export ROS 2 / Gz package",        "OpenExportPmp",  "AssemblyEnable", IMG_EXPORT,  toolbar);
 
             // Robot cluster
-            AddItem(grp, RibbonCommandIds.RobotLinks,     "Links",     "Define robot links",     "OpenRobotLinksPmp",     "RobotClusterEnable", img, toolbar);
-            AddItem(grp, RibbonCommandIds.RobotJoints,    "Joints",    "Define robot joints",    "OpenRobotJointsPmp",    "RobotClusterEnable", img, toolbar);
-            AddItem(grp, RibbonCommandIds.RobotInertia,   "Inertia",   "Per-link inertia",       "OpenRobotInertiaPmp",   "RobotClusterEnable", img, toolbar);
-            AddItem(grp, RibbonCommandIds.RobotSensors,   "Sensors",   "Sensor mounts",          "OpenRobotSensorsPmp",   "RobotClusterEnable", img, toolbar);
-            AddItem(grp, RibbonCommandIds.RobotActuation, "Actuation", "ros2_control / gz",      "OpenRobotActuationPmp", "RobotClusterEnable", img, toolbar);
-            AddItem(grp, RibbonCommandIds.RobotStack,     "Stack",     "RSP + JSB + bridge",     "OpenRobotStackPmp",     "RobotClusterEnable", img, toolbar);
+            AddItem(grp, RibbonCommandIds.RobotLinks,     "Links",     "Define robot links",     "OpenRobotLinksPmp",     "RobotClusterEnable", IMG_LINKS,     toolbar);
+            AddItem(grp, RibbonCommandIds.RobotJoints,    "Joints",    "Define robot joints",    "OpenRobotJointsPmp",    "RobotClusterEnable", IMG_JOINTS,    toolbar);
+            AddItem(grp, RibbonCommandIds.RobotInertia,   "Inertia",   "Per-link inertia",       "OpenRobotInertiaPmp",   "RobotClusterEnable", IMG_INERTIA,   toolbar);
+            AddItem(grp, RibbonCommandIds.RobotSensors,   "Sensors",   "Sensor mounts",          "OpenRobotSensorsPmp",   "RobotClusterEnable", IMG_SENSORS,   toolbar);
+            AddItem(grp, RibbonCommandIds.RobotActuation, "Actuation", "ros2_control / gz",      "OpenRobotActuationPmp", "RobotClusterEnable", IMG_ACTUATION, toolbar);
+            AddItem(grp, RibbonCommandIds.RobotStack,     "Stack",     "RSP + JSB + bridge",     "OpenRobotStackPmp",     "RobotClusterEnable", IMG_STACK,     toolbar);
 
             // World cluster
-            AddItem(grp, RibbonCommandIds.WorldGround,  "Ground",  "Static ground / heightmap", "OpenWorldGroundPmp",  "WorldClusterEnable", img, toolbar);
-            AddItem(grp, RibbonCommandIds.WorldAssets,  "Assets",  "Non-ground asset includes", "OpenWorldAssetsPmp",  "WorldClusterEnable", img, toolbar);
-            AddItem(grp, RibbonCommandIds.WorldPhysics, "Physics", "Engine + step + RTF",       "OpenWorldPhysicsPmp", "WorldClusterEnable", img, toolbar);
-            AddItem(grp, RibbonCommandIds.WorldScene,   "Scene",   "Light + sky + GUI",         "OpenWorldScenePmp",   "WorldClusterEnable", img, toolbar);
+            AddItem(grp, RibbonCommandIds.WorldGround,  "Ground",  "Static ground / heightmap", "OpenWorldGroundPmp",  "WorldClusterEnable", IMG_GROUND,  toolbar);
+            AddItem(grp, RibbonCommandIds.WorldAssets,  "Assets",  "Non-ground asset includes", "OpenWorldAssetsPmp",  "WorldClusterEnable", IMG_ASSETS,  toolbar);
+            AddItem(grp, RibbonCommandIds.WorldPhysics, "Physics", "Engine + step + RTF",       "OpenWorldPhysicsPmp", "WorldClusterEnable", IMG_PHYSICS, toolbar);
+            AddItem(grp, RibbonCommandIds.WorldScene,   "Scene",   "Light + sky + GUI",         "OpenWorldScenePmp",   "WorldClusterEnable", IMG_SCENE,   toolbar);
 
             // Asset cluster
-            AddItem(grp, RibbonCommandIds.AssetBody,    "Body",    "Single-part body",          "OpenAssetBodyPmp",    "AssetClusterEnable", img, toolbar);
-            AddItem(grp, RibbonCommandIds.AssetSurface, "Surface", "Friction / contact",        "OpenAssetSurfacePmp", "AssetClusterEnable", img, toolbar);
+            AddItem(grp, RibbonCommandIds.AssetBody,    "Body",    "Single-part body",          "OpenAssetBodyPmp",    "AssetClusterEnable", IMG_BODY,    toolbar);
+            AddItem(grp, RibbonCommandIds.AssetSurface, "Surface", "Friction / contact",        "OpenAssetSurfacePmp", "AssetClusterEnable", IMG_SURFACE, toolbar);
 
             grp.HasToolbar = true;
             grp.HasMenu = false;
@@ -211,15 +224,16 @@ namespace SW2GZ.UI.Ribbon
             // disable once the doc is mode-locked. The flyout button itself
             // stays clickable (uses ModeFlyoutUpdate) — user can still open
             // the menu and see the current mode greyed-out.
+            // Image indices match scripts\GenerateIcons.ps1 columns 1/2/3.
             _modeFlyout.AddCommandItem("Robot",
                 "Author an actuated robot model (URDF + ros2_control + Gz plugins). Disabled once Robot content exists.",
-                0, "ModeRobotClick", "ModeSubItemUpdate");
+                1, "ModeRobotClick", "ModeSubItemUpdate");
             _modeFlyout.AddCommandItem("World",
                 "Author a Gazebo world (SDF world + included assets + physics/scene). Disabled once World content exists.",
-                0, "ModeWorldClick", "ModeSubItemUpdate");
+                2, "ModeWorldClick", "ModeSubItemUpdate");
             _modeFlyout.AddCommandItem("Asset",
                 "Author a single-body static SDF model. Disabled once Asset content exists.",
-                0, "ModeAssetClick", "ModeSubItemUpdate");
+                3, "ModeAssetClick", "ModeSubItemUpdate");
 
             logger.Info("Sw2gzRibbonRegistrar: mode flyout built (cmdId=" +
                 _modeFlyout.CmdID + ", 3 sub-items)");
