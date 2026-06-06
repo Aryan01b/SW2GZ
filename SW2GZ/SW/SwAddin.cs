@@ -557,7 +557,7 @@ namespace SW2GZ.SW
 
         // ─── Common cluster ───────────────────────────────────────────
         public void OpenCoordPmp()   => OpenStub("Coord");
-        public void OpenPreviewPmp() => LaunchExport_PreviewShim();   // routes to existing flow — see Task 9
+        public void OpenPreviewPmp() => LaunchPreview();
         public void OpenExportPmp()  => LaunchExport();               // existing method
 
         // ─── Robot cluster ────────────────────────────────────────────
@@ -619,11 +619,37 @@ namespace SW2GZ.SW
             }
         }
 
-        // Preview routing — kept as a shim so Task 9 can flesh out the wiring
-        // without re-touching this file's command graph.
-        private void LaunchExport_PreviewShim()
+        private void LaunchPreview()
         {
-            OpenStub("Preview");   // stub for now; Task 9 routes to PreviewServer/PreviewDialog
+            try
+            {
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+
+                // Pull the live config — until the backend plan migrates Sw2gzDoc
+                // into the persisted attribute, preview keeps using the legacy
+                // Sw2gzExportConfig loaded from the attribute.
+                Sw2gzExportConfig config = Sw2gzConfigSerialization.Load(modeldoc);
+                if (config.Links == null || config.Links.Count == 0)
+                {
+                    SwApp.SendMsgToUser2(
+                        "No model saved yet — define links from the Robot cluster first.",
+                        (int)swMessageBoxIcon_e.swMbInformation,
+                        (int)swMessageBoxBtn_e.swMbOk);
+                    return;
+                }
+
+                var result = Sw2gzModelPreviewer.RunPreview(
+                    (SldWorks)SwApp, modeldoc, config);
+                using (var dlg = new PreviewDialog(result))
+                {
+                    dlg.ShowDialog();
+                }
+            }
+            catch (Exception e)
+            {
+                logger.Error("LaunchPreview failed", e);
+                MessageBox.Show("Preview failed: " + e.Message);
+            }
         }
 
         #endregion UI Callbacks
