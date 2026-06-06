@@ -345,94 +345,10 @@ namespace SW2GZ.SW
 
         #region UI Callbacks
 
-        public void SetupAssemblyExporter()
-        {
-            ModelDoc2 modeldoc = SwApp.ActiveDoc;
-            logger.Info("Assembly export called for file " + modeldoc.GetTitle());
-            bool saveAndRebuild = false;
-            if (modeldoc.GetSaveFlag())
-            {
-                saveAndRebuild = true;
-                logger.Info("Save is required");
-            }
-            else if (modeldoc.Extension.NeedsRebuild2 !=
-                (int)swModelRebuildStatus_e.swModelRebuildStatus_FullyRebuilt)
-            {
-                saveAndRebuild = true;
-                logger.Info("A rebuild is required");
-            }
-            if (saveAndRebuild ||
-                MessageBox.Show("The SW to URDF exporter requires saving and/or rebuilding before continuing",
-                "Save and rebuild document?", MessageBoxButtons.YesNo) == DialogResult.Yes)
-            {
-                int options = (int)swSaveAsOptions_e.swSaveAsOptions_SaveReferenced |
-                        (int)swSaveAsOptions_e.swSaveAsOptions_Silent;
-                logger.Info("Saving assembly");
-                modeldoc.Save3(options, 0, 0);
-
-                logger.Info("Opening property manager");
-                SetupPropertyManager();
-            }
-        }
-
-        public void AssemblyURDFExporter()
-        {
-            try
-            {
-                SetupAssemblyExporter();
-            }
-            catch (Exception e)
-            {
-                logger.Error("An exception was caught when trying to setup the assembly exporter", e);
-                MessageBox.Show("There was a problem setting up the property manager: \n\"" +
-                    e.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
-            }
-        }
-
-        public void SetupPropertyManager()
-        {
-            ExportPropertyManager pm = new ExportPropertyManager((SldWorks)SwApp);
-            logger.Info("Loading config tree");
-            bool success = pm.LoadConfigTree();
-
-            if (success)
-            {
-                logger.Info("Showing property manager");
-                pm.Show();
-            }
-        }
-
-        // The SW2GZ entry point. Opens the native PropertyManagerPage export shell
-        // (left panel) so the 3D viewport stays live. Invoked by name (reflection)
-        // from the ribbon/toolbar button, so it must stay public.
-        // Held as a field (not a local) so the PropertyManagerPage2Handler9 COM
-        // callback object stays rooted while the page is open. As a local it gets
-        // GC'd after LaunchWizard returns, and OnButtonPress (Back/Next/Finish)
-        // silently stops firing — the buttons appear dead.
-        private Sw2gzExportPmp _exportWizard;
-
         // Held as a field so the PropertyManagerPage2Handler9 COM callback stays
-        // rooted while the PMP is open — same footgun as _exportWizard.
+        // rooted while the PMP is open — as a local it would get GC'd after the
+        // launch callback returns and OK/Cancel would silently stop firing.
         private SW2GZ.UI.Pmp.Sw2gzStubPmp _openPanel;
-
-        public void LaunchWizard()
-        {
-            try
-            {
-                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
-
-                _exportWizard = new Sw2gzExportPmp((SldWorks)SwApp, modeldoc);
-                _exportWizard.Show();
-            }
-            catch (Exception e)
-            {
-                logger.Error("An exception was caught launching the SW2GZ export panel", e);
-                MessageBox.Show("There was a problem launching the SW2GZ export panel: \n\"" +
-                    e.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
-            }
-        }
 
         // Export command: loads the saved model, confirms what's implemented +
         // collects meta in a dialog, then runs the bare-model export.
