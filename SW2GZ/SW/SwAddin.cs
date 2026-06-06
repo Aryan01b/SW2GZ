@@ -303,108 +303,15 @@ namespace SW2GZ.SW
 
         public void AddCommandMgr()
         {
-            const string title = "SW2GZ";
-            const string buttonName = "Create Model";
-            const string toolTip = "Create Model";
-            const string hint = "Generate a simulation-ready ROS 2 package (URDF, ros2_control, Gazebo, sensors) from this assembly.";
-
-            int errs = 0;
-
-            // Guard against SolidWorks' cached CommandManager layout. If the commands
-            // stored in the registry from a previous load differ from what we register
-            // now, tell SW to discard the cached group (ignorePrevious = true) instead
-            // of merging old + new into duplicate buttons.
-            bool ignorePrevious = false;
-            object registryIDs;
-            int[] knownIDs = new int[] { sw2gzWizardUserID, sw2gzExportUserID };
-            bool hadRegistryData = CmdMgr.GetGroupDataFromRegistry(sw2gzCmdGroupID, out registryIDs);
-            if (hadRegistryData && !CompareIDs((int[])registryIDs, knownIDs))
+            try
             {
-                ignorePrevious = true;
+                var registrar = new SW2GZ.UI.Ribbon.Sw2gzRibbonRegistrar(
+                    CmdMgr, Sw2gzStripIconList(), Sw2gzIconList());
+                registrar.Register();
             }
-
-            ICommandGroup grp = CmdMgr.CreateCommandGroup2(
-                sw2gzCmdGroupID, title, toolTip, hint, -1, ignorePrevious, ref errs);
-            if (grp == null)
+            catch (Exception e)
             {
-                logger.Error("Failed to create SW2GZ command group (error code " + errs + ")");
-            }
-            else
-            {
-                grp.IconList = Sw2gzStripIconList();  // per-button glyphs (strip)
-                grp.MainIconList = Sw2gzIconList();    // command-group glyph (cube)
-
-                // Image index 0 = cube column of the strip.
-                int cmdIndex = grp.AddCommandItem2(
-                    buttonName, -1, hint, toolTip, 0,
-                    "LaunchWizard", "WizardEnable", sw2gzWizardUserID,
-                    (int)swCommandItemType_e.swToolbarItem);
-                if (cmdIndex < 0)
-                {
-                    logger.Error("Failed to add SW2GZ command item to the command group");
-                }
-
-                // Image index 1 = export (cube + arrow) column of the strip.
-                int exportIndex = grp.AddCommandItem2(
-                    "Export", -1, "Export the saved model to a ROS 2 / Gz package", "Export", 1,
-                    "LaunchExport", "WizardEnable", sw2gzExportUserID,
-                    (int)swCommandItemType_e.swToolbarItem);
-                if (exportIndex < 0)
-                {
-                    logger.Error("Failed to add SW2GZ Export command item");
-                }
-
-                // Stacks ribbon section (Actuation/Sensors/Gazebo/Bridge) temporarily
-                // removed — see the user-ID note above. Re-add here with a cached
-                // enable gate when the Create Model flow is verified.
-
-                // Exactly ONE entry: the ribbon/toolbar button. HasMenu=false so the
-                // command group does NOT auto-create a duplicate Tools-menu item.
-                grp.HasToolbar = true;
-                grp.HasMenu = false;
-                grp.Activate();
-
-                // Place the button on a dedicated CommandManager ribbon tab for
-                // assembly documents. Best-effort: if any step fails we still have
-                // the toolbar button.
-                try
-                {
-                    int cmdId = grp.get_CommandID(cmdIndex);
-                    int exportCmdId = grp.get_CommandID(exportIndex);
-
-                    // Remove any existing SW2GZ tab from a previous load BEFORE re-adding,
-                    // otherwise AddCommandTabBox() stacks a second button box on top of the
-                    // persisted one each session — the cause of the duplicate ribbon button.
-                    CommandTab existing = CmdMgr.GetCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
-                    if (existing != null)
-                    {
-                        CmdMgr.RemoveCommandTab(existing);
-                        existing = null;
-                    }
-
-                    CommandTab tab = CmdMgr.AddCommandTab((int)swDocumentTypes_e.swDocASSEMBLY, title);
-                    if (tab != null)
-                    {
-                        int textBelow = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow;
-
-                        // Primary box: Create Model + Export. (The "Stacks" section
-                        // box is temporarily removed — see the user-ID note above.)
-                        ICommandTabBox box = tab.AddCommandTabBox();
-                        int[] cmdIds = new int[] { cmdId, exportCmdId };
-                        int[] textTypes = new int[] { textBelow, textBelow };
-                        box.AddCommands(cmdIds, textTypes);
-
-                        logger.Info("Added SW2GZ command tab for assembly documents");
-                    }
-                }
-                catch (Exception e)
-                {
-                    // Tab placement is the most fragile part of the COM surface;
-                    // the toolbar button still exposes the command.
-                    logger.Warn("SW2GZ ribbon tab placement failed (toolbar button still available)", e);
-                }
-
-                logger.Info("SW2GZ command group activated");
+                logger.Error("AddCommandMgr: ribbon registration failed", e);
             }
         }
 
@@ -504,6 +411,10 @@ namespace SW2GZ.SW
         // GC'd after LaunchWizard returns, and OnButtonPress (Back/Next/Finish)
         // silently stops firing — the buttons appear dead.
         private Sw2gzExportPmp _exportWizard;
+
+        // Held as a field so the PropertyManagerPage2Handler9 COM callback stays
+        // rooted while the PMP is open — same footgun as _exportWizard.
+        private SW2GZ.UI.Pmp.Sw2gzStubPmp _openPanel;
 
         public void LaunchWizard()
         {
@@ -623,6 +534,96 @@ namespace SW2GZ.SW
                 (int)swMessageBoxIcon_e.swMbInformation,
                 (int)swMessageBoxBtn_e.swMbOk);
             return false;
+        }
+
+        // ─── Mode pills ───────────────────────────────────────────────
+        public void ModeRobotClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.Robot);
+        public void ModeWorldClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.World);
+        public void ModeAssetClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.Asset);
+
+        public int ModeRobotEnable() => AssemblyEnable();
+        public int ModeWorldEnable() => AssemblyEnable();
+        public int ModeAssetEnable() => AssemblyEnable();
+
+        private void SetMode(SW2GZ.URDFExport.Sw2gzMode mode)
+        {
+            if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+            var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+            doc.Mode = mode;
+            // SolidWorks re-polls enable-callbacks on the next paint, so the
+            // cluster visibility flips automatically — no explicit refresh
+            // call (ICommandManager has no UpdateCommandBars on this SDK).
+        }
+
+        // ─── Common cluster ───────────────────────────────────────────
+        public void OpenCoordPmp()   => OpenStub("Coord");
+        public void OpenPreviewPmp() => LaunchExport_PreviewShim();   // routes to existing flow — see Task 9
+        public void OpenExportPmp()  => LaunchExport();               // existing method
+
+        // ─── Robot cluster ────────────────────────────────────────────
+        public void OpenRobotLinksPmp()     => OpenStub("Links");
+        public void OpenRobotJointsPmp()    => OpenStub("Joints");
+        public void OpenRobotInertiaPmp()   => OpenStub("Inertia");
+        public void OpenRobotSensorsPmp()   => OpenStub("Sensors");
+        public void OpenRobotActuationPmp() => OpenStub("Actuation");
+        public void OpenRobotStackPmp()     => OpenStub("Stack");
+
+        // ─── World cluster ────────────────────────────────────────────
+        public void OpenWorldGroundPmp()  => OpenStub("Ground");
+        public void OpenWorldAssetsPmp()  => OpenStub("Assets");
+        public void OpenWorldPhysicsPmp() => OpenStub("Physics");
+        public void OpenWorldScenePmp()   => OpenStub("Scene");
+
+        // ─── Asset cluster ────────────────────────────────────────────
+        public void OpenAssetBodyPmp()    => OpenStub("Body");
+        public void OpenAssetSurfacePmp() => OpenStub("Surface");
+
+        // ─── Per-cluster enable callbacks ─────────────────────────────
+        public int AssemblyEnable() => WizardEnable();   // reuse the existing asm-only gate
+
+        public int RobotClusterEnable() => ClusterEnable(SW2GZ.UI.Ribbon.RibbonCluster.Robot);
+        public int WorldClusterEnable() => ClusterEnable(SW2GZ.UI.Ribbon.RibbonCluster.World);
+        public int AssetClusterEnable() => ClusterEnable(SW2GZ.UI.Ribbon.RibbonCluster.Asset);
+
+        private int ClusterEnable(SW2GZ.UI.Ribbon.RibbonCluster cluster)
+        {
+            try
+            {
+                if (AssemblyEnable() == 0) return 0;
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
+                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                return SW2GZ.UI.Ribbon.ClusterVisibility.IsVisible(doc.Mode, cluster) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                logger.Warn("ClusterEnable failed", e);
+                return 0;
+            }
+        }
+
+        // ─── Stub PMP launcher ────────────────────────────────────────
+        private void OpenStub(string title)
+        {
+            try
+            {
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                _openPanel = new SW2GZ.UI.Pmp.Sw2gzStubPmp(
+                    (SldWorks)SwApp, doc, title, _ => { /* no-op for UI-only phase */ });
+                _openPanel.Show();
+            }
+            catch (Exception e)
+            {
+                logger.Error("OpenStub '" + title + "' failed", e);
+                MessageBox.Show("Could not open " + title + ": " + e.Message);
+            }
+        }
+
+        // Preview routing — kept as a shim so Task 9 can flesh out the wiring
+        // without re-touching this file's command graph.
+        private void LaunchExport_PreviewShim()
+        {
+            OpenStub("Preview");   // stub for now; Task 9 routes to PreviewServer/PreviewDialog
         }
 
         #endregion UI Callbacks
