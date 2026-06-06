@@ -39,7 +39,7 @@ using SW2GZ.Utilities;
 namespace SW2GZ.UI.Pmp
 {
     [ComVisible(true)]
-    public sealed class Sw2gzStubPmp : PropertyManagerPage2Handler9
+    internal sealed class Sw2gzStubPmp : PropertyManagerPage2Handler9
     {
         private static readonly log4net.ILog logger = Logger.GetLogger();
 
@@ -48,12 +48,14 @@ namespace SW2GZ.UI.Pmp
         private readonly Sw2gzDoc _snapshot;
         private readonly Action<Sw2gzDoc> _onCommit;
         private readonly PropertyManagerPage2 _page;
+        private readonly string _title;
 
         public Sw2gzStubPmp(SldWorks swApp, Sw2gzDoc liveDoc, string title, Action<Sw2gzDoc> onCommit)
         {
             _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
             _liveDoc = liveDoc ?? throw new ArgumentNullException(nameof(liveDoc));
             _onCommit = onCommit ?? (d => { });
+            _title = title;
 
             // Snapshot BEFORE the page is created so any auto-mutation during
             // page setup is rolled back on Cancel.
@@ -83,7 +85,11 @@ namespace SW2GZ.UI.Pmp
 
         public void Show()
         {
-            if (_page == null) return;
+            if (_page == null)
+            {
+                _swApp.SendMsgToUser("Could not open the '" + _title + "' panel. See log for details.");
+                return;
+            }
             _page.Show2(0);
         }
 
