@@ -55,14 +55,16 @@ namespace SW2GZ.UI.Ribbon
             const string title = "SW2GZ";
             int errs = 0;
 
-            // Discard SolidWorks' cached CommandManager layout if the registry-
-            // stored IDs no longer match what we're about to register.
-            bool ignorePrevious = false;
+            // Always discard SolidWorks' cached CommandManager layout for this
+            // group. v2.1.0 has 18 commands where the v2.1.1 ribbon had 2; SW's
+            // cached tab placement / visibility from the prior install was
+            // applied to the rebuilt tab and silently hid it. Force-fresh is
+            // what the SW SDK examples recommend for an upgrade of this shape.
+            bool ignorePrevious = true;
             object registryIDs;
-            int[] knownIDs = RibbonCommandIds.AllUserIds;
-            bool hadRegistryData = _cmdMgr.GetGroupDataFromRegistry(RibbonCommandIds.CmdGroupId, out registryIDs);
-            if (hadRegistryData && !ArraysMatch((int[])registryIDs, knownIDs))
-                ignorePrevious = true;
+            _cmdMgr.GetGroupDataFromRegistry(RibbonCommandIds.CmdGroupId, out registryIDs);
+            logger.Info("Sw2gzRibbonRegistrar: ignorePrevious=true (registry had cached IDs: " +
+                (registryIDs != null) + ")");
 
             ICommandGroup grp = _cmdMgr.CreateCommandGroup2(
                 RibbonCommandIds.CmdGroupId, title,
