@@ -1,38 +1,38 @@
 # Progress
 
-Current: **v2.1.1** stabilization on `v2.1.1-stabilization` branch (pending PR
-→ `main`, then tag + GitHub release). Phase 1 shipped in 2.1.0; v2.1.1 is the
-first GitHub release after v2.0.0 (v2.1.0 folded in).
+Current: **v2.1.0 UI-shell** shipped on `v2.1.0` branch. Backend wiring in next plan.
 
-## Done
+## Done (v2.1.0 UI shell — this plan)
 
-- **v2.1.1 stabilization** (7 items shipped on `v2.1.1-stabilization`):
-  ribbon null-safety + DRY, ExportDialog cross-assembly defaults + named
-  link/joint summary, pipeline preflight + atomic re-export + per-run log,
-  COM-boundary catch-all, stale-test cleanup, golden refresh. Test suite
-  605/605 green, Release DLL builds.
-- **Phase 1 — RobotPackage export** (v2.1.0, CHANGELOG.md). Wizard +
-  one-click Export → turn-key ROS 2 Jazzy / Gz Harmonic package.
-- **Pipeline groundwork P1–P9**: `RobotModel` aggregate, inertial math,
-  QuickHull3D collider, materials, sensors data, etc. (see CHANGELOG).
-- **Export-modes cleanup** — single `Sw2gzPipeline.Run` overload threads
-  `ExportMode` + `StackProfile`. All three modes route through it. Dead
-  `SdfModelInput` path removed. (commits `54c8ed8`, `5bc28ff`, `0a48f28`)
-- **Wizard mode-aware step plan** — gz asset/world skip Links+Joints
-  (`763fb20`); Back/Next fixed with unit-tested step plan (`4f9dd42`);
-  Output step dropped, moved to ExportDialog (`d7d43f4`).
-- **Exporter polish** — per-package README + gitignore (`464dcc2`); Jazzy
-  + Gz Harmonic-ready output (`29837f9`).
-- **Ribbon trim** — Stacks buttons removed for now (`b7d82c7`).
+- Sw2gzDoc in-memory tree (Robot/World/Asset subtrees).
+- Sw2gzDocSnapshot deep-clone + restore (PMP cancel rollback).
+- Sw2gzDocStore per-document in-memory cache.
+- ClusterVisibility pure helper (mode → cluster visibility).
+- RibbonCommandIds — central layout.
+- Sw2gzStubPmp generic shell PMP.
+- Sw2gzRibbonRegistrar — 4-cluster ribbon build.
+- SwAddin — 18 panel callbacks + mode pills + cluster enable gating.
+- Common.Preview routed to existing PreviewDialog.
+- Common.Export routed to existing ExportDialog.
+- Sw2gzExportPmp linear wizard deleted.
 
-## Next (v2.2 candidates)
+## Done (inherited from v2.1.1 main work — see CHANGELOG)
 
-- Wizard step content tailored per `ExportMode` (today only the step *list*
-  changes; content for SdfModel/SdfWorld is still placeholder).
-- Bring Stacks buttons back behind a saved-model + RobotPackage gate.
+- Pipeline preflight + atomic stage/swap + per-run log.
+- ExportDialog cross-assembly defaults.
+- Per-link anchors + mesh union + REP-105 root.
+- Browser-based three.js preview with live SW joint sync.
+- SW→ROS coord rotation primitives (used internally; UI moved to advanced-only).
+
+## Next (separate plans)
+
+- **Backend wiring** — persist `Sw2gzDoc` into the SW Attribute, replace per-panel stubs with real fields, evolve `Sw2gzExportConfig` schema, full `RobotPipeline`/`WorldPipeline`/`AssetPipeline` split.
+- **Coord auto-default** — internalise `SwToRosRotation` so users don't pick.
+- **Plug-and-play stack** — fill the ros2_control + bridge + clock + RSP gap per spec §7.1.
+- **Cleanup pass** — dead-code list from spec §9 (TfTreeFormatter, emitWorldLink, etc.).
 
 ## Conventions reminder
 
-- No AI attribution in commits / files (memory: `no-ai-attribution`).
-- Add new `.cs` to **both** `SW2GZ.csproj` and `Test\SW2GZ.Writers.Test.csproj`.
-- Close SolidWorks before rebuild or `bin\Release\SW2GZ.dll` copy is blocked.
+- No AI attribution.
+- Legacy csproj — add new .cs files to BOTH `SW2GZ\SW2GZ.csproj` AND `Test\SW2GZ.Writers.Test.csproj` when source-linking pure files.
+- Close SolidWorks before rebuild or DLL copy is blocked.
