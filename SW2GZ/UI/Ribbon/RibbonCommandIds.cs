@@ -46,7 +46,7 @@ namespace SW2GZ.UI.Ribbon
         public const int AssetBody       = 40;
         public const int AssetSurface    = 41;
 
-        public static int[] AllUserIds = new[]
+        public static readonly int[] AllUserIds = new[]
         {
             ModeRobot, ModeWorld, ModeAsset,
             CoordPmp, PreviewPmp, ExportPmp,
