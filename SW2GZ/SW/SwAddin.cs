@@ -432,14 +432,22 @@ namespace SW2GZ.SW
             return false;
         }
 
-        // ─── Mode pills ───────────────────────────────────────────────
+        // ─── Mode flyout (L3b) ────────────────────────────────────────
+        // ModeRobotClick / ModeWorldClick / ModeAssetClick are invoked by the
+        // Mode ▾ flyout sub-items in Sw2gzRibbonRegistrar.BuildModeFlyout.
+        // OpenModePicker is the click target for the flyout button face — SW
+        // opens the dropdown automatically on click of either the face or the
+        // chevron, so this callback is a no-op that exists only to satisfy
+        // CreateFlyoutGroup's required callback parameter.
+        public void OpenModePicker() { /* SW handles the dropdown open */ }
         public void ModeRobotClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.Robot);
         public void ModeWorldClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.World);
         public void ModeAssetClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.Asset);
 
-        public int ModeRobotEnable() => AssemblyEnable();
-        public int ModeWorldEnable() => AssemblyEnable();
-        public int ModeAssetEnable() => AssemblyEnable();
+        // Flyout UpdateCallback — invoked by SW to determine if the flyout
+        // button (and each menu item) is enabled. Same rule as the panel
+        // buttons: only when an assembly doc is active.
+        public int ModeFlyoutUpdate() => AssemblyEnable();
 
         private void SetMode(SW2GZ.URDFExport.Sw2gzMode mode)
         {

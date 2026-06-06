@@ -6,7 +6,8 @@ Stable across builds — change only with an intentional version bump (the old
 group ID's registry cache would then be discarded as stale).
 
 Layout:
-   0..2   Mode toggle pills        (Robot / World / Asset)
+   0..2   Mode flyout sub-items    (Robot / World / Asset — selected via Mode ▾ dropdown)
+   3      Mode flyout group        (single "Mode ▾" button hosting the 3 sub-items)
   10..12  Common cluster           (Coord / Preview / Export)
   20..25  Robot cluster            (Links / Joints / Inertia / Sensors / Actuation / Stack)
   30..33  World cluster            (Ground / Assets / Physics / Scene)
@@ -23,10 +24,13 @@ namespace SW2GZ.UI.Ribbon
         // value like 0 caused AddCommandTab to silently refuse on first install.
         public const int CmdGroupId = 92;
 
-        // Mode pills
-        public const int ModeRobot   = 0;
-        public const int ModeWorld   = 1;
-        public const int ModeAsset   = 2;
+        // Mode flyout — Robot/World/Asset are the sub-items inside a single
+        // "Mode ▾" dropdown button (ModeFlyoutGroup). The sub-item IDs (0..2)
+        // are kept stable so the click callbacks in SwAddin stay wired by name.
+        public const int ModeRobot       = 0;
+        public const int ModeWorld       = 1;
+        public const int ModeAsset       = 2;
+        public const int ModeFlyoutGroup = 3;
 
         // Common cluster
         public const int CoordPmp    = 10;
@@ -51,6 +55,11 @@ namespace SW2GZ.UI.Ribbon
         public const int AssetBody       = 40;
         public const int AssetSurface    = 41;
 
+        // Note: ModeFlyoutGroup is intentionally NOT in this list because the
+        // flyout-group ID is allocated by ICommandManager.CreateFlyoutGroup
+        // (separate registry namespace from AddCommandItem2 user-IDs). The
+        // Robot/World/Asset IDs are included because they're real
+        // sub-command items inside the flyout.
         public static readonly int[] AllUserIds = new[]
         {
             ModeRobot, ModeWorld, ModeAsset,
