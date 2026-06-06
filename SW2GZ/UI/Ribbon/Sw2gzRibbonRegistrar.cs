@@ -36,9 +36,14 @@ namespace SW2GZ.UI.Ribbon
         private readonly string[] _stripIcons;
         private readonly string[] _mainIcons;
 
-        // userId -> cmdId, populated as we add each command item. Cached at
-        // addition time because walking ICommandGroup.CommandID after the fact
-        // is fragile across SDK wrapper versions.
+        // userId -> AddCommandItem2 return index. Cached during AddItem; the
+        // get_CommandID(idx) resolution happens AFTER grp.Activate() because the
+        // SW SDK only returns valid command IDs once the group is activated.
+        // Resolving before Activate quietly returns zero/invalid cmdIds, the
+        // tab boxes get filled with bad IDs, and SW silently hides the tab.
+        private readonly Dictionary<int, int> _userToCmdIdx = new Dictionary<int, int>();
+
+        // userId -> cmdId. Populated by ResolveCmdIds() after Activate.
         private readonly Dictionary<int, int> _userToCmdId = new Dictionary<int, int>();
 
         public Sw2gzRibbonRegistrar(ICommandManager cmdMgr, string[] stripIcons, string[] mainIcons)
@@ -50,6 +55,7 @@ namespace SW2GZ.UI.Ribbon
 
         public void Register()
         {
+            _userToCmdIdx.Clear();
             _userToCmdId.Clear();
 
             const string title = "SW2GZ";
@@ -116,8 +122,27 @@ namespace SW2GZ.UI.Ribbon
             grp.HasMenu = false;
             grp.Activate();
 
+            // CRITICAL: get_CommandID is only valid AFTER Activate. Resolve
+            // every userId -> cmdId here so BuildTab's AddBox calls can pass
+            // real command IDs into ICommandTabBox.AddCommands. Doing this in
+            // AddItem (before Activate) was the v2.1.0 hang where the tab
+            // registered with all-zero cmdIds and SW silently dropped it.
+            ResolveCmdIds(grp);
+
             BuildTab(title, grp);
-            logger.Info("Sw2gzRibbonRegistrar: registered 18 commands across 4 clusters");
+            logger.Info("Sw2gzRibbonRegistrar: registered " + _userToCmdId.Count +
+                " commands across 4 clusters");
+        }
+
+        private void ResolveCmdIds(ICommandGroup grp)
+        {
+            foreach (var kvp in _userToCmdIdx)
+            {
+                int cmdId = grp.get_CommandID(kvp.Value);
+                _userToCmdId[kvp.Key] = cmdId;
+            }
+            logger.Info("Sw2gzRibbonRegistrar: resolved " + _userToCmdId.Count +
+                " cmdIds post-Activate");
         }
 
         // Mirrors SwAddin.AddCommandMgr's AddCommandItem2 parameter order:
@@ -133,7 +158,9 @@ namespace SW2GZ.UI.Ribbon
                 logger.Error("Sw2gzRibbonRegistrar: AddCommandItem2 failed for '" + name + "' (userId=" + userId + ")");
                 return;
             }
-            _userToCmdId[userId] = grp.get_CommandID(idx);
+            // Stash the raw index. The userId -> cmdId resolution happens in
+            // ResolveCmdIds() AFTER grp.Activate(); see the comment there.
+            _userToCmdIdx[userId] = idx;
         }
 
         private void BuildTab(string title, ICommandGroup grp)
