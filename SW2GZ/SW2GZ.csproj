@@ -563,6 +563,7 @@
     <Compile Include="UI\Services\Sw\SwThemeService.cs" />
     <Compile Include="UI\Services\Sw\Sw2gzPipelineExportRunner.cs" />
     <Compile Include="UI\Services\Sw\WizardModelComposer.cs" />
+    <Compile Include="UI\Ribbon\ClusterVisibility.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
