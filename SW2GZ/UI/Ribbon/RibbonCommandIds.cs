@@ -16,7 +16,12 @@ namespace SW2GZ.UI.Ribbon
 {
     public static class RibbonCommandIds
     {
-        public const int CmdGroupId = 0;   // unchanged from v2.1.1 so registry stays warm
+        // SolidWorks group ID — matches the value used by the v2.0.0 / v2.1.1
+        // ribbon (was sw2gzCmdGroupID = 92 in the deleted SwAddin code). Keeping
+        // 92 (a) reuses the registry slot SW already knows about, and
+        // (b) avoids the numeric collision with ModeRobot = 0 below. A pristine
+        // value like 0 caused AddCommandTab to silently refuse on first install.
+        public const int CmdGroupId = 92;
 
         // Mode pills
         public const int ModeRobot   = 0;

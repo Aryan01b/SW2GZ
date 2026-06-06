@@ -150,6 +150,7 @@ namespace SW2GZ.UI.Ribbon
                 logger.Warn("Sw2gzRibbonRegistrar: AddCommandTab returned null — toolbar buttons still available");
                 return;
             }
+            logger.Info("Sw2gzRibbonRegistrar: tab '" + title + "' added for swDocASSEMBLY");
 
             int textBelow = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow;
 
@@ -189,11 +190,20 @@ namespace SW2GZ.UI.Ribbon
                     logger.Warn("Sw2gzRibbonRegistrar: no cmdId cached for userId=" + userId + " (AddCommandItem2 failed?)");
                 }
             }
-            if (cmdIds.Count == 0) return;
+            if (cmdIds.Count == 0)
+            {
+                logger.Warn("Sw2gzRibbonRegistrar: AddBox called with no resolvable cmdIds — skipped");
+                return;
+            }
 
             ICommandTabBox box = tab.AddCommandTabBox();
-            if (box == null) return;
+            if (box == null)
+            {
+                logger.Warn("Sw2gzRibbonRegistrar: AddCommandTabBox returned null — cluster skipped");
+                return;
+            }
             box.AddCommands(cmdIds.ToArray(), textTypes.ToArray());
+            logger.Info("Sw2gzRibbonRegistrar: tab box added with " + cmdIds.Count + " commands");
         }
 
         private static bool ArraysMatch(int[] a, int[] b)
