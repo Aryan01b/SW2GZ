@@ -363,6 +363,7 @@
     <Compile Include="URDFExport\Sw2gzDoc.cs" />
     <Compile Include="URDFExport\Sw2gzDocSnapshot.cs" />
     <Compile Include="URDFExport\Sw2gzDocStore.cs" />
+    <Compile Include="URDFExport\Sw2gzDocLock.cs" />
     <Compile Include="URDFExport\Sw2gzConfigCodec.cs" />
     <Compile Include="URDFExport\Sw2gzConfigSerialization.cs" />
     <Compile Include="Build\Model\LinkDef.cs" />

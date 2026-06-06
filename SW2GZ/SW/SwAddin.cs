@@ -298,9 +298,9 @@ namespace SW2GZ.SW
         {
             try
             {
-                var registrar = new SW2GZ.UI.Ribbon.Sw2gzRibbonRegistrar(
+                _ribbonRegistrar = new SW2GZ.UI.Ribbon.Sw2gzRibbonRegistrar(
                     CmdMgr, Sw2gzStripIconList(), Sw2gzIconList());
-                registrar.Register();
+                _ribbonRegistrar.Register();
             }
             catch (Exception e)
             {
@@ -329,6 +329,10 @@ namespace SW2GZ.SW
         // rooted while the PMP is open — as a local it would get GC'd after the
         // launch callback returns and OK/Cancel would silently stop firing.
         private SW2GZ.UI.Pmp.Sw2gzStubPmp _openPanel;
+
+        // Held so SetMode can call RefreshTabForMode for the L3b "only active
+        // mode visible" tab rebuild. Set in AddCommandMgr.
+        private SW2GZ.UI.Ribbon.Sw2gzRibbonRegistrar _ribbonRegistrar;
 
         // Export command: loads the saved model, confirms what's implemented +
         // collects meta in a dialog, then runs the bare-model export.
@@ -444,19 +448,52 @@ namespace SW2GZ.SW
         public void ModeWorldClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.World);
         public void ModeAssetClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.Asset);
 
-        // Flyout UpdateCallback — invoked by SW to determine if the flyout
-        // button (and each menu item) is enabled. Same rule as the panel
-        // buttons: only when an assembly doc is active.
+        // UpdateCallback for the flyout BUTTON itself — always enabled when an
+        // assembly is active, even if the doc is mode-locked. User can still
+        // open the menu to see which mode they're in.
         public int ModeFlyoutUpdate() => AssemblyEnable();
+
+        // UpdateCallback for the 3 SUB-ITEMS inside the flyout — gated on the
+        // doc-lock: once any user element exists (Links/Joints/Sensors/Ground/
+        // Assets/BodyPart), mode is frozen, sub-items disable. Tooltip on each
+        // sub-item explains; user has to delete content to switch mode.
+        public int ModeSubItemUpdate()
+        {
+            try
+            {
+                if (AssemblyEnable() == 0) return 0;
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
+                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                return SW2GZ.URDFExport.Sw2gzDocLock.IsLocked(doc) ? 0 : 1;
+            }
+            catch (Exception e)
+            {
+                logger.Warn("ModeSubItemUpdate failed", e);
+                return 0;
+            }
+        }
 
         private void SetMode(SW2GZ.URDFExport.Sw2gzMode mode)
         {
             if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
             var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+            if (SW2GZ.URDFExport.Sw2gzDocLock.IsLocked(doc))
+            {
+                logger.Info("SetMode: ignored (doc locked in mode=" + doc.Mode + ")");
+                return;
+            }
+            if (doc.Mode == mode)
+            {
+                logger.Info("SetMode: already in " + mode + ", no-op");
+                return;
+            }
             doc.Mode = mode;
-            // SolidWorks re-polls enable-callbacks on the next paint, so the
-            // cluster visibility flips automatically — no explicit refresh
-            // call (ICommandManager has no UpdateCommandBars on this SDK).
+            logger.Info("SetMode: switched to " + mode);
+
+            // L3b: rebuild the tab so only the active mode's panel cluster
+            // shows. SW's enable-callback can only gray, not hide.
+            try { _ribbonRegistrar?.RefreshTabForMode(mode); }
+            catch (Exception e) { logger.Warn("SetMode: tab refresh failed", e); }
         }
 
         // ─── Common cluster ───────────────────────────────────────────

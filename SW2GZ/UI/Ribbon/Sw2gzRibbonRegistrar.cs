@@ -207,18 +207,49 @@ namespace SW2GZ.UI.Ribbon
 
             // Sub-items live in the flyout's own ID space (separate from
             // grp.AddCommandItem2's userId namespace).
+            // Sub-items use ModeSubItemUpdate (not ModeFlyoutUpdate) so they
+            // disable once the doc is mode-locked. The flyout button itself
+            // stays clickable (uses ModeFlyoutUpdate) — user can still open
+            // the menu and see the current mode greyed-out.
             _modeFlyout.AddCommandItem("Robot",
-                "Author an actuated robot model (URDF + ros2_control + Gz plugins).",
-                0, "ModeRobotClick", "ModeFlyoutUpdate");
+                "Author an actuated robot model (URDF + ros2_control + Gz plugins). Disabled once Robot content exists.",
+                0, "ModeRobotClick", "ModeSubItemUpdate");
             _modeFlyout.AddCommandItem("World",
-                "Author a Gazebo world (SDF world + included assets + physics/scene).",
-                0, "ModeWorldClick", "ModeFlyoutUpdate");
+                "Author a Gazebo world (SDF world + included assets + physics/scene). Disabled once World content exists.",
+                0, "ModeWorldClick", "ModeSubItemUpdate");
             _modeFlyout.AddCommandItem("Asset",
-                "Author a single-body static SDF model.",
-                0, "ModeAssetClick", "ModeFlyoutUpdate");
+                "Author a single-body static SDF model. Disabled once Asset content exists.",
+                0, "ModeAssetClick", "ModeSubItemUpdate");
 
             logger.Info("Sw2gzRibbonRegistrar: mode flyout built (cmdId=" +
                 _modeFlyout.CmdID + ", 3 sub-items)");
+        }
+
+        // Per-mode panel-cluster user-ID lists. Used by both BuildTab (initial
+        // load — defaults to Robot) and RebuildTabForMode (after the user
+        // picks a different mode from the Mode flyout dropdown). Exposed as
+        // arrays so the same data drives both the initial build and rebuild.
+        private static readonly int[] RobotClusterUserIds = new[] {
+            RibbonCommandIds.RobotLinks, RibbonCommandIds.RobotJoints, RibbonCommandIds.RobotInertia,
+            RibbonCommandIds.RobotSensors, RibbonCommandIds.RobotActuation, RibbonCommandIds.RobotStack };
+        private static readonly int[] WorldClusterUserIds = new[] {
+            RibbonCommandIds.WorldGround, RibbonCommandIds.WorldAssets,
+            RibbonCommandIds.WorldPhysics, RibbonCommandIds.WorldScene };
+        private static readonly int[] AssetClusterUserIds = new[] {
+            RibbonCommandIds.AssetBody, RibbonCommandIds.AssetSurface };
+
+        // Active mode used by the next BuildTab call. Refresh sets this then
+        // calls BuildTab; the initial Register call also drives it from the
+        // Sw2gzDoc state in SwAddin (see RefreshTabForMode below).
+        private SW2GZ.URDFExport.Sw2gzMode _activeMode = SW2GZ.URDFExport.Sw2gzMode.Robot;
+
+        // L3b only-one-mode-visible behaviour: SW's enable-callback can gray
+        // a button but not hide it. To truly hide non-active mode clusters
+        // we tear down the tab and rebuild with only the active mode's box.
+        public void RefreshTabForMode(SW2GZ.URDFExport.Sw2gzMode mode)
+        {
+            _activeMode = mode;
+            BuildTab("SW2GZ", null);   // grp not needed for tab rebuild
         }
 
         private void BuildTab(string title, ICommandGroup grp)
@@ -237,30 +268,26 @@ namespace SW2GZ.UI.Ribbon
                 logger.Warn("Sw2gzRibbonRegistrar: AddCommandTab returned null — toolbar buttons still available");
                 return;
             }
-            logger.Info("Sw2gzRibbonRegistrar: tab '" + title + "' added for swDocASSEMBLY");
+            logger.Info("Sw2gzRibbonRegistrar: tab '" + title + "' added for swDocASSEMBLY (mode=" + _activeMode + ")");
 
             int textBelow = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow;
             int flyoutShowAll = (int)swCommandTabButtonFlyoutStyle_e.swCommandTabButton_ActionFlyout;
 
-            // Common cluster (Mode ▾ flyout + 3 common actions). The flyout's
-            // cmdId comes from CreateFlyoutGroup, NOT from grp.get_CommandID, so
-            // we build the tab box manually here rather than via AddBox (which
-            // assumes everything is in _userToCmdId).
+            // Common cluster (Mode ▾ flyout + 3 common actions) — always shown.
             BuildCommonTabBox(tab, textBelow, flyoutShowAll);
 
-            // Robot cluster
-            AddBox(tab, textBelow, new[] {
-                RibbonCommandIds.RobotLinks, RibbonCommandIds.RobotJoints, RibbonCommandIds.RobotInertia,
-                RibbonCommandIds.RobotSensors, RibbonCommandIds.RobotActuation, RibbonCommandIds.RobotStack });
-
-            // World cluster
-            AddBox(tab, textBelow, new[] {
-                RibbonCommandIds.WorldGround, RibbonCommandIds.WorldAssets,
-                RibbonCommandIds.WorldPhysics, RibbonCommandIds.WorldScene });
-
-            // Asset cluster
-            AddBox(tab, textBelow, new[] {
-                RibbonCommandIds.AssetBody, RibbonCommandIds.AssetSurface });
+            // Only the ACTIVE mode's cluster goes on the tab. L3b "one mode
+            // at a time" — the others are not just disabled, they don't appear.
+            int[] activeIds;
+            string activeName;
+            switch (_activeMode)
+            {
+                case SW2GZ.URDFExport.Sw2gzMode.World: activeIds = WorldClusterUserIds; activeName = "World"; break;
+                case SW2GZ.URDFExport.Sw2gzMode.Asset: activeIds = AssetClusterUserIds; activeName = "Asset"; break;
+                default:                               activeIds = RobotClusterUserIds; activeName = "Robot"; break;
+            }
+            AddBox(tab, textBelow, activeIds);
+            logger.Info("Sw2gzRibbonRegistrar: rendered " + activeName + " panel cluster only (L3b hide-others)");
         }
 
         // Build the Common tab box: [Mode flyout] [Coord] [Preview] [Export].
