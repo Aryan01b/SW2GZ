@@ -64,13 +64,6 @@ namespace SW2GZ.SW
         public const int mainItemID2 = 1;
         public const int mainItemID3 = 2;
 
-        // SW2GZ ribbon command group.
-        public const int sw2gzCmdGroupID = 92;
-        public const int sw2gzWizardCmdID = 0;
-        // Stable user-ID handed to AddCommandItem2; SolidWorks persists toolbar
-        // docking state against it, so it must not collide with other groups.
-        private const int sw2gzWizardUserID = 920;
-        private const int sw2gzExportUserID = 921;
         // NOTE: the per-stack "Stacks" ribbon buttons (Actuation/Sensors/Gazebo/
         // Bridge, user IDs 922–925) are temporarily removed while the Create Model
         // flow is sanity-checked. Their enable callback re-loaded the full config
@@ -315,30 +308,17 @@ namespace SW2GZ.SW
             }
         }
 
-        // True iff the registry-stored command IDs match exactly what the add-in
-        // registers now. Used to decide whether SolidWorks' cached CommandManager
-        // layout is stale (see AddCommandMgr / ignorePrevious).
-        private static bool CompareIDs(int[] stored, int[] known)
-        {
-            if (stored == null || known == null) return false;
-            if (stored.Length != known.Length) return false;
-            foreach (int id in known)
-            {
-                if (System.Array.IndexOf(stored, id) < 0) return false;
-            }
-            return true;
-        }
-
         public int ToolbarEnableMethod()
         {
             return 1;
         }
         public void RemoveCommandMgr()
         {
-            // Symmetric with AddCommandMgr: only the command group is created, so
-            // only the command group is removed (single ribbon/toolbar button).
-            CmdMgr.RemoveCommandGroup(sw2gzCmdGroupID);
-            logger.Info("Removing SW2GZ command group");
+            // Symmetric with AddCommandMgr: tear down the command group built by
+            // Sw2gzRibbonRegistrar.Register() so SolidWorks doesn't keep a stale
+            // group ID in its registry across add-in unload/reload.
+            CmdMgr.RemoveCommandGroup(SW2GZ.UI.Ribbon.RibbonCommandIds.CmdGroupId);
+            logger.Info("Removed SW2GZ command group");
         }
 
         #endregion UI Methods
