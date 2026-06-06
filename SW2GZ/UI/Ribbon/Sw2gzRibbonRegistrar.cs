@@ -205,7 +205,7 @@ namespace SW2GZ.UI.Ribbon
             _modeFlyout = _cmdMgr.CreateFlyoutGroup2(
                 RibbonCommandIds.ModeFlyoutGroup,
                 "Mode",
-                "Mode — Robot / World / Asset",
+                "Switch export mode",
                 "Pick which kind of package this assembly exports.",
                 _mainIcons,
                 _stripIcons,

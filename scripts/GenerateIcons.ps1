@@ -28,9 +28,10 @@ $ErrorActionPreference = 'Stop'
 $outDir = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\SW2GZ\UI\Resources\Icons'))
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
 
-# Line-art palette — single color, like SW Sketch tab icons.
-$cInk    = [System.Drawing.Color]::FromArgb(255,  55,  71,  90)   # 37475A slate
-$cAccent = [System.Drawing.Color]::FromArgb(255,  21,  69, 176)   # 1545B0 SW blue (Export)
+# Line-art palette — bright enough to read on SW's dark-theme ribbon AND
+# dark enough to read on light theme. SW does NOT auto-invert icon colors.
+$cInk    = [System.Drawing.Color]::FromArgb(255,  61, 143, 245)   # 3D8FF5 SW-blue accent
+$cAccent = [System.Drawing.Color]::FromArgb(255, 245, 158,  11)   # F59E0B amber (Export — pops out)
 
 function New-Pen([System.Drawing.Color]$color, [double]$thickness) {
     $p = New-Object System.Drawing.Pen($color, [single]$thickness)
@@ -40,8 +41,10 @@ function New-Pen([System.Drawing.Color]$color, [double]$thickness) {
     return $p
 }
 
-# Stroke width scales with icon size — keep ~1/12 of icon edge.
-function Stroke-Width([double]$s) { [Math]::Max(1.2, $s / 12.0) }
+# Stroke width scales with icon size. Heavier than typical line-art (s/9
+# instead of s/12) so glyphs read at the 20px size SW often picks for the
+# ribbon at standard DPI.
+function Stroke-Width([double]$s) { [Math]::Max(1.6, $s / 9.0) }
 
 function Map([scriptblock]$pad, [double]$ox, [double]$oy, [double]$s) {
     # Returns a function that maps normalized 0..1 coords into pixel coords
