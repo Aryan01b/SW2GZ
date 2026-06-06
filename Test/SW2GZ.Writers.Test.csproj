@@ -31,6 +31,7 @@
     <Compile Include="..\SW2GZ\Ros2\StackConfigMap.cs"       Link="Sources\Ros2\StackConfigMap.cs" />
     <Compile Include="..\SW2GZ\Ros2\StackRibbonGate.cs"      Link="Sources\Ros2\StackRibbonGate.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzExportConfig.cs" Link="Sources\URDFExport\Sw2gzExportConfig.cs" />
+    <Compile Include="..\SW2GZ\URDFExport\Sw2gzDoc.cs"          Link="Sources\URDFExport\Sw2gzDoc.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzConfigCodec.cs"  Link="Sources\URDFExport\Sw2gzConfigCodec.cs" />
     <Compile Include="..\SW2GZ\Build\Model\LinkDef.cs"          Link="Sources\Build\Model\LinkDef.cs" />
     <Compile Include="..\SW2GZ\Build\LinkDefValidator.cs"       Link="Sources\Build\LinkDefValidator.cs" />
