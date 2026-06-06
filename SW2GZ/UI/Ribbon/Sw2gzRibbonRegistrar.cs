@@ -50,6 +50,8 @@ namespace SW2GZ.UI.Ribbon
 
         public void Register()
         {
+            _userToCmdId.Clear();
+
             const string title = "SW2GZ";
             int errs = 0;
 
