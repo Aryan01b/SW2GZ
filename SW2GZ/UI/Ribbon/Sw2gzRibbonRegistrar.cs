@@ -133,6 +133,14 @@ namespace SW2GZ.UI.Ribbon
             AddItem(grp, RibbonCommandIds.AssetBody,    "Body",    "Single-part body",          "OpenAssetBodyPmp",    "AssetClusterEnable", IMG_BODY,    toolbar);
             AddItem(grp, RibbonCommandIds.AssetSurface, "Surface", "Friction / contact",        "OpenAssetSurfacePmp", "AssetClusterEnable", IMG_SURFACE, toolbar);
 
+            // Mode pills — TextHorizontal style applied in BuildCommonTabBox.
+            // Image columns 1/2/3 = Robot/World/Asset glyphs (same icons as
+            // the deleted chevron sub-items used). Click callbacks are the
+            // existing ModeRobotClick / WorldClick / AssetClick handlers.
+            AddItem(grp, RibbonCommandIds.ModeRobotPill, "Robot", "Switch to Robot mode (disabled when already active or doc-locked).", "ModeRobotClick", "ModeRobotPillUpdate", 1, toolbar);
+            AddItem(grp, RibbonCommandIds.ModeWorldPill, "World", "Switch to World mode (disabled when already active or doc-locked).", "ModeWorldClick", "ModeWorldPillUpdate", 2, toolbar);
+            AddItem(grp, RibbonCommandIds.ModeAssetPill, "Asset", "Switch to Asset mode (disabled when already active or doc-locked).", "ModeAssetClick", "ModeAssetPillUpdate", 3, toolbar);
+
             grp.HasToolbar = true;
             grp.HasMenu = false;
             grp.Activate();
@@ -144,8 +152,9 @@ namespace SW2GZ.UI.Ribbon
             // registered with all-zero cmdIds and SW silently dropped it.
             ResolveCmdIds(grp);
 
-            // SW-native split button — face = "Create Robot/World/Asset"
-            // (mode-tracking label), chevron = ROBOT / WORLD / ASSET picker.
+            // SW-native split button (face-only) — face = "Create Robot/World/Asset"
+            // (mode-tracking label). Mode switching is now handled by the 3 pills
+            // registered above; the chevron sub-items were removed in v2.1.0.
             BuildModeFlyout(_activeMode);
 
             BuildTab(title, grp);
@@ -331,6 +340,24 @@ namespace SW2GZ.UI.Ribbon
                 cmdIds.Add(_modeFlyout.CmdID);
                 textTypes.Add(faceOnlyType);
             }
+            // Mode pills — TextHorizontal stacks 3-per-column. The 3 pills
+            // sit immediately right of the big Create button, matching its
+            // height. NOTE: per-pill enable is via PillUpdate (set on each
+            // AddCommandItem2), not via the textType.
+            int textHorizontal = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextHorizontal;
+            foreach (int uid in new[] { RibbonCommandIds.ModeRobotPill, RibbonCommandIds.ModeWorldPill, RibbonCommandIds.ModeAssetPill })
+            {
+                if (_userToCmdId.TryGetValue(uid, out int pillCmdId))
+                {
+                    cmdIds.Add(pillCmdId);
+                    textTypes.Add(textHorizontal);
+                }
+                else
+                {
+                    logger.Warn("Sw2gzRibbonRegistrar: pill cmdId missing for userId=" + uid);
+                }
+            }
+
             foreach (int uid in new[] { RibbonCommandIds.CoordPmp, RibbonCommandIds.PreviewPmp, RibbonCommandIds.ExportPmp })
             {
                 if (_userToCmdId.TryGetValue(uid, out int cmdId))

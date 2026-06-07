@@ -6,8 +6,11 @@ Stable across builds — change only with an intentional version bump (the old
 group ID's registry cache would then be discarded as stale).
 
 Layout:
-   0..2   Mode flyout sub-items    (Robot / World / Asset — selected via Mode ▾ dropdown)
-   3      Mode flyout group        (single "Mode ▾" button hosting the 3 sub-items)
+   0..2   Mode flyout sub-items    (Robot / World / Asset — slots reserved as documentation;
+                                    chevron sub-items removed in v2.1.0, replaced by pills 4..6)
+   3      Mode flyout group        (single "Create [Mode]" face-only button)
+   4..6   Mode pills               (Robot / World / Asset — TextHorizontal toggles next to
+                                    the big Create button; replace the chevron sub-items)
   10..12  Common cluster           (Coord / Preview / Export)
   22..25  Robot cluster            (Inertia / Sensors / Actuation / Stack — Links+Joints live in the Create wizard PMP)
   30..33  World cluster            (Ground / Assets / Physics / Scene)
@@ -35,6 +38,14 @@ namespace SW2GZ.UI.Ribbon
         // show SW's "Form New Subassembly" tooltip (cmdID collision in SW's
         // internal command-name table).
         public const int ModeFlyoutGroup = 99;
+
+        // Mode pills — three small TextHorizontal toggles next to the big
+        // Create button. Replace the chevron-style sub-items (slots 0..2 in
+        // the flyout's own ID space, kept reserved as documentation). Click
+        // reuses the existing ModeRobotClick / WorldClick / AssetClick path.
+        public const int ModeRobotPill   = 4;
+        public const int ModeWorldPill   = 5;
+        public const int ModeAssetPill   = 6;
 
         // Common cluster
         public const int CoordPmp    = 10;
@@ -67,6 +78,7 @@ namespace SW2GZ.UI.Ribbon
         public static readonly int[] AllUserIds = new[]
         {
             ModeRobot, ModeWorld, ModeAsset,
+            ModeRobotPill, ModeWorldPill, ModeAssetPill,
             CoordPmp, PreviewPmp, ExportPmp,
             RobotInertia, RobotSensors, RobotActuation, RobotStack,
             WorldGround, WorldAssets, WorldPhysics, WorldScene,

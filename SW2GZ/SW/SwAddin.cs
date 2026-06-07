@@ -437,10 +437,11 @@ namespace SW2GZ.SW
         }
 
         // ─── Mode flyout (L3b) ────────────────────────────────────────
-        // SW-native split button. The flyout face's click callback is
-        // OpenCreatePmp; the 3 sub-items (ROBOT / WORLD / ASSET) call
-        // ModeRobotClick / ModeWorldClick / ModeAssetClick, which set the
-        // doc mode and trigger the L3b tab rebuild via SetMode.
+        // SW-native split button (face-only — no chevron). The flyout face's
+        // click callback is OpenCreatePmp; the 3 mode pills registered next
+        // to the Create button call ModeRobotClick / ModeWorldClick /
+        // ModeAssetClick, which set the doc mode and trigger the L3b tab
+        // rebuild via SetMode.
 
         // Face-click dispatcher — opens the create wizard for the active mode.
         // Robot mode gets the real Sw2gzCreateRobotPmp (Links + Joints, Back/Next);
@@ -532,6 +533,35 @@ namespace SW2GZ.SW
             // shows. SW's enable-callback can only gray, not hide.
             try { _ribbonRegistrar?.RefreshTabForMode(mode); }
             catch (Exception e) { logger.Warn("SetMode: tab refresh failed", e); }
+        }
+
+        // ─── Mode pills ───────────────────────────────────────────────
+        // Three small TextHorizontal toggles next to the big Create button.
+        // The pill matching the active mode returns 0 (disabled = grayed in
+        // the ribbon) so the user reads "I'm in this mode now". Doc-lock
+        // (Sw2gzDocLock.IsLocked) freezes all 3 pills, matching the prior
+        // chevron-sub-item behaviour.
+        public int ModeRobotPillUpdate() => PillUpdate(SW2GZ.URDFExport.Sw2gzMode.Robot);
+        public int ModeWorldPillUpdate() => PillUpdate(SW2GZ.URDFExport.Sw2gzMode.World);
+        public int ModeAssetPillUpdate() => PillUpdate(SW2GZ.URDFExport.Sw2gzMode.Asset);
+
+        private int PillUpdate(SW2GZ.URDFExport.Sw2gzMode pillMode)
+        {
+            try
+            {
+                if (AssemblyEnable() == 0) return 0;
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
+                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                if (SW2GZ.URDFExport.Sw2gzDocLock.IsLocked(doc)) return 0;
+                // Disable the pill that already represents the active mode —
+                // gives the grayed-out "you are here" visual cue.
+                return (doc.Mode == pillMode) ? 0 : 1;
+            }
+            catch (Exception e)
+            {
+                logger.Warn("PillUpdate(" + pillMode + ") failed", e);
+                return 0;
+            }
         }
 
         // ─── Common cluster ───────────────────────────────────────────
