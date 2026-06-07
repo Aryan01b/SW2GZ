@@ -334,57 +334,34 @@ namespace SW2GZ.SW
         // mode visible" tab rebuild. Set in AddCommandMgr.
         private SW2GZ.UI.Ribbon.Sw2gzRibbonRegistrar _ribbonRegistrar;
 
-        // Export command: loads the saved model, confirms what's implemented +
-        // collects meta in a dialog, then runs the bare-model export.
+        // Export command: requires a saved "SW2GZ Doc (v1)" attribute (the
+        // mode pills + Export button are both gated by HasSaved so reaching
+        // here without one is a keyboard-shortcut / poll-race path only).
+        // Opens the modal multi-page Sw2gzExportWizardForm which collects
+        // meta, shows scope, and runs the pipeline in-page.
         public void LaunchExport()
         {
             try
             {
                 if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
 
-                Sw2gzExportConfig config = Sw2gzConfigSerialization.Load(modeldoc);
-                if (config.Links == null || config.Links.Count == 0)
+                if (!SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc))
                 {
                     SwApp.SendMsgToUser2(
-                        "No model saved yet — run Create Model first.",
+                        "No SW2GZ Doc (v1) saved yet — run Create first.",
                         (int)swMessageBoxIcon_e.swMbInformation,
                         (int)swMessageBoxBtn_e.swMbOk);
                     return;
                 }
 
-                using (var dlg = new ExportDialog(config, (SldWorks)SwApp, modeldoc))
+                var doc = SW2GZ.URDFExport.Sw2gzDocSerialization.Load(modeldoc)
+                          ?? SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+
+                using (var wizard = new SW2GZ.UI.Forms.Sw2gzExportWizardForm(
+                    (SldWorks)SwApp, modeldoc, doc))
                 {
-                    if (dlg.ShowDialog() != DialogResult.OK) return;
+                    wizard.ShowDialog();
                 }
-
-                if (string.IsNullOrWhiteSpace(config.OutputFolder))
-                {
-                    SwApp.SendMsgToUser("Set an output folder before exporting.");
-                    return;
-                }
-
-                Sw2gzConfigSerialization.Save((SldWorks)SwApp, modeldoc, config);
-                string pkg = PackageNameSanitizer.Sanitize(config.PackageName).Value;
-                SW2GZ.Validate.ValidationReport report =
-                    Sw2gzModelExporter.Run((SldWorks)SwApp, modeldoc, config);
-                string ws = Sw2gzModelExporter.WorkspacePath(config.OutputFolder, config.PackageName);
-
-                if (report.HasErrors)
-                {
-                    SwApp.SendMsgToUser("Export finished with errors:\n• " +
-                        string.Join("\n• ", System.Linq.Enumerable.ToArray(
-                            System.Linq.Enumerable.Select(report.Errors, x => x.Message))));
-                    return;
-                }
-
-                // Success: information icon (SendMsgToUser defaults to a caution
-                // triangle, which reads as a warning for a clean export).
-                SwApp.SendMsgToUser2(
-                    "Exported to:\n" + ws + "\n\nBuild and launch:\n" +
-                    "  cd \"" + ws + "\"\n  colcon build\n  source install/setup.bash\n" +
-                    "  ros2 launch " + pkg + " gz_sim.launch.py",
-                    (int)swMessageBoxIcon_e.swMbInformation,
-                    (int)swMessageBoxBtn_e.swMbOk);
             }
             catch (Exception e)
             {
@@ -685,6 +662,21 @@ namespace SW2GZ.SW
 
         // ─── Per-cluster enable callbacks ─────────────────────────────
         public int AssemblyEnable() => WizardEnable();   // reuse the existing asm-only gate
+
+        // Export-specific gate: enabled only when an assembly is active AND
+        // a "SW2GZ Doc (v1)" attribute has been saved (i.e. the user has run
+        // a Create wizard at least once). Mirrors the pill-lock idiom so
+        // Export greys until there's something to export.
+        public int ExportEnable()
+        {
+            try
+            {
+                if (AssemblyEnable() == 0) return 0;
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
+                return SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc) ? 1 : 0;
+            }
+            catch (Exception e) { logger.Warn("ExportEnable failed", e); return 0; }
+        }
 
         public int RobotClusterEnable() => ClusterEnable(SW2GZ.UI.Ribbon.RibbonCluster.Robot);
         public int WorldClusterEnable() => ClusterEnable(SW2GZ.UI.Ribbon.RibbonCluster.World);
