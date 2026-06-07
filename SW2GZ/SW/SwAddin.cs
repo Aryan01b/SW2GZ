@@ -466,6 +466,15 @@ namespace SW2GZ.SW
             try
             {
                 if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+                // If the persisted attribute is gone (user deleted "SW2GZ Doc
+                // (v1)" from the FeatureManager tree), drop the stale in-memory
+                // doc so the wizard re-seeds from the live assembly. Without
+                // this the user would see their old link tree carry over even
+                // though the on-disk state was wiped.
+                if (!SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc))
+                {
+                    SW2GZ.URDFExport.Sw2gzDocStore.Reset(modeldoc);
+                }
                 var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
                 switch (doc.Mode)
                 {
@@ -641,50 +650,14 @@ namespace SW2GZ.SW
             }
         }
 
-        // ─── Delete Config ────────────────────────────────────────────
-        // Enable only when a saved "SW2GZ Doc (v1)" attribute exists.
-        public int DeleteConfigEnable()
-        {
-            try
-            {
-                if (AssemblyEnable() == 0) return 0;
-                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
-                return SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc) ? 1 : 0;
-            }
-            catch (Exception e) { logger.Warn("DeleteConfigEnable failed", e); return 0; }
-        }
-
-        public void OpenDeleteConfigPmp()
-        {
-            try
-            {
-                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
-                if (!SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc))
-                {
-                    SwApp.SendMsgToUser("No SW2GZ Doc (v1) attribute to delete.");
-                    return;
-                }
-                var result = MessageBox.Show(
-                    "Delete the saved SW2GZ Doc (v1) attribute?\n\n" +
-                    "Once deleted you can switch modes and re-run Create.",
-                    "Delete SW2GZ Doc", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
-                if (result != DialogResult.OK) return;
-
-                bool deleted = SW2GZ.URDFExport.Sw2gzDocSerialization.Delete(modeldoc);
-                // Reset the in-memory doc so the next wizard re-seeds from scratch.
-                SW2GZ.URDFExport.Sw2gzDocStore.Reset(modeldoc);
-                // Refresh the ribbon so pills re-evaluate their enable state.
-                try { _ribbonRegistrar?.RefreshTabForMode(
-                    SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc).Mode); }
-                catch (Exception ex) { logger.Warn("Delete: tab refresh failed", ex); }
-                logger.Info("DeleteConfig: deleted=" + deleted);
-            }
-            catch (Exception e)
-            {
-                logger.Error("OpenDeleteConfigPmp failed", e);
-                MessageBox.Show("Delete failed: " + e.Message);
-            }
-        }
+        // Delete-from-tree path: the user removes "SW2GZ Doc (v1)" via the
+        // FeatureManager right-click → Delete. SW polls PillUpdate every UI
+        // tick and HasSaved becomes false → pills re-enable naturally. The
+        // in-memory Sw2gzDocStore entry may be stale (holds the last edited
+        // tree), so each OpenCreate* path below resets the store on
+        // !HasSaved before opening — ensures the next wizard re-seeds from
+        // assembly state, matching the "deleted from disk → fresh start"
+        // expectation.
 
         // ─── Common cluster ───────────────────────────────────────────
         // Coord button removed in v2.1.0 — advanced coord convention now

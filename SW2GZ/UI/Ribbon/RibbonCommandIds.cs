@@ -61,8 +61,9 @@ namespace SW2GZ.UI.Ribbon
         // PreviewPmp / ExportPmp don't have to renumber.
         public const int PreviewPmp  = 11;
         public const int ExportPmp   = 12;
-        // Delete the saved "SW2GZ Doc (v1)" attribute, re-enabling mode pills.
-        public const int DeleteConfig = 17;
+        // Slot 17 (DeleteConfig) reserved as a documentation gap — the user
+        // deletes the "SW2GZ Doc (v1)" attribute from the FeatureManager tree
+        // directly (right-click → Delete) instead of via a ribbon command.
 
         // Mode-Create trio — three pre-registered Create buttons (one per
         // mode), each with its own static "Create Robot" / "Create World" /
@@ -103,7 +104,7 @@ namespace SW2GZ.UI.Ribbon
             ModeRobot, ModeWorld, ModeAsset,
             ModeRobotPill, ModeWorldPill, ModeAssetPill,
             ModeCreateRobot, ModeCreateWorld, ModeCreateAsset,
-            PreviewPmp, ExportPmp, DeleteConfig,
+            PreviewPmp, ExportPmp,
             RobotInertia, RobotSensors, RobotActuation, RobotStack,
             WorldGround, WorldAssets, WorldPhysics, WorldScene,
             AssetBody, AssetSurface,
