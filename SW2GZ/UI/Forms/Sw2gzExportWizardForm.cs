@@ -32,14 +32,20 @@ namespace SW2GZ.UI.Forms
         private static readonly log4net.ILog logger = Logger.GetLogger();
 
         // ─── Layout constants ────────────────────────────────────────
-        private const int FormW = 640;
-        private const int FormH = 560;
-        private const int Gutter = 20;
-        private const int FieldSpacing = 22;
-        private const int LabelLift = 18;
-        private const int InputH = 26;
-        private const int PageH = 430;
-        private const int NavH = 56;
+        // Field row = label at y, input at y + LabelLift, next label at
+        // y + RowH. Hard-coded numbers (not derived from LabelLift +
+        // InputH + extra) so a tweak to one doesn't accidentally collapse
+        // the row gap — that's the bug an earlier "y += LabelLift +
+        // InputH + FieldSpacing - LabelLift" expression hid.
+        private const int FormW       = 640;
+        private const int Gutter      = 20;
+        private const int LabelLift   = 22;   // label top → input top
+        private const int InputH      = 26;   // textbox height
+        private const int RowGap      = 16;   // input bottom → next label top
+        private const int RowH        = LabelLift + InputH + RowGap;   // 64 px
+        private const int SectionGap  = 18;
+        private const int PageH       = 460;
+        private const int NavH        = 56;
 
         private readonly SldWorks _swApp;
         private readonly ModelDoc2 _modelDoc;
@@ -95,6 +101,8 @@ namespace SW2GZ.UI.Forms
             MinimizeBox     = false;
             ShowInTaskbar   = false;
             ClientSize      = new Size(FormW, PageH + NavH);
+            // PageH bumped to 460 so all four meta rows + headline fit
+            // without the last License row clipping into the nav strip.
             Font            = new Font("Segoe UI", 9F);
 
             BuildPages();
@@ -132,23 +140,22 @@ namespace SW2GZ.UI.Forms
         private Panel BuildMetaPage()
         {
             var p = new Panel { Padding = new Padding(Gutter) };
+            int contentW = FormW - 2 * Gutter;
 
             int y = Gutter;
             _modeLabel = AddLabel(p, "Mode: " + ModeText(_doc.Mode), Gutter, y,
                 new Font("Segoe UI Semibold", 12F, FontStyle.Bold));
-            y += 32;
+            y += 34;
 
             // Sub-headline divider.
             var rule = new Panel
             {
                 Location = new Point(Gutter, y),
-                Size = new Size(FormW - 2 * Gutter, 1),
+                Size = new Size(contentW, 1),
                 Tag = "rule",
             };
             p.Controls.Add(rule);
-            y += 18;
-
-            int contentW = FormW - 2 * Gutter;
+            y += SectionGap;
 
             // Output folder + Browse
             AddLabel(p, "Output folder", Gutter, y, subtle: true);
@@ -163,13 +170,13 @@ namespace SW2GZ.UI.Forms
             browse.Click += (s, e) => BrowseOutput();
             p.Controls.Add(_txtOutput);
             p.Controls.Add(browse);
-            y += LabelLift + InputH + FieldSpacing - LabelLift;
+            y += RowH;
 
             // Package name
             AddLabel(p, "Package name", Gutter, y, subtle: true);
             _txtPkg = NewTextBox(Gutter, y + LabelLift, contentW);
             p.Controls.Add(_txtPkg);
-            y += LabelLift + InputH + FieldSpacing - LabelLift;
+            y += RowH;
 
             // Author / Email — true 50/50 split with consistent gutter.
             int half = (contentW - 16) / 2;
@@ -179,7 +186,7 @@ namespace SW2GZ.UI.Forms
             _txtEmail  = NewTextBox(Gutter + half + 16, y + LabelLift, half);
             p.Controls.Add(_txtAuthor);
             p.Controls.Add(_txtEmail);
-            y += LabelLift + InputH + FieldSpacing - LabelLift;
+            y += RowH;
 
             // License
             AddLabel(p, "License", Gutter, y, subtle: true);
@@ -197,15 +204,15 @@ namespace SW2GZ.UI.Forms
 
             _scopeHeader = AddLabel(p, "", Gutter, y,
                 new Font("Segoe UI Semibold", 12F, FontStyle.Bold));
-            y += 32;
+            y += 34;
 
             _scopeCounts    = AddLabel(p, "", Gutter, y);
-            y += 22;
+            y += 24;
             _scopeWorkspace = AddLabel(p, "", Gutter, y, subtle: true);
-            y += 28;
+            y += 30;
 
             AddLabel(p, "Files that will be written", Gutter, y, subtle: true);
-            y += LabelLift;
+            y += 26;   // explicit gap below this section label, > label height
             _scopeFiles = new ListBox
             {
                 Location = new Point(Gutter, y),
