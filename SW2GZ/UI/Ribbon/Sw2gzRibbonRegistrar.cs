@@ -231,28 +231,8 @@ namespace SW2GZ.UI.Ribbon
                 return;
             }
 
-            // Sub-items live in the flyout's own ID space (separate from
-            // grp.AddCommandItem2's userId namespace).
-            // Sub-items use ModeSubItemUpdate (not ModeFlyoutUpdate) so they
-            // disable once the doc is mode-locked. The flyout button itself
-            // stays clickable (uses ModeFlyoutUpdate) — user can still open
-            // the menu and see the current mode greyed-out.
-            // Image indices match scripts\GenerateIcons.ps1 columns 1/2/3.
-            // Sub-item labels mirror the HTML mockup ("Create Robot/World/Asset")
-            // — same wording as the face, so the chevron menu reads as "pick a
-            // different default action" exactly like Insert Components.
-            _modeFlyout.AddCommandItem("Create Robot",
-                "Author an actuated robot (URDF + ros2_control + Gz plugins). Disabled once Robot content exists.",
-                1, "ModeRobotClick", "ModeSubItemUpdate");
-            _modeFlyout.AddCommandItem("Create World",
-                "Author a Gazebo world (SDF world + included assets + physics + scene). Disabled once World content exists.",
-                2, "ModeWorldClick", "ModeSubItemUpdate");
-            _modeFlyout.AddCommandItem("Create Asset",
-                "Author a single-body static SDF model. Disabled once Asset content exists.",
-                3, "ModeAssetClick", "ModeSubItemUpdate");
-
             logger.Info("Sw2gzRibbonRegistrar: mode flyout (re)built — face='" +
-                faceLabel + "', cmdId=" + _modeFlyout.CmdID + ", 3 sub-items");
+                faceLabel + "', cmdId=" + _modeFlyout.CmdID + " (no sub-items, pills handle mode switch)");
         }
 
         // Per-mode panel-cluster user-ID lists. Used by both BuildTab (initial
@@ -340,18 +320,16 @@ namespace SW2GZ.UI.Ribbon
 
             if (_modeFlyout != null)
             {
-                // True split button: OR in swCommandTabButton_ActionFlyout so
-                // SW renders a clickable face + a separate chevron that drops
-                // the menu (this is the "Insert Components" pattern). Without
-                // this flag SW falls back to the SimpleFlyout look — the whole
-                // button is one big dropdown trigger and the face never fires
-                // its click callback. SimpleFlyout was the bit that previously
-                // crashed; ActionFlyout is a different flag and is what the
-                // standard SW split buttons use.
-                int flyoutTextType = textBelow |
-                    (int)swCommandTabButtonFlyoutStyle_e.swCommandTabButton_ActionFlyout;
+                // Face-only "Create [Mode]" — no chevron. NoFlyout style hides
+                // the dropdown affordance; mode switching moved to the 3 pills
+                // appended after Coord/Preview/Export below. Mode flyout stays
+                // an IFlyoutGroup so its face label can keep tracking the
+                // active mode via the same-userId re-create trick (see
+                // BuildModeFlyout — there's no setter on IFlyoutGroup.Name).
+                int faceOnlyType = textBelow |
+                    (int)swCommandTabButtonFlyoutStyle_e.swCommandTabButton_NoFlyout;
                 cmdIds.Add(_modeFlyout.CmdID);
-                textTypes.Add(flyoutTextType);
+                textTypes.Add(faceOnlyType);
             }
             foreach (int uid in new[] { RibbonCommandIds.CoordPmp, RibbonCommandIds.PreviewPmp, RibbonCommandIds.ExportPmp })
             {

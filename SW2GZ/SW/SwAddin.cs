@@ -511,26 +511,6 @@ namespace SW2GZ.SW
         // open the menu to see which mode they're in.
         public int ModeFlyoutUpdate() => AssemblyEnable();
 
-        // UpdateCallback for the 3 SUB-ITEMS inside the flyout — gated on the
-        // doc-lock: once any user element exists (Links/Joints/Sensors/Ground/
-        // Assets/BodyPart), mode is frozen, sub-items disable. Tooltip on each
-        // sub-item explains; user has to delete content to switch mode.
-        public int ModeSubItemUpdate()
-        {
-            try
-            {
-                if (AssemblyEnable() == 0) return 0;
-                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
-                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
-                return SW2GZ.URDFExport.Sw2gzDocLock.IsLocked(doc) ? 0 : 1;
-            }
-            catch (Exception e)
-            {
-                logger.Warn("ModeSubItemUpdate failed", e);
-                return 0;
-            }
-        }
-
         private void SetMode(SW2GZ.URDFExport.Sw2gzMode mode)
         {
             if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
