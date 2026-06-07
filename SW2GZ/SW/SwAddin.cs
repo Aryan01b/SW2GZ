@@ -444,11 +444,13 @@ namespace SW2GZ.SW
         // rebuild via SetMode.
 
         // Face-click dispatcher — opens the create wizard for the active mode.
-        // Robot mode gets the real Sw2gzCreateRobotPmp (Links + Joints, Back/Next);
-        // World / Asset stay on OpenStub until their wizards are written.
-        // _createRobotPmp held as field — same COM-handler-rooting reason as
-        // _openPanel (the SW PMP handler interface is freed on AfterClose).
+        // Each mode has its own multi-step PMP (Sw2gzCreateRobotPmp /
+        // Sw2gzCreateWorldPmp / Sw2gzCreateAssetPmp). Held as fields — same
+        // COM-handler-rooting reason as _openPanel (the SW PMP handler
+        // interface is freed on AfterClose).
         private SW2GZ.UI.Pmp.Sw2gzCreateRobotPmp _createRobotPmp;
+        private SW2GZ.UI.Pmp.Sw2gzCreateWorldPmp _createWorldPmp;
+        private SW2GZ.UI.Pmp.Sw2gzCreateAssetPmp _createAssetPmp;
 
         // Bisecting confirmed: calling swApp.CreatePropertyManagerPage directly
         // from inside an IFlyoutGroup face callback throws InvalidCastException
@@ -465,19 +467,71 @@ namespace SW2GZ.SW
             {
                 if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
                 var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
-                string title;
                 switch (doc.Mode)
                 {
-                    case SW2GZ.URDFExport.Sw2gzMode.World: title = "Create World"; break;
-                    case SW2GZ.URDFExport.Sw2gzMode.Asset: title = "Create Asset"; break;
-                    default:                               title = "Create Robot"; break;
+                    case SW2GZ.URDFExport.Sw2gzMode.World:
+                        DeferToIdle(() => OpenCreateWorld(modeldoc, doc));
+                        break;
+                    case SW2GZ.URDFExport.Sw2gzMode.Asset:
+                        DeferToIdle(() => OpenCreateAsset(modeldoc, doc));
+                        break;
+                    default:
+                        DeferToIdle(() => OpenCreateRobot(modeldoc, doc));
+                        break;
                 }
-                DeferToIdle(() => OpenStub(title));
             }
             catch (Exception e)
             {
                 logger.Error("OpenCreatePmp failed", e);
                 MessageBox.Show("Could not open Create: " + e.Message);
+            }
+        }
+
+        private void OpenCreateRobot(ModelDoc2 modelDoc, SW2GZ.URDFExport.Sw2gzDoc doc)
+        {
+            try
+            {
+                _createRobotPmp = new SW2GZ.UI.Pmp.Sw2gzCreateRobotPmp(
+                    (SldWorks)SwApp, modelDoc, doc,
+                    _ => { /* backend-wiring plan will persist doc.Robot here */ });
+                _createRobotPmp.Show();
+            }
+            catch (Exception e)
+            {
+                logger.Error("OpenCreateRobot failed", e);
+                MessageBox.Show("Could not open Create Robot: " + e.Message);
+            }
+        }
+
+        private void OpenCreateWorld(ModelDoc2 modelDoc, SW2GZ.URDFExport.Sw2gzDoc doc)
+        {
+            try
+            {
+                _createWorldPmp = new SW2GZ.UI.Pmp.Sw2gzCreateWorldPmp(
+                    (SldWorks)SwApp, modelDoc, doc,
+                    _ => { /* backend-wiring plan will persist doc.World here */ });
+                _createWorldPmp.Show();
+            }
+            catch (Exception e)
+            {
+                logger.Error("OpenCreateWorld failed", e);
+                MessageBox.Show("Could not open Create World: " + e.Message);
+            }
+        }
+
+        private void OpenCreateAsset(ModelDoc2 modelDoc, SW2GZ.URDFExport.Sw2gzDoc doc)
+        {
+            try
+            {
+                _createAssetPmp = new SW2GZ.UI.Pmp.Sw2gzCreateAssetPmp(
+                    (SldWorks)SwApp, modelDoc, doc,
+                    _ => { /* backend-wiring plan will persist doc.Asset here */ });
+                _createAssetPmp.Show();
+            }
+            catch (Exception e)
+            {
+                logger.Error("OpenCreateAsset failed", e);
+                MessageBox.Show("Could not open Create Asset: " + e.Message);
             }
         }
 

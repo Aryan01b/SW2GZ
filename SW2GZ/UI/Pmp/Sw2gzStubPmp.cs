@@ -39,7 +39,7 @@ using SW2GZ.Utilities;
 namespace SW2GZ.UI.Pmp
 {
     [ComVisible(true)]
-    internal sealed class Sw2gzStubPmp : PropertyManagerPage2Handler9
+    public sealed class Sw2gzStubPmp : PropertyManagerPage2Handler9
     {
         private static readonly log4net.ILog logger = Logger.GetLogger();
 

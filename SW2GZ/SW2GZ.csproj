@@ -567,6 +567,9 @@
     <Compile Include="UI\Ribbon\RibbonCommandIds.cs" />
     <Compile Include="UI\Ribbon\Sw2gzRibbonRegistrar.cs" />
     <Compile Include="UI\Pmp\Sw2gzStubPmp.cs" />
+    <Compile Include="UI\Pmp\Sw2gzCreateRobotPmp.cs" />
+    <Compile Include="UI\Pmp\Sw2gzCreateWorldPmp.cs" />
+    <Compile Include="UI\Pmp\Sw2gzCreateAssetPmp.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
