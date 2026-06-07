@@ -46,11 +46,6 @@ namespace SW2GZ.UI.Ribbon
         // userId -> cmdId. Populated by ResolveCmdIds() after Activate.
         private readonly Dictionary<int, int> _userToCmdId = new Dictionary<int, int>();
 
-        // The "Mode ▾" flyout group built by BuildModeFlyout(). Its cmdId is
-        // retrieved as flyoutGroup.CmdID after CreateFlyoutGroup returns, and
-        // is added to the Common tab box alongside Coord/Preview/Export.
-        private IFlyoutGroup _modeFlyout;
-
         public Sw2gzRibbonRegistrar(ICommandManager cmdMgr, string[] stripIcons, string[] mainIcons)
         {
             _cmdMgr     = cmdMgr     ?? throw new ArgumentNullException(nameof(cmdMgr));
@@ -111,8 +106,11 @@ namespace SW2GZ.UI.Ribbon
             const int IMG_GROUND = 13, IMG_ASSETS = 14, IMG_PHYSICS = 15, IMG_SCENE = 16;
             const int IMG_BODY = 17, IMG_SURFACE = 18;
 
-            // Common cluster (Mode is registered separately as a flyout — see
-            // BuildModeFlyout below — and inserted into the Common tab box).
+            // Common cluster — static "Create" button first, then Coord/Preview/Export.
+            const int IMG_CREATE = 0;   // strip column 0 — mode-trio glyph, reused as the generic Create face
+            AddItem(grp, RibbonCommandIds.ModeCreate, "Create",
+                    "Create new content in the active mode (mode shown by pill at right).",
+                    "OpenCreatePmp", "AssemblyEnable", IMG_CREATE, toolbar);
             AddItem(grp, RibbonCommandIds.CoordPmp,   "Coord",   "Coordinate convention (advanced)", "OpenCoordPmp",   "AssemblyEnable", IMG_COORD,   toolbar);
             AddItem(grp, RibbonCommandIds.PreviewPmp, "Preview", "Browser-based 3D preview",         "OpenPreviewPmp", "AssemblyEnable", IMG_PREVIEW, toolbar);
             AddItem(grp, RibbonCommandIds.ExportPmp,  "Export",  "Export ROS 2 / Gz package",        "OpenExportPmp",  "AssemblyEnable", IMG_EXPORT,  toolbar);
@@ -152,11 +150,6 @@ namespace SW2GZ.UI.Ribbon
             // registered with all-zero cmdIds and SW silently dropped it.
             ResolveCmdIds(grp);
 
-            // SW-native split button (face-only) — face = "Create Robot/World/Asset"
-            // (mode-tracking label). Mode switching is now handled by the 3 pills
-            // registered above; the chevron sub-items were removed in v2.1.0.
-            BuildModeFlyout(_activeMode);
-
             BuildTab(title, grp);
             logger.Info("Sw2gzRibbonRegistrar: registered " + _userToCmdId.Count +
                 " commands across 4 clusters");
@@ -191,59 +184,6 @@ namespace SW2GZ.UI.Ribbon
             _userToCmdIdx[userId] = idx;
         }
 
-        // SW-native split button modelled on "Insert Components":
-        //   face (click)   → OpenCreatePmp, label tracks active mode
-        //                    ("Create Robot" / "Create World" / "Create Asset")
-        //   chevron (drop) → ROBOT / WORLD / ASSET picker
-        //
-        // The face label is set via the `name` parameter of CreateFlyoutGroup2,
-        // which is captured at creation time — SW has no setter on IFlyoutGroup
-        // to mutate it later. To track the active mode the flyout is recreated
-        // (same userId) every time RefreshTabForMode fires; SW docs note that
-        // passing an existing userId UPDATES the flyout, so this is idempotent.
-        //
-        // Signature: ICommandManager.CreateFlyoutGroup2(int, string, string,
-        //   string, object mainIconList, object iconList, string callbackFn,
-        //   string updateCallbackFn). No enable-method parameter — enable
-        //   state is folded into updateCallbackFn's return value.
-        //
-        // The face icon falls out to column 0 of the icon strip (the mode-
-        // flyout trio glyph) — CreateFlyoutGroup2 takes the WHOLE list and
-        // SW picks the first column, with no per-mode override. The label +
-        // visible panel cluster carry the mode signal.
-        //
-        // IFlyoutGroup.AddCommandItem(string name, string hint, int imageIdx,
-        //   string callbackFn, string updateCallbackFn) — 5 args, no enable.
-        private void BuildModeFlyout(SW2GZ.URDFExport.Sw2gzMode mode)
-        {
-            string faceLabel;
-            switch (mode)
-            {
-                case SW2GZ.URDFExport.Sw2gzMode.World: faceLabel = "Create World"; break;
-                case SW2GZ.URDFExport.Sw2gzMode.Asset: faceLabel = "Create Asset"; break;
-                default:                               faceLabel = "Create Robot"; break;
-            }
-
-            _modeFlyout = _cmdMgr.CreateFlyoutGroup2(
-                RibbonCommandIds.ModeFlyoutGroup,
-                faceLabel,
-                faceLabel,
-                "Click to create for the active mode. Use the dropdown to switch mode (Robot / World / Asset).",
-                _mainIcons,
-                _stripIcons,
-                "OpenCreatePmp",
-                "ModeFlyoutUpdate");
-
-            if (_modeFlyout == null)
-            {
-                logger.Error("Sw2gzRibbonRegistrar: CreateFlyoutGroup2 returned null");
-                return;
-            }
-
-            logger.Info("Sw2gzRibbonRegistrar: mode flyout (re)built — face='" +
-                faceLabel + "', cmdId=" + _modeFlyout.CmdID + " (no sub-items, pills handle mode switch)");
-        }
-
         // Per-mode panel-cluster user-ID lists. Used by both BuildTab (initial
         // load — defaults to Robot) and RebuildTabForMode (after the user
         // picks a different mode from the Mode flyout dropdown). Exposed as
@@ -268,9 +208,6 @@ namespace SW2GZ.UI.Ribbon
         public void RefreshTabForMode(SW2GZ.URDFExport.Sw2gzMode mode)
         {
             _activeMode = mode;
-            // Recreate the flyout so the face label updates ("Create Robot" →
-            // "Create World" etc.). Same userId — SW treats this as an update.
-            BuildModeFlyout(mode);
             BuildTab("SW2GZ", null);   // grp not needed for tab rebuild
         }
 
@@ -294,9 +231,7 @@ namespace SW2GZ.UI.Ribbon
 
             int textBelow = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow;
 
-            // Common cluster — Mode flyout (split button) + 3 common actions.
-            // The flyout's cmdId comes from IFlyoutGroup.CmdID, not from
-            // _userToCmdId, so it needs the dedicated BuildCommonTabBox helper.
+            // Common cluster — static "Create" button + 3 pills + 3 common actions.
             BuildCommonTabBox(tab, textBelow);
 
             // Only the ACTIVE mode's cluster goes on the tab. L3b "one mode
@@ -313,9 +248,7 @@ namespace SW2GZ.UI.Ribbon
             logger.Info("Sw2gzRibbonRegistrar: rendered " + activeName + " panel cluster only (L3b hide-others)");
         }
 
-        // Build the Common tab box: [Mode flyout] [Coord] [Preview] [Export].
-        // Flyout cmdId comes from IFlyoutGroup.CmdID (separate ID space from
-        // the per-command get_CommandID lookups).
+        // Build the Common tab box: [Create] [pills] [Coord] [Preview] [Export].
         private void BuildCommonTabBox(CommandTab tab, int textBelow)
         {
             ICommandTabBox box = tab.AddCommandTabBox();
@@ -324,22 +257,19 @@ namespace SW2GZ.UI.Ribbon
                 logger.Warn("Sw2gzRibbonRegistrar: Common tab box AddCommandTabBox returned null");
                 return;
             }
-            // Capacity 8 = 1 Mode flyout + 3 pills + 3 common buttons + slack.
+            // Capacity 8 = 1 Create + 3 pills + 3 common buttons + slack.
             var cmdIds = new List<int>(8);
             var textTypes = new List<int>(8);
 
-            if (_modeFlyout != null)
+            // Static "Create" button (regular AddCommandItem2, no flyout) — replaces
+            // the prior IFlyoutGroup-based dynamic-label trick which dropped the
+            // button on mode switch (CreateFlyoutGroup2 doesn't survive re-call with
+            // zero sub-items) and rendered a chevron the NoFlyout flag couldn't hide.
+            // Mode context comes from the 3 pills appended below.
+            if (_userToCmdId.TryGetValue(RibbonCommandIds.ModeCreate, out int createCmdId))
             {
-                // Face-only "Create [Mode]" — no chevron. NoFlyout style hides
-                // the dropdown affordance; mode switching moved to the 3 pills
-                // appended after Coord/Preview/Export below. Mode flyout stays
-                // an IFlyoutGroup so its face label can keep tracking the
-                // active mode via the same-userId re-create trick (see
-                // BuildModeFlyout — there's no setter on IFlyoutGroup.Name).
-                int faceOnlyType = textBelow |
-                    (int)swCommandTabButtonFlyoutStyle_e.swCommandTabButton_NoFlyout;
-                cmdIds.Add(_modeFlyout.CmdID);
-                textTypes.Add(faceOnlyType);
+                cmdIds.Add(createCmdId);
+                textTypes.Add(textBelow);
             }
             // Mode pills — TextHorizontal stacks 3-per-column. The 3 pills
             // sit immediately right of the big Create button, matching its
@@ -369,7 +299,7 @@ namespace SW2GZ.UI.Ribbon
             }
             box.AddCommands(cmdIds.ToArray(), textTypes.ToArray());
             logger.Info("Sw2gzRibbonRegistrar: Common tab box added with " + cmdIds.Count +
-                " entries (incl. mode flyout)");
+                " entries (Create + pills + Coord/Preview/Export)");
         }
 
         private void AddBox(CommandTab tab, int textBelow, int[] userIds)

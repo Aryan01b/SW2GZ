@@ -8,10 +8,11 @@ group ID's registry cache would then be discarded as stale).
 Layout:
    0..2   Mode flyout sub-items    (Robot / World / Asset — slots reserved as documentation;
                                     chevron sub-items removed in v2.1.0, replaced by pills 4..6)
-   3      Mode flyout group        (single "Create [Mode]" face-only button)
+   3      Mode flyout group        (reserved — was IFlyoutGroup "Create [Mode]"; replaced by 13 in v2.1.0)
    4..6   Mode pills               (Robot / World / Asset — TextHorizontal toggles next to
                                     the big Create button; replace the chevron sub-items)
-  10..12  Common cluster           (Coord / Preview / Export)
+  10..13  Common cluster           (Coord / Preview / Export / ModeCreate)
+  13      ModeCreate               (static "Create" button — regular AddCommandItem2, no flyout)
   22..25  Robot cluster            (Inertia / Sensors / Actuation / Stack — Links+Joints live in the Create wizard PMP)
   30..33  World cluster            (Ground / Assets / Physics / Scene)
   40..41  Asset cluster            (Body / Surface)
@@ -51,6 +52,7 @@ namespace SW2GZ.UI.Ribbon
         public const int CoordPmp    = 10;
         public const int PreviewPmp  = 11;
         public const int ExportPmp   = 12;
+        public const int ModeCreate  = 13;
 
         // Robot cluster — RobotLinks (was 20) and RobotJoints (was 21) moved
         // into the Create-Robot wizard PMP. IDs left as gaps so the others
@@ -74,11 +76,13 @@ namespace SW2GZ.UI.Ribbon
         // flyout-group ID is allocated by ICommandManager.CreateFlyoutGroup
         // (separate registry namespace from AddCommandItem2 user-IDs). The
         // Robot/World/Asset IDs are included because they're real
-        // sub-command items inside the flyout.
+        // sub-command items inside the flyout. ModeCreate (13) IS in this list —
+        // it is a regular AddCommandItem2 command, not a flyout group.
         public static readonly int[] AllUserIds = new[]
         {
             ModeRobot, ModeWorld, ModeAsset,
             ModeRobotPill, ModeWorldPill, ModeAssetPill,
+            ModeCreate,
             CoordPmp, PreviewPmp, ExportPmp,
             RobotInertia, RobotSensors, RobotActuation, RobotStack,
             WorldGround, WorldAssets, WorldPhysics, WorldScene,

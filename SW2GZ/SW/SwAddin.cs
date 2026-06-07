@@ -507,11 +507,6 @@ namespace SW2GZ.SW
         public void ModeWorldClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.World);
         public void ModeAssetClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.Asset);
 
-        // UpdateCallback for the flyout BUTTON itself — always enabled when an
-        // assembly is active, even if the doc is mode-locked. User can still
-        // open the menu to see which mode they're in.
-        public int ModeFlyoutUpdate() => AssemblyEnable();
-
         private void SetMode(SW2GZ.URDFExport.Sw2gzMode mode)
         {
             if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
