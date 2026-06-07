@@ -9,7 +9,7 @@ Layout:
    0..2   Mode flyout sub-items    (Robot / World / Asset — selected via Mode ▾ dropdown)
    3      Mode flyout group        (single "Mode ▾" button hosting the 3 sub-items)
   10..12  Common cluster           (Coord / Preview / Export)
-  20..25  Robot cluster            (Links / Joints / Inertia / Sensors / Actuation / Stack)
+  22..25  Robot cluster            (Inertia / Sensors / Actuation / Stack — Links+Joints live in the Create wizard PMP)
   30..33  World cluster            (Ground / Assets / Physics / Scene)
   40..41  Asset cluster            (Body / Surface)
 */
@@ -30,16 +30,20 @@ namespace SW2GZ.UI.Ribbon
         public const int ModeRobot       = 0;
         public const int ModeWorld       = 1;
         public const int ModeAsset       = 2;
-        public const int ModeFlyoutGroup = 3;
+        // ID 99 — deliberately well away from SW built-in command IDs in the
+        // low single-digit range. Using ID=3 caused the flyout button face to
+        // show SW's "Form New Subassembly" tooltip (cmdID collision in SW's
+        // internal command-name table).
+        public const int ModeFlyoutGroup = 99;
 
         // Common cluster
         public const int CoordPmp    = 10;
         public const int PreviewPmp  = 11;
         public const int ExportPmp   = 12;
 
-        // Robot cluster
-        public const int RobotLinks      = 20;
-        public const int RobotJoints     = 21;
+        // Robot cluster — RobotLinks (was 20) and RobotJoints (was 21) moved
+        // into the Create-Robot wizard PMP. IDs left as gaps so the others
+        // keep their stable values across the upgrade.
         public const int RobotInertia    = 22;
         public const int RobotSensors    = 23;
         public const int RobotActuation  = 24;
@@ -64,7 +68,7 @@ namespace SW2GZ.UI.Ribbon
         {
             ModeRobot, ModeWorld, ModeAsset,
             CoordPmp, PreviewPmp, ExportPmp,
-            RobotLinks, RobotJoints, RobotInertia, RobotSensors, RobotActuation, RobotStack,
+            RobotInertia, RobotSensors, RobotActuation, RobotStack,
             WorldGround, WorldAssets, WorldPhysics, WorldScene,
             AssetBody, AssetSurface,
         };

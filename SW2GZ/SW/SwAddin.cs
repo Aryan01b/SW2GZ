@@ -437,13 +437,71 @@ namespace SW2GZ.SW
         }
 
         // ─── Mode flyout (L3b) ────────────────────────────────────────
-        // ModeRobotClick / ModeWorldClick / ModeAssetClick are invoked by the
-        // Mode ▾ flyout sub-items in Sw2gzRibbonRegistrar.BuildModeFlyout.
-        // OpenModePicker is the click target for the flyout button face — SW
-        // opens the dropdown automatically on click of either the face or the
-        // chevron, so this callback is a no-op that exists only to satisfy
-        // CreateFlyoutGroup's required callback parameter.
-        public void OpenModePicker() { /* SW handles the dropdown open */ }
+        // SW-native split button. The flyout face's click callback is
+        // OpenCreatePmp; the 3 sub-items (ROBOT / WORLD / ASSET) call
+        // ModeRobotClick / ModeWorldClick / ModeAssetClick, which set the
+        // doc mode and trigger the L3b tab rebuild via SetMode.
+
+        // Face-click dispatcher — opens the create wizard for the active mode.
+        // Robot mode gets the real Sw2gzCreateRobotPmp (Links + Joints, Back/Next);
+        // World / Asset stay on OpenStub until their wizards are written.
+        // _createRobotPmp held as field — same COM-handler-rooting reason as
+        // _openPanel (the SW PMP handler interface is freed on AfterClose).
+        private SW2GZ.UI.Pmp.Sw2gzCreateRobotPmp _createRobotPmp;
+
+        // Bisecting confirmed: calling swApp.CreatePropertyManagerPage directly
+        // from inside an IFlyoutGroup face callback throws InvalidCastException
+        // at the COM marshaller — even when the PMP class is Sw2gzStubPmp, which
+        // works fine from regular ribbon commands. SW's flyout face is invoked
+        // in a COM apartment / marshalling state that refuses to take a managed
+        // handler object. The fix: defer the actual PMP creation onto the next
+        // WinForms message-loop tick via a one-shot Timer. The flyout callback
+        // returns immediately; the Timer fires on the next idle, OUTSIDE the
+        // flyout context, and the PMP opens normally.
+        public void OpenCreatePmp()
+        {
+            try
+            {
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                string title;
+                switch (doc.Mode)
+                {
+                    case SW2GZ.URDFExport.Sw2gzMode.World: title = "Create World"; break;
+                    case SW2GZ.URDFExport.Sw2gzMode.Asset: title = "Create Asset"; break;
+                    default:                               title = "Create Robot"; break;
+                }
+                DeferToIdle(() => OpenStub(title));
+            }
+            catch (Exception e)
+            {
+                logger.Error("OpenCreatePmp failed", e);
+                MessageBox.Show("Could not open Create: " + e.Message);
+            }
+        }
+
+        // Run `action` on the next WinForms idle tick. Used by callbacks that
+        // SW invokes from a COM marshalling context that breaks subsequent COM
+        // calls (notably flyout face callbacks → CreatePropertyManagerPage).
+        private void DeferToIdle(Action action)
+        {
+            if (action == null) return;
+            // 500ms: empirically, a 1ms one-shot was not enough for the SW
+            // flyout-face callback path — InvalidCastException still fired from
+            // InterfaceMarshaler.ConvertToNative on CreatePropertyManagerPage's
+            // handler param. SW appears to hold COM-apartment state past the
+            // first message-loop tick after the flyout callback returns. A
+            // half-second delay gives SW time to fully dismiss the flyout.
+            var timer = new System.Windows.Forms.Timer { Interval = 500 };
+            timer.Tick += (sender, args) =>
+            {
+                timer.Stop();
+                timer.Dispose();
+                try { action(); }
+                catch (Exception e) { logger.Error("DeferToIdle action failed", e); }
+            };
+            timer.Start();
+        }
         public void ModeRobotClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.Robot);
         public void ModeWorldClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.World);
         public void ModeAssetClick() => SetMode(SW2GZ.URDFExport.Sw2gzMode.Asset);
@@ -502,8 +560,8 @@ namespace SW2GZ.SW
         public void OpenExportPmp()  => LaunchExport();               // existing method
 
         // ─── Robot cluster ────────────────────────────────────────────
-        public void OpenRobotLinksPmp()     => OpenStub("Links");
-        public void OpenRobotJointsPmp()    => OpenStub("Joints");
+        // Links and Joints used to be ribbon buttons but have moved into the
+        // Create-Robot wizard PMP (face-click of the split button).
         public void OpenRobotInertiaPmp()   => OpenStub("Inertia");
         public void OpenRobotSensorsPmp()   => OpenStub("Sensors");
         public void OpenRobotActuationPmp() => OpenStub("Actuation");

@@ -103,31 +103,21 @@ namespace SW2GZ.UI.Ribbon
             // 13 Ground | 14 Assets | 15 Physics | 16 Scene |
             // 17 Body | 18 Surface
             const int IMG_COORD = 4, IMG_PREVIEW = 5, IMG_EXPORT = 6;
-            const int IMG_LINKS = 7, IMG_JOINTS = 8, IMG_INERTIA = 9;
+            // IMG_LINKS=7, IMG_JOINTS=8 — Links/Joints moved into the Create-Robot
+            // wizard PMP; the strip columns are kept (still drawn) so we don't
+            // have to renumber later columns.
+            const int IMG_INERTIA = 9;
             const int IMG_SENSORS = 10, IMG_ACTUATION = 11, IMG_STACK = 12;
             const int IMG_GROUND = 13, IMG_ASSETS = 14, IMG_PHYSICS = 15, IMG_SCENE = 16;
             const int IMG_BODY = 17, IMG_SURFACE = 18;
 
-            // Mode is a flyout-group dropdown (L3b design). The visible "Mode ▾"
-            // button hosts a dropdown of Robot/World/Asset sub-items, each wired
-            // to its own click callback. The flyout-button click itself opens
-            // the dropdown; ModeFlyoutClick is invoked as a default action when
-            // the user clicks the button face rather than the chevron.
-            // CreateFlyoutGroup is a separate primitive from AddCommandItem2 —
-            // it owns its own command-ID space. The 3 sub-items are added via
-            // IFlyoutGroup.AddCommandItem (NOT grp.AddCommandItem2) so their
-            // userIds (0,1,2) live inside the flyout's namespace and don't
-            // collide with this group's userIds.
-            BuildModeFlyout();
-
-            // Common cluster
+            // Common cluster (Mode is registered separately as a flyout — see
+            // BuildModeFlyout below — and inserted into the Common tab box).
             AddItem(grp, RibbonCommandIds.CoordPmp,   "Coord",   "Coordinate convention (advanced)", "OpenCoordPmp",   "AssemblyEnable", IMG_COORD,   toolbar);
             AddItem(grp, RibbonCommandIds.PreviewPmp, "Preview", "Browser-based 3D preview",         "OpenPreviewPmp", "AssemblyEnable", IMG_PREVIEW, toolbar);
             AddItem(grp, RibbonCommandIds.ExportPmp,  "Export",  "Export ROS 2 / Gz package",        "OpenExportPmp",  "AssemblyEnable", IMG_EXPORT,  toolbar);
 
-            // Robot cluster
-            AddItem(grp, RibbonCommandIds.RobotLinks,     "Links",     "Define robot links",     "OpenRobotLinksPmp",     "RobotClusterEnable", IMG_LINKS,     toolbar);
-            AddItem(grp, RibbonCommandIds.RobotJoints,    "Joints",    "Define robot joints",    "OpenRobotJointsPmp",    "RobotClusterEnable", IMG_JOINTS,    toolbar);
+            // Robot cluster — Links/Joints moved into the Create-Robot wizard PMP.
             AddItem(grp, RibbonCommandIds.RobotInertia,   "Inertia",   "Per-link inertia",       "OpenRobotInertiaPmp",   "RobotClusterEnable", IMG_INERTIA,   toolbar);
             AddItem(grp, RibbonCommandIds.RobotSensors,   "Sensors",   "Sensor mounts",          "OpenRobotSensorsPmp",   "RobotClusterEnable", IMG_SENSORS,   toolbar);
             AddItem(grp, RibbonCommandIds.RobotActuation, "Actuation", "ros2_control / gz",      "OpenRobotActuationPmp", "RobotClusterEnable", IMG_ACTUATION, toolbar);
@@ -153,6 +143,10 @@ namespace SW2GZ.UI.Ribbon
             // AddItem (before Activate) was the v2.1.0 hang where the tab
             // registered with all-zero cmdIds and SW silently dropped it.
             ResolveCmdIds(grp);
+
+            // SW-native split button — face = "Create Robot/World/Asset"
+            // (mode-tracking label), chevron = ROBOT / WORLD / ASSET picker.
+            BuildModeFlyout(_activeMode);
 
             BuildTab(title, grp);
             logger.Info("Sw2gzRibbonRegistrar: registered " + _userToCmdId.Count +
@@ -188,28 +182,47 @@ namespace SW2GZ.UI.Ribbon
             _userToCmdIdx[userId] = idx;
         }
 
-        // Build the "Mode ▾" flyout group. Three sub-items (Robot/World/Asset)
-        // hang off it. Picking a sub-item invokes ModeRobotClick /
-        // ModeWorldClick / etc. on SwAddin which flips Sw2gzDoc.Mode in the
-        // doc-store.
+        // SW-native split button modelled on "Insert Components":
+        //   face (click)   → OpenCreatePmp, label tracks active mode
+        //                    ("Create Robot" / "Create World" / "Create Asset")
+        //   chevron (drop) → ROBOT / WORLD / ASSET picker
+        //
+        // The face label is set via the `name` parameter of CreateFlyoutGroup2,
+        // which is captured at creation time — SW has no setter on IFlyoutGroup
+        // to mutate it later. To track the active mode the flyout is recreated
+        // (same userId) every time RefreshTabForMode fires; SW docs note that
+        // passing an existing userId UPDATES the flyout, so this is idempotent.
         //
         // Signature: ICommandManager.CreateFlyoutGroup2(int, string, string,
         //   string, object mainIconList, object iconList, string callbackFn,
         //   string updateCallbackFn). No enable-method parameter — enable
         //   state is folded into updateCallbackFn's return value.
         //
+        // The face icon falls out to column 0 of the icon strip (the mode-
+        // flyout trio glyph) — CreateFlyoutGroup2 takes the WHOLE list and
+        // SW picks the first column, with no per-mode override. The label +
+        // visible panel cluster carry the mode signal.
+        //
         // IFlyoutGroup.AddCommandItem(string name, string hint, int imageIdx,
         //   string callbackFn, string updateCallbackFn) — 5 args, no enable.
-        private void BuildModeFlyout()
+        private void BuildModeFlyout(SW2GZ.URDFExport.Sw2gzMode mode)
         {
+            string faceLabel;
+            switch (mode)
+            {
+                case SW2GZ.URDFExport.Sw2gzMode.World: faceLabel = "Create World"; break;
+                case SW2GZ.URDFExport.Sw2gzMode.Asset: faceLabel = "Create Asset"; break;
+                default:                               faceLabel = "Create Robot"; break;
+            }
+
             _modeFlyout = _cmdMgr.CreateFlyoutGroup2(
                 RibbonCommandIds.ModeFlyoutGroup,
-                "Mode",
-                "Switch export mode",
-                "Pick which kind of package this assembly exports.",
+                faceLabel,
+                faceLabel,
+                "Click to create for the active mode. Use the dropdown to switch mode (Robot / World / Asset).",
                 _mainIcons,
                 _stripIcons,
-                "OpenModePicker",
+                "OpenCreatePmp",
                 "ModeFlyoutUpdate");
 
             if (_modeFlyout == null)
@@ -225,18 +238,21 @@ namespace SW2GZ.UI.Ribbon
             // stays clickable (uses ModeFlyoutUpdate) — user can still open
             // the menu and see the current mode greyed-out.
             // Image indices match scripts\GenerateIcons.ps1 columns 1/2/3.
-            _modeFlyout.AddCommandItem("Robot",
-                "Author an actuated robot model (URDF + ros2_control + Gz plugins). Disabled once Robot content exists.",
+            // Sub-item labels mirror the HTML mockup ("Create Robot/World/Asset")
+            // — same wording as the face, so the chevron menu reads as "pick a
+            // different default action" exactly like Insert Components.
+            _modeFlyout.AddCommandItem("Create Robot",
+                "Author an actuated robot (URDF + ros2_control + Gz plugins). Disabled once Robot content exists.",
                 1, "ModeRobotClick", "ModeSubItemUpdate");
-            _modeFlyout.AddCommandItem("World",
-                "Author a Gazebo world (SDF world + included assets + physics/scene). Disabled once World content exists.",
+            _modeFlyout.AddCommandItem("Create World",
+                "Author a Gazebo world (SDF world + included assets + physics + scene). Disabled once World content exists.",
                 2, "ModeWorldClick", "ModeSubItemUpdate");
-            _modeFlyout.AddCommandItem("Asset",
+            _modeFlyout.AddCommandItem("Create Asset",
                 "Author a single-body static SDF model. Disabled once Asset content exists.",
                 3, "ModeAssetClick", "ModeSubItemUpdate");
 
-            logger.Info("Sw2gzRibbonRegistrar: mode flyout built (cmdId=" +
-                _modeFlyout.CmdID + ", 3 sub-items)");
+            logger.Info("Sw2gzRibbonRegistrar: mode flyout (re)built — face='" +
+                faceLabel + "', cmdId=" + _modeFlyout.CmdID + ", 3 sub-items");
         }
 
         // Per-mode panel-cluster user-ID lists. Used by both BuildTab (initial
@@ -244,7 +260,7 @@ namespace SW2GZ.UI.Ribbon
         // picks a different mode from the Mode flyout dropdown). Exposed as
         // arrays so the same data drives both the initial build and rebuild.
         private static readonly int[] RobotClusterUserIds = new[] {
-            RibbonCommandIds.RobotLinks, RibbonCommandIds.RobotJoints, RibbonCommandIds.RobotInertia,
+            RibbonCommandIds.RobotInertia,
             RibbonCommandIds.RobotSensors, RibbonCommandIds.RobotActuation, RibbonCommandIds.RobotStack };
         private static readonly int[] WorldClusterUserIds = new[] {
             RibbonCommandIds.WorldGround, RibbonCommandIds.WorldAssets,
@@ -263,6 +279,9 @@ namespace SW2GZ.UI.Ribbon
         public void RefreshTabForMode(SW2GZ.URDFExport.Sw2gzMode mode)
         {
             _activeMode = mode;
+            // Recreate the flyout so the face label updates ("Create Robot" →
+            // "Create World" etc.). Same userId — SW treats this as an update.
+            BuildModeFlyout(mode);
             BuildTab("SW2GZ", null);   // grp not needed for tab rebuild
         }
 
@@ -285,10 +304,11 @@ namespace SW2GZ.UI.Ribbon
             logger.Info("Sw2gzRibbonRegistrar: tab '" + title + "' added for swDocASSEMBLY (mode=" + _activeMode + ")");
 
             int textBelow = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow;
-            int flyoutShowAll = (int)swCommandTabButtonFlyoutStyle_e.swCommandTabButton_ActionFlyout;
 
-            // Common cluster (Mode ▾ flyout + 3 common actions) — always shown.
-            BuildCommonTabBox(tab, textBelow, flyoutShowAll);
+            // Common cluster — Mode flyout (split button) + 3 common actions.
+            // The flyout's cmdId comes from IFlyoutGroup.CmdID, not from
+            // _userToCmdId, so it needs the dedicated BuildCommonTabBox helper.
+            BuildCommonTabBox(tab, textBelow);
 
             // Only the ACTIVE mode's cluster goes on the tab. L3b "one mode
             // at a time" — the others are not just disabled, they don't appear.
@@ -306,10 +326,8 @@ namespace SW2GZ.UI.Ribbon
 
         // Build the Common tab box: [Mode flyout] [Coord] [Preview] [Export].
         // Flyout cmdId comes from IFlyoutGroup.CmdID (separate ID space from
-        // the per-command get_CommandID lookups). textType for the flyout uses
-        // the swCommandTabButton_ActionFlyout flag so the button face is
-        // clickable AND the chevron drops the menu.
-        private void BuildCommonTabBox(CommandTab tab, int textBelow, int flyoutShowAll)
+        // the per-command get_CommandID lookups).
+        private void BuildCommonTabBox(CommandTab tab, int textBelow)
         {
             ICommandTabBox box = tab.AddCommandTabBox();
             if (box == null)
@@ -322,8 +340,18 @@ namespace SW2GZ.UI.Ribbon
 
             if (_modeFlyout != null)
             {
+                // True split button: OR in swCommandTabButton_ActionFlyout so
+                // SW renders a clickable face + a separate chevron that drops
+                // the menu (this is the "Insert Components" pattern). Without
+                // this flag SW falls back to the SimpleFlyout look — the whole
+                // button is one big dropdown trigger and the face never fires
+                // its click callback. SimpleFlyout was the bit that previously
+                // crashed; ActionFlyout is a different flag and is what the
+                // standard SW split buttons use.
+                int flyoutTextType = textBelow |
+                    (int)swCommandTabButtonFlyoutStyle_e.swCommandTabButton_ActionFlyout;
                 cmdIds.Add(_modeFlyout.CmdID);
-                textTypes.Add(textBelow | flyoutShowAll);
+                textTypes.Add(flyoutTextType);
             }
             foreach (int uid in new[] { RibbonCommandIds.CoordPmp, RibbonCommandIds.PreviewPmp, RibbonCommandIds.ExportPmp })
             {
