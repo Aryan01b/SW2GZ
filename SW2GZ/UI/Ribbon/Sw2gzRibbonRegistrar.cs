@@ -93,11 +93,11 @@ namespace SW2GZ.UI.Ribbon
             // scripts\GenerateIcons.ps1 ($drawers list).
             //
             // 0 ModeFlyout | 1 Robot | 2 World | 3 Asset |
-            // 4 Coord | 5 Preview | 6 Export |
+            // 4 Coord (unused, removed v2.1.0) | 5 Preview | 6 Export |
             // 7 Links | 8 Joints | 9 Inertia | 10 Sensors | 11 Actuation | 12 Stack |
             // 13 Ground | 14 Assets | 15 Physics | 16 Scene |
             // 17 Body | 18 Surface
-            const int IMG_COORD = 4, IMG_PREVIEW = 5, IMG_EXPORT = 6;
+            const int IMG_PREVIEW = 5, IMG_EXPORT = 6;
             // IMG_LINKS=7, IMG_JOINTS=8 — Links/Joints moved into the Create-Robot
             // wizard PMP; the strip columns are kept (still drawn) so we don't
             // have to renumber later columns.
@@ -106,14 +106,28 @@ namespace SW2GZ.UI.Ribbon
             const int IMG_GROUND = 13, IMG_ASSETS = 14, IMG_PHYSICS = 15, IMG_SCENE = 16;
             const int IMG_BODY = 17, IMG_SURFACE = 18;
 
-            // Common cluster — static "Create" button first, then Coord/Preview/Export.
-            const int IMG_CREATE = 0;   // strip column 0 — mode-trio glyph, reused as the generic Create face
-            AddItem(grp, RibbonCommandIds.ModeCreate, "Create",
-                    "Create new content in the active mode (mode shown by pill at right).",
+            // Mode-Create trio — three pre-registered Create buttons, each
+            // with its own static label. Only the active-mode one is placed
+            // in the Common box; mode switch swaps the box (see
+            // BuildCommonTabBox / RefreshTabForMode). All three share the
+            // OpenCreatePmp callback, which already branches on doc.Mode.
+            // Icon column 0 (mode-trio glyph) used for all three so the
+            // big-button face stays visually consistent across modes.
+            const int IMG_CREATE = 0;
+            AddItem(grp, RibbonCommandIds.ModeCreateRobot, "Create Robot",
+                    "Create / edit the robot package for this assembly.",
                     "OpenCreatePmp", "AssemblyEnable", IMG_CREATE, toolbar);
-            AddItem(grp, RibbonCommandIds.CoordPmp,   "Coord",   "Coordinate convention (advanced)", "OpenCoordPmp",   "AssemblyEnable", IMG_COORD,   toolbar);
-            AddItem(grp, RibbonCommandIds.PreviewPmp, "Preview", "Browser-based 3D preview",         "OpenPreviewPmp", "AssemblyEnable", IMG_PREVIEW, toolbar);
-            AddItem(grp, RibbonCommandIds.ExportPmp,  "Export",  "Export ROS 2 / Gz package",        "OpenExportPmp",  "AssemblyEnable", IMG_EXPORT,  toolbar);
+            AddItem(grp, RibbonCommandIds.ModeCreateWorld, "Create World",
+                    "Create / edit the Gz world for this assembly.",
+                    "OpenCreatePmp", "AssemblyEnable", IMG_CREATE, toolbar);
+            AddItem(grp, RibbonCommandIds.ModeCreateAsset, "Create Asset",
+                    "Create / edit a reusable asset from this assembly.",
+                    "OpenCreatePmp", "AssemblyEnable", IMG_CREATE, toolbar);
+
+            // Common cluster — Coord button removed in v2.1.0 (advanced coord
+            // convention moved into the Create wizard).
+            AddItem(grp, RibbonCommandIds.PreviewPmp, "Preview", "Browser-based 3D preview",  "OpenPreviewPmp", "AssemblyEnable", IMG_PREVIEW, toolbar);
+            AddItem(grp, RibbonCommandIds.ExportPmp,  "Export",  "Export ROS 2 / Gz package", "OpenExportPmp",  "AssemblyEnable", IMG_EXPORT,  toolbar);
 
             // Robot cluster — Links/Joints moved into the Create-Robot wizard PMP.
             AddItem(grp, RibbonCommandIds.RobotInertia,   "Inertia",   "Per-link inertia",       "OpenRobotInertiaPmp",   "RobotClusterEnable", IMG_INERTIA,   toolbar);
@@ -150,7 +164,7 @@ namespace SW2GZ.UI.Ribbon
             // registered with all-zero cmdIds and SW silently dropped it.
             ResolveCmdIds(grp);
 
-            BuildTab(title, grp);
+            BuildTab(title);
             logger.Info("Sw2gzRibbonRegistrar: registered " + _userToCmdId.Count +
                 " commands across 4 clusters");
         }
@@ -202,27 +216,72 @@ namespace SW2GZ.UI.Ribbon
         // Sw2gzDoc state in SwAddin (see RefreshTabForMode below).
         private SW2GZ.URDFExport.Sw2gzMode _activeMode = SW2GZ.URDFExport.Sw2gzMode.Robot;
 
-        // L3b only-one-mode-visible behaviour: SW's enable-callback can gray
-        // a button but not hide it. To truly hide non-active mode clusters
-        // we tear down the tab and rebuild with only the active mode's box.
+        // Cached refs so RefreshTabForMode can swap just the two boxes instead
+        // of tearing down the whole tab. RemoveCommandTab + AddCommandTab
+        // forces the SW2GZ tab to become active — which yanked the user off
+        // whatever tab they were on (Assembly / Layout / etc.) every time a
+        // mode pill was clicked. Per-box swap keeps the tab itself untouched
+        // so the user's active-tab focus is preserved.
+        // Three managed boxes on the tab, rendered left-to-right with SW's
+        // built-in gap between adjacent CommandTabBox instances (SW's API has
+        // no per-button separator — multiple boxes IS the separator idiom):
+        //   _modeStartBox    : [Create <Mode>] [Robot/World/Asset pills]
+        //   _actionsBox      : [Preview] [Export]
+        //   _modeClusterBox  : the active mode's panel-cluster buttons
+        private CommandTab _tab;
+        private CommandTabBox _modeStartBox;
+        private CommandTabBox _actionsBox;
+        private CommandTabBox _modeClusterBox;
+
         public void RefreshTabForMode(SW2GZ.URDFExport.Sw2gzMode mode)
         {
             _activeMode = mode;
-            BuildTab("SW2GZ", null);   // grp not needed for tab rebuild
+
+            int asmType = (int)swDocumentTypes_e.swDocASSEMBLY;
+            // Resolve a live tab handle each call — _tab may be stale across
+            // a SW Disconnect/Reconnect cycle.
+            CommandTab live = _cmdMgr.GetCommandTab(asmType, "SW2GZ");
+            if (live == null)
+            {
+                // No tab yet — first-time build path (or recovery after a
+                // missed initial registration). Falls through to BuildTab.
+                BuildTab("SW2GZ");
+                return;
+            }
+            _tab = live;
+
+            int textBelow = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow;
+
+            // Surgical swap: drop the managed boxes and rebuild them in
+            // place. The CommandTab itself stays — so the ribbon's currently
+            // active tab (whether SW2GZ or another) doesn't change. Only the
+            // mode-start box needs rebuilding to swap the Create label, but
+            // we rebuild all three to keep ordering deterministic (SW appends
+            // new boxes after existing ones, so partial rebuild would
+            // reshuffle the layout left-to-right).
+            if (_modeStartBox   != null) { try { _tab.RemoveCommandTabBox(_modeStartBox);   } catch { } _modeStartBox = null; }
+            if (_actionsBox     != null) { try { _tab.RemoveCommandTabBox(_actionsBox);     } catch { } _actionsBox = null; }
+            if (_modeClusterBox != null) { try { _tab.RemoveCommandTabBox(_modeClusterBox); } catch { } _modeClusterBox = null; }
+
+            BuildAllBoxes(_tab, textBelow);
+            logger.Info("Sw2gzRibbonRegistrar: RefreshTabForMode swapped boxes for mode=" + _activeMode +
+                " (tab focus preserved)");
         }
 
-        private void BuildTab(string title, ICommandGroup grp)
+        private void BuildTab(string title)
         {
             int asmType = (int)swDocumentTypes_e.swDocASSEMBLY;
 
             // Drop any existing tab from a previous load BEFORE re-adding,
             // otherwise AddCommandTabBox stacks duplicate boxes on top of the
-            // persisted one each session.
+            // persisted one each session. This full-rebuild path is for
+            // initial registration only — RefreshTabForMode takes the
+            // box-swap path to avoid the tab-focus side effect.
             CommandTab existing = _cmdMgr.GetCommandTab(asmType, title);
             if (existing != null) _cmdMgr.RemoveCommandTab(existing);
 
-            CommandTab tab = _cmdMgr.AddCommandTab(asmType, title);
-            if (tab == null)
+            _tab = _cmdMgr.AddCommandTab(asmType, title);
+            if (_tab == null)
             {
                 logger.Warn("Sw2gzRibbonRegistrar: AddCommandTab returned null — toolbar buttons still available");
                 return;
@@ -230,43 +289,39 @@ namespace SW2GZ.UI.Ribbon
             logger.Info("Sw2gzRibbonRegistrar: tab '" + title + "' added for swDocASSEMBLY (mode=" + _activeMode + ")");
 
             int textBelow = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow;
-
-            // Common cluster — static "Create" button + 3 pills + 3 common actions.
-            BuildCommonTabBox(tab, textBelow);
-
-            // Only the ACTIVE mode's cluster goes on the tab. L3b "one mode
-            // at a time" — the others are not just disabled, they don't appear.
-            int[] activeIds;
-            string activeName;
-            switch (_activeMode)
-            {
-                case SW2GZ.URDFExport.Sw2gzMode.World: activeIds = WorldClusterUserIds; activeName = "World"; break;
-                case SW2GZ.URDFExport.Sw2gzMode.Asset: activeIds = AssetClusterUserIds; activeName = "Asset"; break;
-                default:                               activeIds = RobotClusterUserIds; activeName = "Robot"; break;
-            }
-            AddBox(tab, textBelow, activeIds);
-            logger.Info("Sw2gzRibbonRegistrar: rendered " + activeName + " panel cluster only (L3b hide-others)");
+            BuildAllBoxes(_tab, textBelow);
         }
 
-        // Build the Common tab box: [Create] [pills] [Coord] [Preview] [Export].
-        private void BuildCommonTabBox(CommandTab tab, int textBelow)
+        private void BuildAllBoxes(CommandTab tab, int textBelow)
+        {
+            _modeStartBox   = BuildModeStartBox(tab, textBelow);
+            _actionsBox     = BuildActionsBox(tab, textBelow);
+            _modeClusterBox = BuildModeClusterBox(tab, textBelow);
+        }
+
+        // Box 1 — mode-start: [Create <Mode>] [Robot/World/Asset pills].
+        // The Create button is the mode-specific variant (one of three
+        // pre-registered commands); the SW SDK can't rename a command after
+        // Activate, so per-mode labels need per-mode commands swapped in here.
+        private CommandTabBox BuildModeStartBox(CommandTab tab, int textBelow)
         {
             ICommandTabBox box = tab.AddCommandTabBox();
             if (box == null)
             {
-                logger.Warn("Sw2gzRibbonRegistrar: Common tab box AddCommandTabBox returned null");
-                return;
+                logger.Warn("Sw2gzRibbonRegistrar: mode-start tab box AddCommandTabBox returned null");
+                return null;
             }
-            // Capacity 8 = 1 Create + 3 pills + 3 common buttons + slack.
-            var cmdIds = new List<int>(8);
-            var textTypes = new List<int>(8);
+            var cmdIds = new List<int>(4);
+            var textTypes = new List<int>(4);
 
-            // Static "Create" button (regular AddCommandItem2, no flyout) — replaces
-            // the prior IFlyoutGroup-based dynamic-label trick which dropped the
-            // button on mode switch (CreateFlyoutGroup2 doesn't survive re-call with
-            // zero sub-items) and rendered a chevron the NoFlyout flag couldn't hide.
-            // Mode context comes from the 3 pills appended below.
-            if (_userToCmdId.TryGetValue(RibbonCommandIds.ModeCreate, out int createCmdId))
+            int createUserId;
+            switch (_activeMode)
+            {
+                case SW2GZ.URDFExport.Sw2gzMode.World: createUserId = RibbonCommandIds.ModeCreateWorld; break;
+                case SW2GZ.URDFExport.Sw2gzMode.Asset: createUserId = RibbonCommandIds.ModeCreateAsset; break;
+                default:                               createUserId = RibbonCommandIds.ModeCreateRobot; break;
+            }
+            if (_userToCmdId.TryGetValue(createUserId, out int createCmdId))
             {
                 cmdIds.Add(createCmdId);
                 textTypes.Add(textBelow);
@@ -288,21 +343,43 @@ namespace SW2GZ.UI.Ribbon
                     logger.Warn("Sw2gzRibbonRegistrar: pill cmdId missing for userId=" + uid);
                 }
             }
-
-            foreach (int uid in new[] { RibbonCommandIds.CoordPmp, RibbonCommandIds.PreviewPmp, RibbonCommandIds.ExportPmp })
-            {
-                if (_userToCmdId.TryGetValue(uid, out int cmdId))
-                {
-                    cmdIds.Add(cmdId);
-                    textTypes.Add(textBelow);
-                }
-            }
             box.AddCommands(cmdIds.ToArray(), textTypes.ToArray());
-            logger.Info("Sw2gzRibbonRegistrar: Common tab box added with " + cmdIds.Count +
-                " entries (Create + pills + Coord/Preview/Export)");
+            logger.Info("Sw2gzRibbonRegistrar: mode-start tab box added with " + cmdIds.Count +
+                " entries (Create[" + _activeMode + "] + pills)");
+            return (CommandTabBox)box;
         }
 
-        private void AddBox(CommandTab tab, int textBelow, int[] userIds)
+        // Box 2 — actions: [Preview] [Export]. Rendered with the SW-default
+        // gap between this box and the mode-start box, which serves as the
+        // group separator.
+        private CommandTabBox BuildActionsBox(CommandTab tab, int textBelow)
+        {
+            return AddBox(tab, textBelow, new[] {
+                RibbonCommandIds.PreviewPmp,
+                RibbonCommandIds.ExportPmp,
+            });
+        }
+
+        // Box 3 — mode-cluster: the active mode's panel-cluster buttons.
+        // Only one cluster goes on the tab at a time — L3b "one mode at a
+        // time" (others are hidden, not just grayed).
+        private CommandTabBox BuildModeClusterBox(CommandTab tab, int textBelow)
+        {
+            int[] activeIds;
+            string activeName;
+            switch (_activeMode)
+            {
+                case SW2GZ.URDFExport.Sw2gzMode.World: activeIds = WorldClusterUserIds; activeName = "World"; break;
+                case SW2GZ.URDFExport.Sw2gzMode.Asset: activeIds = AssetClusterUserIds; activeName = "Asset"; break;
+                default:                               activeIds = RobotClusterUserIds; activeName = "Robot"; break;
+            }
+            var result = AddBox(tab, textBelow, activeIds);
+            if (result != null)
+                logger.Info("Sw2gzRibbonRegistrar: rendered " + activeName + " panel cluster only (L3b hide-others)");
+            return result;
+        }
+
+        private CommandTabBox AddBox(CommandTab tab, int textBelow, int[] userIds)
         {
             var cmdIds = new List<int>(userIds.Length);
             var textTypes = new List<int>(userIds.Length);
@@ -321,25 +398,18 @@ namespace SW2GZ.UI.Ribbon
             if (cmdIds.Count == 0)
             {
                 logger.Warn("Sw2gzRibbonRegistrar: AddBox called with no resolvable cmdIds — skipped");
-                return;
+                return null;
             }
 
             ICommandTabBox box = tab.AddCommandTabBox();
             if (box == null)
             {
                 logger.Warn("Sw2gzRibbonRegistrar: AddCommandTabBox returned null — cluster skipped");
-                return;
+                return null;
             }
             box.AddCommands(cmdIds.ToArray(), textTypes.ToArray());
             logger.Info("Sw2gzRibbonRegistrar: tab box added with " + cmdIds.Count + " commands");
-        }
-
-        private static bool ArraysMatch(int[] a, int[] b)
-        {
-            if (a == null || b == null || a.Length != b.Length) return false;
-            foreach (int x in b)
-                if (Array.IndexOf(a, x) < 0) return false;
-            return true;
+            return (CommandTabBox)box;
         }
     }
 }

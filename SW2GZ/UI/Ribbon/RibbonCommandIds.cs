@@ -8,11 +8,14 @@ group ID's registry cache would then be discarded as stale).
 Layout:
    0..2   Mode flyout sub-items    (Robot / World / Asset — slots reserved as documentation;
                                     chevron sub-items removed in v2.1.0, replaced by pills 4..6)
-   3      Mode flyout group        (reserved — was IFlyoutGroup "Create [Mode]"; replaced by 13 in v2.1.0)
+   3      Mode flyout group        (reserved — was IFlyoutGroup "Create [Mode]"; replaced by 14..16 in v2.1.0)
    4..6   Mode pills               (Robot / World / Asset — TextHorizontal toggles next to
                                     the big Create button; replace the chevron sub-items)
-  10..13  Common cluster           (Coord / Preview / Export / ModeCreate)
-  13      ModeCreate               (static "Create" button — regular AddCommandItem2, no flyout)
+  11..12  Common cluster           (Preview / Export — Coord removed in v2.1.0)
+  14..16  Mode-Create trio         (Create Robot / Create World / Create Asset — three pre-registered
+                                    AddCommandItem2 buttons; only the active-mode one is placed in the
+                                    Common box. SW SDK doesn't allow renaming a command after Activate,
+                                    so per-mode labels need per-mode commands.)
   22..25  Robot cluster            (Inertia / Sensors / Actuation / Stack — Links+Joints live in the Create wizard PMP)
   30..33  World cluster            (Ground / Assets / Physics / Scene)
   40..41  Asset cluster            (Body / Surface)
@@ -48,11 +51,21 @@ namespace SW2GZ.UI.Ribbon
         public const int ModeWorldPill   = 5;
         public const int ModeAssetPill   = 6;
 
-        // Common cluster
-        public const int CoordPmp    = 10;
+        // Common cluster — Coord (was 10) removed in v2.1.0; advanced coord
+        // convention now lives in the Create wizard. ID slot kept as a gap so
+        // PreviewPmp / ExportPmp don't have to renumber.
         public const int PreviewPmp  = 11;
         public const int ExportPmp   = 12;
-        public const int ModeCreate  = 13;
+
+        // Mode-Create trio — three pre-registered Create buttons (one per
+        // mode), each with its own static "Create Robot" / "Create World" /
+        // "Create Asset" label. Only the one matching the active mode is
+        // placed in the Common tab box; mode switch swaps the box, not the
+        // command name (SW SDK can't rename a command post-Activate).
+        // Slot 13 = old generic ModeCreate, kept as a gap to avoid renumbering.
+        public const int ModeCreateRobot = 14;
+        public const int ModeCreateWorld = 15;
+        public const int ModeCreateAsset = 16;
 
         // Robot cluster — RobotLinks (was 20) and RobotJoints (was 21) moved
         // into the Create-Robot wizard PMP. IDs left as gaps so the others
@@ -76,14 +89,14 @@ namespace SW2GZ.UI.Ribbon
         // flyout-group ID is allocated by ICommandManager.CreateFlyoutGroup
         // (separate registry namespace from AddCommandItem2 user-IDs). The
         // Robot/World/Asset IDs are included because they're real
-        // sub-command items inside the flyout. ModeCreate (13) IS in this list —
-        // it is a regular AddCommandItem2 command, not a flyout group.
+        // sub-command items inside the flyout. ModeCreate{Robot,World,Asset}
+        // are regular AddCommandItem2 commands, not a flyout group.
         public static readonly int[] AllUserIds = new[]
         {
             ModeRobot, ModeWorld, ModeAsset,
             ModeRobotPill, ModeWorldPill, ModeAssetPill,
-            ModeCreate,
-            CoordPmp, PreviewPmp, ExportPmp,
+            ModeCreateRobot, ModeCreateWorld, ModeCreateAsset,
+            PreviewPmp, ExportPmp,
             RobotInertia, RobotSensors, RobotActuation, RobotStack,
             WorldGround, WorldAssets, WorldPhysics, WorldScene,
             AssetBody, AssetSurface,

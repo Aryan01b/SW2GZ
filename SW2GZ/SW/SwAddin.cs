@@ -560,7 +560,8 @@ namespace SW2GZ.SW
         }
 
         // ─── Common cluster ───────────────────────────────────────────
-        public void OpenCoordPmp()   => OpenStub("Coord");
+        // Coord button removed in v2.1.0 — advanced coord convention now
+        // lives in the Create wizard, not the ribbon.
         public void OpenPreviewPmp() => LaunchPreview();
         public void OpenExportPmp()  => LaunchExport();               // existing method
 
