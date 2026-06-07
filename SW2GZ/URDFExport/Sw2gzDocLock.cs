@@ -3,8 +3,8 @@ Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
 Decides whether a Sw2gzDoc is "locked into" its current mode — i.e. the user
 has authored content under the active mode and switching mode would discard
-that work. The ribbon's Mode ▾ dropdown disables its sub-items while locked,
-so the user can still see the current mode in the menu but can't pick another.
+that work. The ribbon's mode pills (Robot/World/Asset) disable while locked,
+so the user can see the active mode but can't switch to another.
 
 A doc is considered locked when ANY of the active mode's content lists is
 non-empty (Robot.Links/Joints/Sensors, World.Ground/Assets, Asset.BodyPart).

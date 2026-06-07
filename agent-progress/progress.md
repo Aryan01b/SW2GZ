@@ -15,6 +15,7 @@ Current: **v2.1.0 UI-shell** shipped on `v2.1.0` branch. Backend wiring in next 
 - Common.Preview routed to existing PreviewDialog.
 - Common.Export routed to existing ExportDialog.
 - Sw2gzExportPmp linear wizard deleted.
+- Mode flyout redesign: face-only "Create [Mode]" button + 3 TextHorizontal pills (active pill grayed) replacing the chevron-based mode picker. Demo Split throwaway removed.
 
 ## Done (inherited from v2.1.1 main work — see CHANGELOG)
 
