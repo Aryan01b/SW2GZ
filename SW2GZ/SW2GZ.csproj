@@ -366,6 +366,8 @@
     <Compile Include="URDFExport\Sw2gzDocLock.cs" />
     <Compile Include="URDFExport\Sw2gzConfigCodec.cs" />
     <Compile Include="URDFExport\Sw2gzConfigSerialization.cs" />
+    <Compile Include="URDFExport\Sw2gzDocCodec.cs" />
+    <Compile Include="URDFExport\Sw2gzDocSerialization.cs" />
     <Compile Include="Build\Model\LinkDef.cs" />
     <Compile Include="Build\LinkDefValidator.cs" />
     <Compile Include="Build\LinkHierarchy.cs" />
@@ -566,6 +568,7 @@
     <Compile Include="UI\Ribbon\ClusterVisibility.cs" />
     <Compile Include="UI\Ribbon\RibbonCommandIds.cs" />
     <Compile Include="UI\Ribbon\Sw2gzRibbonRegistrar.cs" />
+    <Compile Include="UI\Ribbon\Sw2gzModeChangeOverlay.cs" />
     <Compile Include="UI\Pmp\Sw2gzStubPmp.cs" />
     <Compile Include="UI\Pmp\Sw2gzCreateRobotPmp.cs" />
     <Compile Include="UI\Pmp\Sw2gzCreateWorldPmp.cs" />

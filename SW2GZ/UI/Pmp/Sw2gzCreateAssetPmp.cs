@@ -43,6 +43,7 @@ namespace SW2GZ.UI.Pmp
         private const int StepCount = 3;
 
         private int _currentStep = StepBody;
+        private bool _okay;
 
         private const int BodySelectionMark = 0x4C0;
 
@@ -308,7 +309,7 @@ namespace SW2GZ.UI.Pmp
                 case IdBackBtn: if (_currentStep > 0) ShowStep(_currentStep - 1); break;
                 case IdNextBtn:
                     if (_currentStep < StepCount - 1) ShowStep(_currentStep + 1);
-                    else { CommitBodyFromControls(); CommitSurfaceFromControls(); _page.Close(true); }
+                    else { CommitBodyFromControls(); CommitSurfaceFromControls(); _okay = true; _page.Close(true); }
                     break;
                 case IdBodySetBtn:   HandleSetBody(); break;
                 case IdBodyClearBtn: HandleClearBody(); break;
@@ -317,7 +318,9 @@ namespace SW2GZ.UI.Pmp
 
         void IPropertyManagerPage2Handler9.OnClose(int Reason)
         {
-            if (Reason == (int)swPropertyManagerPageCloseReasons_e.swPropertyManagerPageClose_Cancel)
+            bool okay = Reason == (int)swPropertyManagerPageCloseReasons_e.swPropertyManagerPageClose_Okay;
+            _okay = _okay || okay;
+            if (!_okay)
             {
                 Sw2gzDocSnapshot.Restore(_snapshot, _liveDoc);
                 logger.Info("Sw2gzCreateAssetPmp: cancel → snapshot restored");
@@ -329,7 +332,7 @@ namespace SW2GZ.UI.Pmp
             }
         }
 
-        void IPropertyManagerPage2Handler9.AfterClose() { if (_liveDoc != null) _onCommit(_liveDoc); }
+        void IPropertyManagerPage2Handler9.AfterClose() { if (_okay && _liveDoc != null) _onCommit(_liveDoc); }
 
         void IPropertyManagerPage2Handler9.AfterActivation() { }
         void IPropertyManagerPage2Handler9.OnGainedFocus(int Id) { }

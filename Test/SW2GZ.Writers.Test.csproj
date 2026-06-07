@@ -35,6 +35,7 @@
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzDocSnapshot.cs"  Link="Sources\URDFExport\Sw2gzDocSnapshot.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzDocLock.cs"      Link="Sources\URDFExport\Sw2gzDocLock.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzConfigCodec.cs"  Link="Sources\URDFExport\Sw2gzConfigCodec.cs" />
+    <Compile Include="..\SW2GZ\URDFExport\Sw2gzDocCodec.cs"     Link="Sources\URDFExport\Sw2gzDocCodec.cs" />
     <Compile Include="..\SW2GZ\Build\Model\LinkDef.cs"          Link="Sources\Build\Model\LinkDef.cs" />
     <Compile Include="..\SW2GZ\Build\LinkDefValidator.cs"       Link="Sources\Build\LinkDefValidator.cs" />
     <Compile Include="..\SW2GZ\Build\LinkHierarchy.cs"          Link="Sources\Build\LinkHierarchy.cs" />

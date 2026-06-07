@@ -493,7 +493,7 @@ namespace SW2GZ.SW
             {
                 _createRobotPmp = new SW2GZ.UI.Pmp.Sw2gzCreateRobotPmp(
                     (SldWorks)SwApp, modelDoc, doc,
-                    _ => { /* backend-wiring plan will persist doc.Robot here */ });
+                    d => PersistDoc(modelDoc, d));
                 _createRobotPmp.Show();
             }
             catch (Exception e)
@@ -509,7 +509,7 @@ namespace SW2GZ.SW
             {
                 _createWorldPmp = new SW2GZ.UI.Pmp.Sw2gzCreateWorldPmp(
                     (SldWorks)SwApp, modelDoc, doc,
-                    _ => { /* backend-wiring plan will persist doc.World here */ });
+                    d => PersistDoc(modelDoc, d));
                 _createWorldPmp.Show();
             }
             catch (Exception e)
@@ -525,13 +525,29 @@ namespace SW2GZ.SW
             {
                 _createAssetPmp = new SW2GZ.UI.Pmp.Sw2gzCreateAssetPmp(
                     (SldWorks)SwApp, modelDoc, doc,
-                    _ => { /* backend-wiring plan will persist doc.Asset here */ });
+                    d => PersistDoc(modelDoc, d));
                 _createAssetPmp.Show();
             }
             catch (Exception e)
             {
                 logger.Error("OpenCreateAsset failed", e);
                 MessageBox.Show("Could not open Create Asset: " + e.Message);
+            }
+        }
+
+        // Persists Sw2gzDoc to "SW2GZ Doc (v1)" Attribute on Finish (not Cancel
+        // — each wizard guards _onCommit via an _okay flag set in OnClose).
+        // While the attribute exists the mode pills are locked.
+        private void PersistDoc(ModelDoc2 modelDoc, SW2GZ.URDFExport.Sw2gzDoc doc)
+        {
+            try
+            {
+                SW2GZ.URDFExport.Sw2gzDocSerialization.Save((SldWorks)SwApp, modelDoc, doc);
+            }
+            catch (Exception e)
+            {
+                logger.Error("PersistDoc failed", e);
+                MessageBox.Show("Save failed: " + e.Message);
             }
         }
 
@@ -575,12 +591,22 @@ namespace SW2GZ.SW
                 logger.Info("SetMode: already in " + mode + ", no-op");
                 return;
             }
+            var from = doc.Mode;
             doc.Mode = mode;
             logger.Info("SetMode: switched to " + mode);
 
             // L3b: rebuild the tab so only the active mode's panel cluster
-            // shows. SW's enable-callback can only gray, not hide.
-            try { _ribbonRegistrar?.RefreshTabForMode(mode); }
+            // shows. The Sw2gzModeChangeOverlay covers the rebuild flash with
+            // a brief modal toast — clearer to the user than the bare ribbon
+            // refresh, and stops the visual confusion of boxes vanishing +
+            // reappearing while the active tab focus is preserved.
+            try
+            {
+                var overlay = new SW2GZ.UI.Ribbon.Sw2gzModeChangeOverlay(
+                    from, mode,
+                    () => _ribbonRegistrar?.RefreshTabForMode(mode));
+                overlay.ShowDialog();
+            }
             catch (Exception e) { logger.Warn("SetMode: tab refresh failed", e); }
         }
 
@@ -602,6 +628,8 @@ namespace SW2GZ.SW
                 if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
                 var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
                 if (SW2GZ.URDFExport.Sw2gzDocLock.IsLocked(doc)) return 0;
+                // Locked by saved attribute — user must Delete Config first.
+                if (SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc)) return 0;
                 // Disable the pill that already represents the active mode —
                 // gives the grayed-out "you are here" visual cue.
                 return (doc.Mode == pillMode) ? 0 : 1;
@@ -610,6 +638,51 @@ namespace SW2GZ.SW
             {
                 logger.Warn("PillUpdate(" + pillMode + ") failed", e);
                 return 0;
+            }
+        }
+
+        // ─── Delete Config ────────────────────────────────────────────
+        // Enable only when a saved "SW2GZ Doc (v1)" attribute exists.
+        public int DeleteConfigEnable()
+        {
+            try
+            {
+                if (AssemblyEnable() == 0) return 0;
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
+                return SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc) ? 1 : 0;
+            }
+            catch (Exception e) { logger.Warn("DeleteConfigEnable failed", e); return 0; }
+        }
+
+        public void OpenDeleteConfigPmp()
+        {
+            try
+            {
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+                if (!SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc))
+                {
+                    SwApp.SendMsgToUser("No SW2GZ Doc (v1) attribute to delete.");
+                    return;
+                }
+                var result = MessageBox.Show(
+                    "Delete the saved SW2GZ Doc (v1) attribute?\n\n" +
+                    "Once deleted you can switch modes and re-run Create.",
+                    "Delete SW2GZ Doc", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
+                if (result != DialogResult.OK) return;
+
+                bool deleted = SW2GZ.URDFExport.Sw2gzDocSerialization.Delete(modeldoc);
+                // Reset the in-memory doc so the next wizard re-seeds from scratch.
+                SW2GZ.URDFExport.Sw2gzDocStore.Reset(modeldoc);
+                // Refresh the ribbon so pills re-evaluate their enable state.
+                try { _ribbonRegistrar?.RefreshTabForMode(
+                    SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc).Mode); }
+                catch (Exception ex) { logger.Warn("Delete: tab refresh failed", ex); }
+                logger.Info("DeleteConfig: deleted=" + deleted);
+            }
+            catch (Exception e)
+            {
+                logger.Error("OpenDeleteConfigPmp failed", e);
+                MessageBox.Show("Delete failed: " + e.Message);
             }
         }
 

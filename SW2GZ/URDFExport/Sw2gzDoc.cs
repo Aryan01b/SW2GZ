@@ -3,16 +3,20 @@ Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
 In-memory configuration tree for a single SolidWorks assembly's SW2GZ export.
 Held per-document by Sw2gzDocStore for the lifetime of the SolidWorks session.
-Persistence to a SolidWorks Attribute is OUT OF SCOPE for this plan — lands
-in the backend wiring plan.
 
 Each top-level mode (Robot/World/Asset) has its own subtree. All three exist
 on every Sw2gzDoc — only the one matching `Mode` is exposed in the ribbon.
 The other two are inert but kept so mode switches don't lose data.
 
 Pure / COM-free — source-linked into the test project.
+
+v2.1.0 schema: Robot subtree holds the rich LinkDef/JointDef types ported
+from main's Sw2gzExportPmp wizard so the Create-Robot PMP can rebuild the
+full link-tree + mate-driven joint flow. Sw2gzDocSerialization persists the
+full tree to a "SW2GZ Doc v1" SolidWorks Attribute.
 */
 using System.Collections.Generic;
+using SW2GZ.Build.Model;
 
 namespace SW2GZ.URDFExport
 {
@@ -28,10 +32,10 @@ namespace SW2GZ.URDFExport
 
     public sealed class Sw2gzRobotConfig
     {
-        public List<string> Links    { get; set; } = new List<string>();
-        public List<string> Joints   { get; set; } = new List<string>();
-        public List<string> Sensors  { get; set; } = new List<string>();
-        public bool UseRos2Control   { get; set; } = true;
+        public List<LinkDef>  Links    { get; set; } = new List<LinkDef>();
+        public List<JointDef> Joints   { get; set; } = new List<JointDef>();
+        public List<string>   Sensors  { get; set; } = new List<string>();
+        public bool UseRos2Control     { get; set; } = true;
     }
 
     public sealed class Sw2gzWorldConfig
@@ -45,8 +49,8 @@ namespace SW2GZ.URDFExport
 
     public sealed class Sw2gzAssetConfig
     {
-        public string BodyPart { get; set; } = string.Empty;
+        public string BodyPart   { get; set; } = string.Empty;
         public double FrictionMu { get; set; } = 0.8;
-        public bool IsStatic { get; set; } = true;
+        public bool IsStatic     { get; set; } = true;
     }
 }

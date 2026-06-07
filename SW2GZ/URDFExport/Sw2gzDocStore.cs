@@ -35,6 +35,13 @@ namespace SW2GZ.URDFExport
 
         public static void Clear() => _byKey.Clear();
 
+        /// Drop the cached doc for a single assembly, e.g. after the persisted
+        /// attribute is deleted. The next GetOrCreate will return a fresh doc.
+        public static void Reset(ModelDoc2 model)
+        {
+            _byKey.Remove(KeyFor(model));
+        }
+
         private static string KeyFor(ModelDoc2 model)
         {
             if (model == null) return "<null>";

@@ -46,6 +46,8 @@ namespace SW2GZ.UI.Pmp
         private static readonly string[] StepNames = { "Scene", "Assets", "Physics", "Review" };
         private const int StepCount = 4;
 
+        private bool _okay;
+
         private int _currentStep = StepScene;
 
         private const int GroundSelectionMark = 0x4B0;
@@ -439,7 +441,7 @@ namespace SW2GZ.UI.Pmp
                 case IdBackBtn: if (_currentStep > 0) ShowStep(_currentStep - 1); break;
                 case IdNextBtn:
                     if (_currentStep < StepCount - 1) ShowStep(_currentStep + 1);
-                    else { CommitPhysicsFromControls(); _page.Close(true); }
+                    else { CommitPhysicsFromControls(); _okay = true; _page.Close(true); }
                     break;
                 case IdGroundSetBtn:   HandleSetGround(); break;
                 case IdGroundClearBtn: HandleClearGround(); break;
@@ -451,7 +453,9 @@ namespace SW2GZ.UI.Pmp
 
         void IPropertyManagerPage2Handler9.OnClose(int Reason)
         {
-            if (Reason == (int)swPropertyManagerPageCloseReasons_e.swPropertyManagerPageClose_Cancel)
+            bool okay = Reason == (int)swPropertyManagerPageCloseReasons_e.swPropertyManagerPageClose_Okay;
+            _okay = _okay || okay;
+            if (!_okay)
             {
                 Sw2gzDocSnapshot.Restore(_snapshot, _liveDoc);
                 logger.Info("Sw2gzCreateWorldPmp: cancel → snapshot restored");
@@ -462,7 +466,7 @@ namespace SW2GZ.UI.Pmp
             }
         }
 
-        void IPropertyManagerPage2Handler9.AfterClose() { if (_liveDoc != null) _onCommit(_liveDoc); }
+        void IPropertyManagerPage2Handler9.AfterClose() { if (_okay && _liveDoc != null) _onCommit(_liveDoc); }
 
         void IPropertyManagerPage2Handler9.AfterActivation() { }
         void IPropertyManagerPage2Handler9.OnGainedFocus(int Id) { }

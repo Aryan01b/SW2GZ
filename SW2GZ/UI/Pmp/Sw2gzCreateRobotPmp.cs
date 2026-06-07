@@ -2,42 +2,35 @@
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
 Sw2gzCreateRobotPmp — the "Create Robot" PropertyManagerPage opened from the
-mode-specific Create button on the SW2GZ ribbon. Multi-step wizard modelled
-on main's Sw2gzExportPmp linear-wizard pattern (one PMP, one group per step,
-only currentStep's group .Visible = true, persistent footer group with Back /
-Next).
+mode-specific Create button on the SW2GZ ribbon.
 
-Steps:
-    0 — Links   (pick components → robot links)
-    1 — Joints  (pick mates → robot joints)
-    2 — Review  (counts; Next caption flips to "Finish")
+Ports main branch's Sw2gzExportPmp Links + Joints + Review steps onto v2.1.0's
+Sw2gzDoc.Robot subtree (LinkDef[] + JointDef[]). Mode is no longer a step
+inside the wizard — it's chosen on the ribbon by pill before this PMP opens,
+so the wizard is fixed 3 steps:
+    0 — Links   (embedded LinkTreeView + pick funnel + Add/Remove + mass + validation)
+    1 — Joints  (joints listbox + mates listbox + selected-joint detail)
+    2 — Review  (compact metadata + links/joints lists; Finish persists Sw2gzDoc)
 
-v2.1.0 schema constraint: Sw2gzDoc.Robot.Links and .Joints are flat
-List<string> (just names). Rich LinkDef/JointDef + parent/child hierarchy
-moves in with the backend-wiring plan. This wizard collects names today;
-the export pipeline still reads from the legacy Sw2gzExportConfig attribute
-until backend wiring lands.
-
-Mode is NOT a step inside the PMP — it's chosen on the ribbon via mode pills
-before this PMP opens. World / Asset get their own PMPs.
-
-COM-rooting note: held as a field on SwAddin (_createRobotPmp). The PMP COM
-handler interface is released on AfterClose, so a local would get GC'd after
-OpenCreatePmp returns and OK/Cancel callbacks would silently stop firing.
-
-CCW marshalling note: when invoked from the IFlyoutGroup face callback,
-swApp.CreatePropertyManagerPage throws InvalidCastException from the COM
-marshaller. SwAddin.OpenCreatePmp wraps the launch in DeferToIdle so the
-PMP is created on the next message-loop tick, OUTSIDE the flyout callback
-context. See SwAddin.cs for the full diagnosis.
+Output / Package / Author fields still live in ExportDialog under the Export
+ribbon button (unchanged from main).
 */
 #if SW_INTEROP
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidWorks.Interop.swpublished;
+using SW2GZ.Build;
+using SW2GZ.Build.Model;
+using SW2GZ.Build.Urdf;
+using SW2GZ.SwSurface;
+using SW2GZ.SwSurface.Abstractions;
+using SW2GZ.UI;
 using SW2GZ.URDFExport;
 using SW2GZ.Utilities;
 
@@ -55,72 +48,84 @@ namespace SW2GZ.UI.Pmp
         private readonly Action<Sw2gzDoc> _onCommit;
         private readonly PropertyManagerPage2 _page;
 
-        // ─── Step plan ───────────────────────────────────────────────
         private const int StepLinks  = 0;
         private const int StepJoints = 1;
         private const int StepReview = 2;
-        private static readonly string[] StepNames = { "Links", "Joints", "Review" };
+        private static readonly string[] StepNames = { "Create base model structure", "Joints", "Review" };
         private const int StepCount = 3;
 
         private int _currentStep = StepLinks;
+        private bool _okay;
 
-        // ─── Selection mark — keeps our SelectionBox picks separate from
-        //     anything the user selected outside the PMP.
-        private const int LinkSelectionMark = 0x4C4;   // arbitrary, must differ from joint mark
-        private const int JointSelectionMark = 0x4A1;
+        private Sw2gzRobotConfig Robot => _liveDoc.Robot;
 
-        // ─── Control IDs ─────────────────────────────────────────────
-        // 1-9 reserved for nav / header.
-        private const int IdHeader    = 1;
-        private const int IdFooter    = 2;
-        private const int IdBackBtn   = 3;
-        private const int IdNextBtn   = 4;
+        private const int HeaderGroupID = 1;
+        private const int HeaderLabelID = 2;
+        private const int NavGroupID    = 3;
+        private const int ButtonBackID  = 4;
+        private const int ButtonNextID  = 5;
 
-        // 10-19 Links step.
-        private const int IdLinksGroup       = 10;
-        private const int IdLinksDescr       = 11;
-        private const int IdLinksPicker      = 12;
-        private const int IdLinksAddBtn      = 13;
-        private const int IdLinksList        = 14;
-        private const int IdLinksRemoveBtn   = 15;
-        private const int IdLinksClearBtn    = 16;
-        private const int IdLinksReseedBtn   = 17;
+        private const int StepIdBase = 100;
+        private int StepGroupId(int step) => StepIdBase + step * 20;
 
-        // 20-29 Joints step.
-        private const int IdJointsGroup      = 20;
-        private const int IdJointsDescr      = 21;
-        private const int IdJointsMatesList  = 22;
-        private const int IdJointsAddBtn     = 23;
-        private const int IdJointsList       = 24;
-        private const int IdJointsRemoveBtn  = 25;
-        private const int IdJointsClearBtn   = 26;
-        private const int IdJointsRefreshBtn = 27;
+        private const int TreeHandleID          = StepIdBase + 0 * 20 + 2;
+        private const int PickFunnelID          = StepIdBase + 0 * 20 + 3;
+        private const int ButtonAddLinkID       = StepIdBase + 0 * 20 + 4;
+        private const int ButtonRemoveLinkID    = StepIdBase + 0 * 20 + 5;
+        private const int LabelLinkMassID       = StepIdBase + 0 * 20 + 6;
+        private const int LabelLinkValidationID = StepIdBase + 0 * 20 + 7;
+        private const int LabelLinkInstrID      = StepIdBase + 0 * 20 + 8;
 
-        // 30-39 Review step.
-        private const int IdReviewGroup       = 30;
-        private const int IdReviewDescr       = 31;
-        private const int IdReviewLinksLabel  = 32;
-        private const int IdReviewJointsLabel = 33;
-        private const int IdReviewModeLabel   = 34;
+        private const int LabelJointInstrID  = StepIdBase + 1 * 20 + 2;
+        private const int ListJointsID       = StepIdBase + 1 * 20 + 3;
+        private const int LabelMatesCapID    = StepIdBase + 1 * 20 + 4;
+        private const int ListMatesID        = StepIdBase + 1 * 20 + 5;
+        private const int LabelDetailCapID   = StepIdBase + 1 * 20 + 6;
+        private const int LabelDetailLinksID = StepIdBase + 1 * 20 + 7;
+        private const int LabelDetailMateID  = StepIdBase + 1 * 20 + 8;
+        private const int LabelDetailTypeID  = StepIdBase + 1 * 20 + 9;
+        private const int LabelDetailLimitsID = StepIdBase + 1 * 20 + 10;
 
-        // ─── PMP control refs ────────────────────────────────────────
+        private const int LabelReviewInstrID     = StepIdBase + 2 * 20 + 2;
+        private const int LabelReviewModeID      = StepIdBase + 2 * 20 + 3;
+        private const int LabelReviewLinksCapID  = StepIdBase + 2 * 20 + 4;
+        private const int ListReviewLinksID      = StepIdBase + 2 * 20 + 5;
+        private const int LabelReviewJointsCapID = StepIdBase + 2 * 20 + 6;
+        private const int ListReviewJointsID    = StepIdBase + 2 * 20 + 7;
+
+        private const int LinkSelectionMark = 3;
+
         private PropertyManagerPageLabel _hdrLabel;
         private PropertyManagerPageGroup[] _stepGroups;
         private PropertyManagerPageButton _backBtn;
         private PropertyManagerPageButton _nextBtn;
 
-        private PropertyManagerPageSelectionbox _linksPicker;
-        private PropertyManagerPageListbox _linksList;
+        private PropertyManagerPageWindowFromHandle _treeHandle;
+        private LinkTreeView _linkTree;
+        private PropertyManagerPageSelectionbox _pickFunnel;
+        private PropertyManagerPageLabel _linkMass;
+        private PropertyManagerPageLabel _linkValidation;
+        private LinkDef _activeLink;
+        private bool _suppressLinkSelectionLoad;
+        private IMassProperties _massProps;
+        private readonly List<string> _allComponentIds = new List<string>();
 
-        private PropertyManagerPageListbox _matesList;
-        private PropertyManagerPageListbox _jointsList;
+        private PropertyManagerPageListbox _jointsListBox;
+        private PropertyManagerPageListbox _matesListBox;
+        private PropertyManagerPageLabel _detailLinks;
+        private PropertyManagerPageLabel _detailMate;
+        private PropertyManagerPageLabel _detailType;
+        private PropertyManagerPageLabel _detailLimits;
+        private int _activeJointIndex = -1;
+        private List<MateInfo> _allMates = new List<MateInfo>();
+        private List<int> _visibleMateIndices = new List<int>();
+        private bool _suppressMateListEvents;
 
-        private PropertyManagerPageLabel _reviewLinksLabel;
-        private PropertyManagerPageLabel _reviewJointsLabel;
-        private PropertyManagerPageLabel _reviewModeLabel;
-
-        // ─── Cached mate names (one read per PMP open). ──────────────
-        private List<string> _allMateNames = new List<string>();
+        private PropertyManagerPageLabel _reviewMode;
+        private PropertyManagerPageLabel _reviewLinksCap;
+        private PropertyManagerPageListbox _reviewLinksList;
+        private PropertyManagerPageLabel _reviewJointsCap;
+        private PropertyManagerPageListbox _reviewJointsList;
 
         public Sw2gzCreateRobotPmp(SldWorks swApp, ModelDoc2 modelDoc, Sw2gzDoc liveDoc, Action<Sw2gzDoc> onCommit)
         {
@@ -132,10 +137,14 @@ namespace SW2GZ.UI.Pmp
             _snapshot = Sw2gzDocSnapshot.Clone(liveDoc);
 
             int errs = 0;
-            int opts = (int)swPropertyManagerPageOptions_e.swPropertyManagerOptions_OkayButton |
-                       (int)swPropertyManagerPageOptions_e.swPropertyManagerOptions_CancelButton;
+            const string title = "Create Robot";
+            long opts =
+                (int)swPropertyManagerPageOptions_e.swPropertyManagerOptions_OkayButton +
+                (int)swPropertyManagerPageOptions_e.swPropertyManagerOptions_CancelButton +
+                (int)swPropertyManagerPageOptions_e.swPropertyManagerOptions_HandleKeystrokes;
+
             _page = (PropertyManagerPage2)swApp.CreatePropertyManagerPage(
-                "Create Robot", opts, this, ref errs);
+                title, (int)opts, this, ref errs);
 
             if (_page == null)
             {
@@ -143,349 +152,551 @@ namespace SW2GZ.UI.Pmp
                 return;
             }
 
-            SeedLinksFromAssemblyIfEmpty();
-            ReadAllMates();
+            try { _massProps = new SolidWorksMassProperties(swApp, (AssemblyDoc)modelDoc); }
+            catch (Exception e) { logger.Warn("MassProperties init failed", e); }
 
+            SeedLinksFromAssembly();
             BuildPage();
             ShowStep(StepLinks);
         }
 
-        // ─── Page build ──────────────────────────────────────────────
+        public void Show()
+        {
+            if (_page == null) { _swApp.SendMsgToUser("Could not open Create Robot."); return; }
+            _page.Show2(0);
+        }
+
         private void BuildPage()
         {
-            int leftEdge = (int)swPropertyManagerPageControlLeftAlign_e.swControlAlign_LeftEdge;
-            int indent   = (int)swPropertyManagerPageControlLeftAlign_e.swControlAlign_Indent;
-            int visibleEnabled = (int)swAddControlOptions_e.swControlOptions_Enabled |
-                                 (int)swAddControlOptions_e.swControlOptions_Visible;
+            const int visibleEnabled =
+                (int)swAddControlOptions_e.swControlOptions_Visible +
+                (int)swAddControlOptions_e.swControlOptions_Enabled;
+            const int leftEdge =
+                (int)swPropertyManagerPageControlLeftAlign_e.swControlAlign_LeftEdge;
+            const int indent =
+                (int)swPropertyManagerPageControlLeftAlign_e.swControlAlign_Indent;
+            int grpOptions =
+                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Visible +
+                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Expanded;
 
-            _hdrLabel = (PropertyManagerPageLabel)_page.AddControl2(
-                IdHeader,
+            var header = (PropertyManagerPageGroup)_page.AddGroupBox(HeaderGroupID, "Progress", grpOptions);
+            _hdrLabel = (PropertyManagerPageLabel)header.AddControl2(
+                HeaderLabelID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Step 1 of " + StepCount + " — " + StepNames[0],
-                (short)leftEdge, visibleEnabled, "");
+                "", (short)leftEdge, visibleEnabled, "");
 
             _stepGroups = new PropertyManagerPageGroup[StepCount];
-            _stepGroups[StepLinks]  = BuildLinksGroup(leftEdge, indent, visibleEnabled);
-            _stepGroups[StepJoints] = BuildJointsGroup(leftEdge, indent, visibleEnabled);
-            _stepGroups[StepReview] = BuildReviewGroup(leftEdge, indent, visibleEnabled);
-
-            var footer = (PropertyManagerPageGroup)_page.AddGroupBox(IdFooter, "",
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Visible +
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Expanded);
-            _backBtn = (PropertyManagerPageButton)footer.AddControl2(
-                IdBackBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "< Back", (short)leftEdge, visibleEnabled, "Previous step");
-            _nextBtn = (PropertyManagerPageButton)footer.AddControl2(
-                IdNextBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Next >", (short)leftEdge, visibleEnabled, "Next step");
-        }
-
-        private PropertyManagerPageGroup BuildLinksGroup(int leftEdge, int indent, int visibleEnabled)
-        {
-            var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdLinksGroup, "Links",
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Visible +
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Expanded);
-
-            grp.AddControl2(IdLinksDescr,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Pick assembly components in the viewport, then 'Add as link'.",
-                (short)leftEdge, visibleEnabled, "");
-
-            _linksPicker = (PropertyManagerPageSelectionbox)grp.AddControl2(
-                IdLinksPicker,
-                (short)swPropertyManagerPageControlType_e.swControlType_Selectionbox,
-                "Components", (short)leftEdge, visibleEnabled,
-                "Pick components in the viewport — click Add to convert to links");
-            _linksPicker.SingleEntityOnly = false;
-            _linksPicker.AllowMultipleSelectOfSameEntity = false;
-            _linksPicker.Height = 30;
-            _linksPicker.Mark = LinkSelectionMark;
-            var linkFilters = new swSelectType_e[] { swSelectType_e.swSelCOMPONENTS };
-            _linksPicker.SetSelectionFilters((object)linkFilters);
-
-            grp.AddControl2(IdLinksAddBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Add as link(s)", (short)indent, visibleEnabled, "Convert each picked component into a link");
-
-            _linksList = (PropertyManagerPageListbox)grp.AddControl2(
-                IdLinksList,
-                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
-                "Robot links", (short)leftEdge, visibleEnabled, "Current robot links — select one to remove");
-            ((IPropertyManagerPageListbox)_linksList).Height = 110;
-
-            grp.AddControl2(IdLinksRemoveBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Remove selected", (short)indent, visibleEnabled, "Remove the highlighted link");
-            grp.AddControl2(IdLinksClearBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Clear all", (short)indent, visibleEnabled, "Remove every link");
-            grp.AddControl2(IdLinksReseedBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Reseed from assembly", (short)indent, visibleEnabled,
-                "Replace the list with one link per top-level component");
-
-            RefreshLinksList();
-            return grp;
-        }
-
-        private PropertyManagerPageGroup BuildJointsGroup(int leftEdge, int indent, int visibleEnabled)
-        {
-            var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdJointsGroup, "Joints",
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Visible +
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Expanded);
-
-            grp.AddControl2(IdJointsDescr,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Pick an assembly mate from the list, then 'Add as joint'.",
-                (short)leftEdge, visibleEnabled, "");
-
-            _matesList = (PropertyManagerPageListbox)grp.AddControl2(
-                IdJointsMatesList,
-                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
-                "Assembly mates", (short)leftEdge, visibleEnabled, "All mates in this assembly");
-            ((IPropertyManagerPageListbox)_matesList).Height = 110;
-
-            grp.AddControl2(IdJointsAddBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Add as joint", (short)indent, visibleEnabled, "Convert the selected mate into a joint");
-
-            _jointsList = (PropertyManagerPageListbox)grp.AddControl2(
-                IdJointsList,
-                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
-                "Robot joints", (short)leftEdge, visibleEnabled, "Current robot joints");
-            ((IPropertyManagerPageListbox)_jointsList).Height = 90;
-
-            grp.AddControl2(IdJointsRemoveBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Remove selected", (short)indent, visibleEnabled, "Remove the highlighted joint");
-            grp.AddControl2(IdJointsClearBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Clear all", (short)indent, visibleEnabled, "Remove every joint");
-            grp.AddControl2(IdJointsRefreshBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Reload mates", (short)indent, visibleEnabled,
-                "Re-read the assembly's mate list (use after editing mates in the FeatureManager)");
-
-            RefreshMatesList();
-            RefreshJointsList();
-            return grp;
-        }
-
-        private PropertyManagerPageGroup BuildReviewGroup(int leftEdge, int indent, int visibleEnabled)
-        {
-            var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdReviewGroup, "Review",
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Visible +
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Expanded);
-
-            grp.AddControl2(IdReviewDescr,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Review and click Finish to commit. Cancel rolls back to the snapshot.",
-                (short)leftEdge, visibleEnabled, "");
-
-            _reviewModeLabel = (PropertyManagerPageLabel)grp.AddControl2(
-                IdReviewModeLabel,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Mode: Robot",
-                (short)leftEdge, visibleEnabled, "");
-            _reviewLinksLabel = (PropertyManagerPageLabel)grp.AddControl2(
-                IdReviewLinksLabel,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Links: 0", (short)leftEdge, visibleEnabled, "");
-            _reviewJointsLabel = (PropertyManagerPageLabel)grp.AddControl2(
-                IdReviewJointsLabel,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Joints: 0", (short)leftEdge, visibleEnabled, "");
-            return grp;
-        }
-
-        // ─── Assembly enumeration ────────────────────────────────────
-        private void SeedLinksFromAssemblyIfEmpty()
-        {
-            if (_liveDoc.Robot.Links.Count > 0) return;
-            try
+            for (int step = 0; step < StepCount; step++)
             {
-                AssemblyDoc asm = _modelDoc as AssemblyDoc;
-                if (asm == null) return;
-                object[] comps = (object[])asm.GetComponents(true);
-                if (comps == null) return;
+                var stepGroup = (PropertyManagerPageGroup)_page.AddGroupBox(
+                    StepGroupId(step), StepNames[step], grpOptions);
+                _stepGroups[step] = stepGroup;
+                switch (step)
+                {
+                    case StepLinks:  BuildLinksStep(stepGroup, leftEdge, indent, visibleEnabled); break;
+                    case StepJoints: BuildJointsStep(stepGroup, leftEdge, indent, visibleEnabled); break;
+                    case StepReview: BuildReviewStep(stepGroup, leftEdge, indent, visibleEnabled); break;
+                }
+            }
+
+            var navGroup = (PropertyManagerPageGroup)_page.AddGroupBox(NavGroupID, "Navigation", grpOptions);
+            _backBtn = (PropertyManagerPageButton)navGroup.AddControl2(
+                ButtonBackID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Button,
+                "< Back", 0, visibleEnabled, "Previous step");
+            ((IPropertyManagerPageControl)_backBtn).Width = 70;
+            _nextBtn = (PropertyManagerPageButton)navGroup.AddControl2(
+                ButtonNextID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Button,
+                "Next >", 0, visibleEnabled, "Next step");
+            ((IPropertyManagerPageControl)_nextBtn).Width = 70;
+        }
+
+        private PropertyManagerPageLabel AddFieldLabel(
+            PropertyManagerPageGroup group, int id, string caption, int leftEdge, int labelOpts)
+        {
+            var label = (PropertyManagerPageLabel)group.AddControl2(
+                id,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                caption, (short)leftEdge, labelOpts, "");
+            label.Caption = caption;
+            return label;
+        }
+
+        private void SeedLinksFromAssembly()
+        {
+            _allComponentIds.Clear();
+            object[] comps = (object[])((AssemblyDoc)_modelDoc).GetComponents(true);
+            var top = new List<Component2>();
+            if (comps != null)
+            {
                 foreach (object o in comps)
                 {
-                    var c = o as Component2;
-                    if (c == null || c.IsSuppressed()) continue;
-                    _liveDoc.Robot.Links.Add(c.Name2);
+                    var c = (Component2)o;
+                    if (c.IsSuppressed()) continue;
+                    top.Add(c);
+                    _allComponentIds.Add(c.Name2);
                 }
-                logger.Info("Sw2gzCreateRobotPmp: seeded " + _liveDoc.Robot.Links.Count + " links from assembly");
             }
-            catch (Exception e)
+
+            if (Robot.Links == null) Robot.Links = new List<LinkDef>();
+            if (Robot.Links.Count > 0) return;
+
+            int rootIdx = 0;
+            for (int i = 0; i < top.Count; i++)
             {
-                logger.Warn("SeedLinksFromAssemblyIfEmpty failed", e);
+                try { if (top[i].IsFixed()) { rootIdx = i; break; } } catch { }
+            }
+            string rootName = top.Count > 0
+                ? RosNameSanitizer.Sanitize(top[rootIdx].Name2).Value : "base_link";
+
+            for (int i = 0; i < top.Count; i++)
+            {
+                Robot.Links.Add(new LinkDef
+                {
+                    Name = RosNameSanitizer.Sanitize(top[i].Name2).Value,
+                    ComponentIds = new List<string> { top[i].Name2 },
+                    ParentName = i == rootIdx ? "" : rootName,
+                });
+            }
+            logger.Info("Sw2gzCreateRobotPmp: seeded " + Robot.Links.Count + " links");
+        }
+
+        private void BuildLinksStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
+        {
+            int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
+
+            int rows = Robot.Links != null ? Robot.Links.Count : 1;
+            int treeHeight = System.Math.Min(260, System.Math.Max(90, rows * 20 + 30));
+            _linkTree = new LinkTreeView { Height = treeHeight, Visible = true };
+            _linkTree.ActiveLinkChanged += (s, l) =>
+            {
+                _activeLink = l;
+                if (_activeLink != null) UpdateMassReadout(_activeLink);
+                UpdateValidationLabel();
+                if (!_suppressLinkSelectionLoad) LoadLinkSelection(_activeLink);
+            };
+            _linkTree.LinksChanged += (s, e) => UpdateValidationLabel();
+
+            AddFieldLabel(group, LabelLinkInstrID,
+                "Tree: click a link, then pick its parts in the viewport. " +
+                "Drag to re-parent, F2 to rename, right-click to set base.",
+                leftEdge, labelOpts);
+
+            _treeHandle = (PropertyManagerPageWindowFromHandle)group.AddControl2(
+                TreeHandleID,
+                (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
+                "Link tree", (short)leftEdge, visibleEnabled,
+                "Drag to re-parent; F2 to rename; right-click to set the base link");
+            _treeHandle.Height = treeHeight;
+            _treeHandle.SetWindowHandlex64(_linkTree.Handle.ToInt64());
+
+            _pickFunnel = (PropertyManagerPageSelectionbox)group.AddControl2(
+                PickFunnelID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Selectionbox,
+                "Parts for the selected link", (short)leftEdge, visibleEnabled,
+                "Pick components in the viewport — assigned to the selected link instantly");
+            var filters = new swSelectType_e[]
+            {
+                swSelectType_e.swSelCOMPONENTS, swSelectType_e.swSelSOLIDBODIES,
+            };
+            _pickFunnel.SingleEntityOnly = false;
+            _pickFunnel.AllowMultipleSelectOfSameEntity = false;
+            _pickFunnel.Height = 24;
+            _pickFunnel.Mark = LinkSelectionMark;
+            _pickFunnel.SetSelectionFilters((object)filters);
+
+            AddLinkButton(group, ButtonAddLinkID, "Add link", indent, visibleEnabled);
+            AddLinkButton(group, ButtonRemoveLinkID, "Remove link", indent, visibleEnabled);
+
+            _linkMass = AddFieldLabel(group, LabelLinkMassID, "", leftEdge, labelOpts);
+            _linkValidation = AddFieldLabel(group, LabelLinkValidationID, "", leftEdge, labelOpts);
+
+            _linkTree.SetLinks(Robot.Links);
+            var roots = LinkHierarchy.Roots(Robot.Links);
+            if (roots.Count > 0) _linkTree.SelectByLinkName(roots[0].Name);
+            UpdateValidationLabel();
+        }
+
+        private PropertyManagerPageButton AddLinkButton(
+            PropertyManagerPageGroup group, int id, string caption, int indent, int visibleEnabled)
+        {
+            var b = (PropertyManagerPageButton)group.AddControl2(
+                id,
+                (short)swPropertyManagerPageControlType_e.swControlType_Button,
+                caption, (short)indent, visibleEnabled, caption);
+            ((IPropertyManagerPageControl)b).Width = 110;
+            return b;
+        }
+
+        private void OnFunnelChanged()
+        {
+            if (_currentStep != StepLinks) return;
+            if (_activeLink == null || _linkTree == null) return;
+            List<string> box = ReadSelectionBoxNames();
+            if (SameSet(box, _activeLink.ComponentIds)) return;
+
+            foreach (string id in box)
+                foreach (LinkDef l in Robot.Links)
+                    if (l != _activeLink) l.ComponentIds.Remove(id);
+            _activeLink.ComponentIds = box;
+
+            _suppressLinkSelectionLoad = true;
+            try { _linkTree.Rebuild(); }
+            finally { _suppressLinkSelectionLoad = false; }
+
+            UpdateMassReadout(_activeLink);
+            UpdateValidationLabel();
+        }
+
+        private void LoadLinkSelection(LinkDef link)
+        {
+            if (link == null) return;
+            _modelDoc.ClearSelection2(true);
+            ISelectionMgr selMgr = (ISelectionMgr)_modelDoc.SelectionManager;
+            SelectData sd = selMgr.CreateSelectData();
+            sd.Mark = LinkSelectionMark;
+            object[] comps = (object[])((AssemblyDoc)_modelDoc).GetComponents(true);
+            if (comps != null)
+                foreach (object o in comps)
+                {
+                    var c = (Component2)o;
+                    if (link.ComponentIds.Contains(c.Name2)) c.Select4(true, sd, false);
+                }
+            if (_pickFunnel != null) _pickFunnel.SetSelectionFocus();
+        }
+
+        private static bool SameSet(List<string> a, List<string> b)
+        {
+            if (a.Count != b.Count) return false;
+            var set = new HashSet<string>(a);
+            foreach (string x in b) if (!set.Contains(x)) return false;
+            return true;
+        }
+
+        private void AddLink()
+        {
+            var roots = LinkHierarchy.Roots(Robot.Links);
+            string parent = _activeLink?.Name ?? (roots.Count > 0 ? roots[0].Name : "");
+            var link = new LinkDef { Name = UniqueLinkName(), ParentName = parent };
+            Robot.Links.Add(link);
+            _linkTree.SetLinks(Robot.Links);
+            _linkTree.SelectByLinkName(link.Name);
+            UpdateValidationLabel();
+        }
+
+        private void RemoveLink()
+        {
+            if (_activeLink == null || Robot.Links.Count <= 1) return;
+            string removed = _activeLink.Name, parent = _activeLink.ParentName ?? "";
+            foreach (LinkDef l in Robot.Links)
+                if (l.ParentName == removed) l.ParentName = parent;
+            Robot.Links.Remove(_activeLink);
+            if (LinkHierarchy.Roots(Robot.Links).Count == 0 && Robot.Links.Count > 0)
+                Robot.Links[0].ParentName = "";
+            _activeLink = null;
+            _linkTree.SetLinks(Robot.Links);
+            UpdateValidationLabel();
+        }
+
+        private string UniqueLinkName()
+        {
+            int n = Robot.Links.Count + 1;
+            while (true)
+            {
+                string candidate = RosNameSanitizer.Sanitize("link_" + n).Value;
+                bool taken = false;
+                foreach (LinkDef l in Robot.Links) if (l.Name == candidate) { taken = true; break; }
+                if (!taken) return candidate;
+                n++;
             }
         }
 
-        // Walks the FeatureManager looking for the MatesFolder feature, then
-        // enumerates its sub-features (each is a mate). This is simpler than
-        // the SolidWorksAssemblyWalker.WalkAllMates path on main and is
-        // sufficient for the v2.1.0 wizard, which only needs the mate name.
+        private void UpdateMassReadout(LinkDef link)
+        {
+            if (_linkMass == null || _massProps == null) return;
+            double total = 0; bool missing = false;
+            foreach (string id in link.ComponentIds)
+            {
+                try { total += _massProps.Get(ComponentPathForId(id)).Mass; }
+                catch (Exception) { missing = true; }
+            }
+            string s = link.ComponentIds.Count + " component(s), mass " + total.ToString("0.###") + " kg";
+            if (missing) s += " (set material on all parts)";
+            _linkMass.Caption = s;
+        }
+
+        private string ComponentPathForId(string name2)
+        {
+            object[] comps = (object[])((AssemblyDoc)_modelDoc).GetComponents(true);
+            if (comps != null)
+                foreach (object o in comps)
+                {
+                    var c = (Component2)o;
+                    if (c.Name2 == name2) return c.GetPathName();
+                }
+            return name2;
+        }
+
+        private void UpdateValidationLabel()
+        {
+            if (_linkValidation == null) return;
+            List<string> issues = LinkDefValidator.Validate(Robot.Links, _allComponentIds);
+            _linkValidation.Caption = issues.Count == 0
+                ? "All components assigned."
+                : issues.Count + " issue(s): " + issues[0];
+        }
+
+        private List<string> ReadSelectionBoxNames()
+        {
+            var names = new List<string>();
+            ISelectionMgr selMgr = (ISelectionMgr)_modelDoc.SelectionManager;
+            if (selMgr == null) return names;
+            int count = selMgr.GetSelectedObjectCount2(LinkSelectionMark);
+            for (int i = 1; i <= count; i++)
+            {
+                object selObj = selMgr.GetSelectedObject6(i, LinkSelectionMark);
+                int selType = selMgr.GetSelectedObjectType3(i, LinkSelectionMark);
+                string name = DescribeSelection(selObj, selType);
+                if (!string.IsNullOrEmpty(name)) names.Add(name);
+            }
+            return names;
+        }
+
+        private static string DescribeSelection(object selObj, int selType)
+        {
+            switch ((swSelectType_e)selType)
+            {
+                case swSelectType_e.swSelSOLIDBODIES:
+                case swSelectType_e.swSelSURFACEBODIES:
+                    return selObj is Body2 body ? body.Name : null;
+                case swSelectType_e.swSelCOMPONENTS:
+                    return selObj is Component2 comp ? comp.Name2 : null;
+                default:
+                    return null;
+            }
+        }
+
+        private void BuildJointsStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
+        {
+            int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
+
+            AddFieldLabel(group, LabelJointInstrID,
+                "Joints come from the link tree — one per parent→child. Select a joint, " +
+                "then the mate that drives it; the mate sets type and limits.",
+                leftEdge, labelOpts);
+
+            _jointsListBox = (PropertyManagerPageListbox)group.AddControl2(
+                ListJointsID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
+                "", (short)leftEdge, visibleEnabled, "Joints (from the link tree) — select one");
+            ((IPropertyManagerPageListbox)_jointsListBox).Height = 90;
+
+            AddFieldLabel(group, LabelMatesCapID,
+                "Mates — select one to assign to the joint (it highlights in the view):",
+                leftEdge, labelOpts);
+            _matesListBox = (PropertyManagerPageListbox)group.AddControl2(
+                ListMatesID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
+                "", (short)leftEdge, visibleEnabled, "Assembly mates — click to assign + highlight");
+            ((IPropertyManagerPageListbox)_matesListBox).Height = 90;
+
+            AddFieldLabel(group, LabelDetailCapID, "— Selected joint —", leftEdge, labelOpts);
+            _detailLinks  = AddFieldLabel(group, LabelDetailLinksID, "", leftEdge, labelOpts);
+            _detailMate   = AddFieldLabel(group, LabelDetailMateID, "", leftEdge, labelOpts);
+            _detailType   = AddFieldLabel(group, LabelDetailTypeID, "", leftEdge, labelOpts);
+            _detailLimits = AddFieldLabel(group, LabelDetailLimitsID, "", leftEdge, labelOpts);
+        }
+
         private void ReadAllMates()
         {
-            _allMateNames = new List<string>();
             try
             {
-                Feature feat = (Feature)_modelDoc.FirstFeature();
-                while (feat != null)
-                {
-                    string typeName = feat.GetTypeName2();
-                    if (typeName == "MateGroup")
-                    {
-                        Feature mate = (Feature)feat.GetFirstSubFeature();
-                        while (mate != null)
-                        {
-                            string subType = mate.GetTypeName2();
-                            // MateGroup children include both real mates and
-                            // construction features (e.g. reference axes). Real
-                            // mate features have the "Mate" prefix on TypeName2.
-                            if (subType != null && subType.StartsWith("Mate"))
-                            {
-                                _allMateNames.Add(mate.Name);
-                            }
-                            mate = (Feature)mate.GetNextSubFeature();
-                        }
-                    }
-                    feat = (Feature)feat.GetNextFeature();
-                }
-                logger.Info("Sw2gzCreateRobotPmp: found " + _allMateNames.Count + " mates");
+                _allMates = new List<MateInfo>(
+                    new SolidWorksAssemblyWalker((AssemblyDoc)_modelDoc).WalkAllMates());
             }
             catch (Exception e)
             {
                 logger.Warn("ReadAllMates failed", e);
+                _allMates = new List<MateInfo>();
             }
         }
 
-        // ─── List refresh helpers ────────────────────────────────────
-        private void RefreshLinksList()
+        private void EnterJointsStep()
         {
-            if (_linksList == null) return;
-            _linksList.Clear();
-            foreach (string name in _liveDoc.Robot.Links) _linksList.AddItems(name);
-            if (_liveDoc.Robot.Links.Count > 0) _linksList.CurrentSelection = 0;
+            Robot.Joints = JointSeeder.Sync(Robot.Links, Robot.Joints);
+            ReadAllMates();
+            PopulateMateList();
+            if (_activeJointIndex < 0 && Robot.Joints.Count > 0) _activeJointIndex = 0;
+            PopulateJointList();
         }
 
-        private void RefreshMatesList()
+        private void PopulateMateList()
         {
-            if (_matesList == null) return;
-            _matesList.Clear();
-            foreach (string name in _allMateNames) _matesList.AddItems(name);
-            if (_allMateNames.Count > 0) _matesList.CurrentSelection = 0;
-        }
-
-        private void RefreshJointsList()
-        {
-            if (_jointsList == null) return;
-            _jointsList.Clear();
-            foreach (string name in _liveDoc.Robot.Joints) _jointsList.AddItems(name);
-            if (_liveDoc.Robot.Joints.Count > 0) _jointsList.CurrentSelection = 0;
-        }
-
-        private void RefreshReviewLabels()
-        {
-            if (_reviewLinksLabel != null)
-                _reviewLinksLabel.Caption = "Links: " + _liveDoc.Robot.Links.Count;
-            if (_reviewJointsLabel != null)
-                _reviewJointsLabel.Caption = "Joints: " + _liveDoc.Robot.Joints.Count;
-            if (_reviewModeLabel != null)
-                _reviewModeLabel.Caption = "Mode: Robot";
-        }
-
-        // ─── Action handlers ─────────────────────────────────────────
-        private void HandleAddLink()
-        {
+            if (_matesListBox == null) return;
+            _suppressMateListEvents = true;
             try
             {
-                ISelectionMgr selMgr = (ISelectionMgr)_modelDoc.SelectionManager;
-                if (selMgr == null) return;
-                int count = selMgr.GetSelectedObjectCount2(LinkSelectionMark);
-                int added = 0;
-                for (int i = 1; i <= count; i++)
+                _matesListBox.Clear();
+                _visibleMateIndices.Clear();
+
+                JointDef j = ActiveJoint();
+                string p = j?.ParentLink, c = j?.ChildLink;
+                bool filter = j != null && !string.IsNullOrEmpty(p) && !string.IsNullOrEmpty(c);
+
+                for (int i = 0; i < _allMates.Count; i++)
                 {
-                    object selObj = selMgr.GetSelectedObject6(i, LinkSelectionMark);
-                    if (selObj is Component2 c && !string.IsNullOrEmpty(c.Name2)
-                        && !_liveDoc.Robot.Links.Contains(c.Name2))
+                    MateInfo m = _allMates[i];
+                    if (filter)
                     {
-                        _liveDoc.Robot.Links.Add(c.Name2);
-                        added++;
+                        if (string.IsNullOrEmpty(m.LinkA) || string.IsNullOrEmpty(m.LinkB)) continue;
+                        bool spans = (m.LinkA == p && m.LinkB == c) || (m.LinkA == c && m.LinkB == p);
+                        if (!spans) continue;
                     }
+                    _visibleMateIndices.Add(i);
+                    _matesListBox.AddItems(m.Name + "  [" + m.Kind + "]");
                 }
-                logger.Info("HandleAddLink: " + added + " new links from " + count + " picks");
-                RefreshLinksList();
-                // Clear the picker so user can start a fresh selection.
-                _modelDoc.ClearSelection2(true);
             }
-            catch (Exception e)
+            finally { _suppressMateListEvents = false; }
+        }
+
+        private void PopulateJointList()
+        {
+            if (_jointsListBox == null) return;
+            _jointsListBox.Clear();
+            foreach (JointDef j in Robot.Joints)
             {
-                logger.Warn("HandleAddLink failed", e);
+                string tag = string.IsNullOrEmpty(j.MateName) ? "(no mate)" : j.MateName;
+                _jointsListBox.AddItems(j.Name + "   —   " + tag);
             }
-        }
-
-        private void HandleRemoveLink()
-        {
-            int idx = _linksList != null ? _linksList.CurrentSelection : -1;
-            if (idx < 0 || idx >= _liveDoc.Robot.Links.Count) return;
-            _liveDoc.Robot.Links.RemoveAt(idx);
-            RefreshLinksList();
-        }
-
-        private void HandleClearLinks()
-        {
-            _liveDoc.Robot.Links.Clear();
-            RefreshLinksList();
-        }
-
-        private void HandleReseedLinks()
-        {
-            _liveDoc.Robot.Links.Clear();
-            SeedLinksFromAssemblyIfEmpty();
-            RefreshLinksList();
-        }
-
-        private void HandleAddJoint()
-        {
-            int idx = _matesList != null ? _matesList.CurrentSelection : -1;
-            if (idx < 0 || idx >= _allMateNames.Count) return;
-            string mateName = _allMateNames[idx];
-            if (!_liveDoc.Robot.Joints.Contains(mateName))
+            if (Robot.Joints.Count > 0)
             {
-                _liveDoc.Robot.Joints.Add(mateName);
-                RefreshJointsList();
+                if (_activeJointIndex < 0 || _activeJointIndex >= Robot.Joints.Count) _activeJointIndex = 0;
+                _jointsListBox.CurrentSelection = (short)_activeJointIndex;
+            }
+            UpdateJointDetails();
+        }
+
+        private JointDef ActiveJoint() =>
+            _activeJointIndex >= 0 && _activeJointIndex < Robot.Joints.Count
+                ? Robot.Joints[_activeJointIndex] : null;
+
+        private void UpdateJointDetails()
+        {
+            JointDef j = ActiveJoint();
+            bool limited = j != null &&
+                (j.Type == UrdfJointType.Revolute || j.Type == UrdfJointType.Prismatic);
+
+            if (_detailLinks != null)
+                _detailLinks.Caption = j == null ? "No joint selected."
+                    : "Links:  " + j.ParentLink + "  →  " + j.ChildLink;
+            if (_detailMate != null)
+                _detailMate.Caption = j == null ? ""
+                    : "Mate:  " + (string.IsNullOrEmpty(j.MateName) ? "none — select a mate above" : j.MateName);
+            if (_detailType != null)
+                _detailType.Caption = j == null ? "" : "Type:  " + j.Type;
+            if (_detailLimits != null)
+                _detailLimits.Caption = (j == null || !limited) ? ""
+                    : "Limits:  lower " + Fmt(j.LimitLower) + ",  upper " + Fmt(j.LimitUpper);
+
+            PopulateMateList();
+            HighlightActiveMate();
+        }
+
+        private static string Fmt(double? v) =>
+            v.HasValue ? v.Value.ToString("0.###", CultureInfo.InvariantCulture) : "–";
+
+        private void HighlightActiveMate()
+        {
+            JointDef j = ActiveJoint();
+            if (j == null || string.IsNullOrEmpty(j.MateName)) return;
+            try { new SolidWorksAssemblyWalker((AssemblyDoc)_modelDoc).HighlightMate(j.MateName); }
+            catch (Exception e) { logger.Warn("HighlightActiveMate threw", e); }
+        }
+
+        private void AssignMateToActiveJoint(int visibleIndex)
+        {
+            JointDef j = ActiveJoint();
+            if (j == null) { _swApp.SendMsgToUser("Select a joint first, then a mate."); return; }
+            if (visibleIndex < 0 || visibleIndex >= _visibleMateIndices.Count) return;
+            int mateIndex = _visibleMateIndices[visibleIndex];
+            if (mateIndex < 0 || mateIndex >= _allMates.Count) return;
+
+            MateInfo m = _allMates[mateIndex];
+            j.MateName = m.Name;
+            j.Type = JointSeeder.ToJointType(m.Kind);
+            j.SetAxis(m.Axis);
+            j.LimitLower = m.LimitLower;
+            j.LimitUpper = m.LimitUpper;
+
+            PopulateJointList();
+        }
+
+        private void BuildReviewStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
+        {
+            int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
+            AddFieldLabel(group, LabelReviewInstrID,
+                "Review, then Finish to save to the SW2GZ Doc (v1) attribute.",
+                leftEdge, labelOpts);
+
+            _reviewMode = AddFieldLabel(group, LabelReviewModeID, "", leftEdge, labelOpts);
+            _reviewLinksCap = AddFieldLabel(group, LabelReviewLinksCapID, "", leftEdge, labelOpts);
+            _reviewLinksList = (PropertyManagerPageListbox)group.AddControl2(
+                ListReviewLinksID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
+                "", (short)leftEdge, visibleEnabled, "Links");
+            ((IPropertyManagerPageListbox)_reviewLinksList).Height = 76;
+
+            _reviewJointsCap = AddFieldLabel(group, LabelReviewJointsCapID, "", leftEdge, labelOpts);
+            _reviewJointsList = (PropertyManagerPageListbox)group.AddControl2(
+                ListReviewJointsID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
+                "", (short)leftEdge, visibleEnabled, "Joints");
+            ((IPropertyManagerPageListbox)_reviewJointsList).Height = 96;
+        }
+
+        private void EnterReviewStep()
+        {
+            if (_reviewMode == null) return;
+            _reviewMode.Caption = "Mode:  Robot package (URDF/Xacro)";
+
+            var links = Robot.Links ?? new List<LinkDef>();
+            _reviewLinksCap.Caption = "Links  (" + links.Count + ")";
+            _reviewLinksList.Clear();
+            foreach (LinkDef l in links)
+            {
+                string rel = string.IsNullOrEmpty(l.ParentName) ? "base" : "← " + l.ParentName;
+                int parts = l.ComponentIds != null ? l.ComponentIds.Count : 0;
+                _reviewLinksList.AddItems(l.Name + "    " + rel + "    ·" + parts + "p");
+            }
+
+            var joints = Robot.Joints ?? new List<JointDef>();
+            _reviewJointsCap.Caption = "Joints  (" + joints.Count + ")";
+            _reviewJointsList.Clear();
+            foreach (JointDef j in joints)
+            {
+                string mate = string.IsNullOrEmpty(j.MateName) ? "no mate" : j.MateName;
+                string lim = (j.LimitLower.HasValue || j.LimitUpper.HasValue)
+                    ? "  [" + Fmt(j.LimitLower) + "," + Fmt(j.LimitUpper) + "]" : "";
+                _reviewJointsList.AddItems(j.Name + "    " + j.Type + "    " + mate + lim);
             }
         }
 
-        private void HandleRemoveJoint()
-        {
-            int idx = _jointsList != null ? _jointsList.CurrentSelection : -1;
-            if (idx < 0 || idx >= _liveDoc.Robot.Joints.Count) return;
-            _liveDoc.Robot.Joints.RemoveAt(idx);
-            RefreshJointsList();
-        }
-
-        private void HandleClearJoints()
-        {
-            _liveDoc.Robot.Joints.Clear();
-            RefreshJointsList();
-        }
-
-        private void HandleReloadMates()
-        {
-            ReadAllMates();
-            RefreshMatesList();
-        }
-
-        // ─── Navigation ──────────────────────────────────────────────
         private void ShowStep(int step)
         {
             if (step < 0) step = 0;
             if (step > StepCount - 1) step = StepCount - 1;
+
+            if (_currentStep == StepLinks && step != StepLinks)
+            {
+                try
+                {
+                    if (_modelDoc != null) _modelDoc.ClearSelection2(true);
+                    _activeLink = null;
+                }
+                catch (Exception ex) { logger.Warn("Links step exit: ClearSelection2 failed", ex); }
+            }
+
             _currentStep = step;
 
             for (int i = 0; i < StepCount; i++)
@@ -500,45 +711,68 @@ namespace SW2GZ.UI.Pmp
             ((IPropertyManagerPageControl)_backBtn).Enabled = _currentStep > 0;
             _nextBtn.Caption = (_currentStep == StepCount - 1) ? "Finish" : "Next >";
 
-            if (_currentStep == StepReview) RefreshReviewLabels();
+            if (_currentStep == StepJoints) EnterJointsStep();
+            else if (_currentStep == StepReview) EnterReviewStep();
         }
 
-        public void Show()
+        private void GoBack()
         {
-            if (_page == null)
-            {
-                _swApp.SendMsgToUser("Could not open the Create Robot panel. See log for details.");
-                return;
-            }
-            _page.Show2(0);
+            if (_currentStep > 0) ShowStep(_currentStep - 1);
         }
 
-        // ─── PMP handler ─────────────────────────────────────────────
+        private void GoNext()
+        {
+            if (_currentStep == StepLinks)
+            {
+                List<string> issues = LinkDefValidator.Validate(Robot.Links, _allComponentIds);
+                if (issues.Count > 0)
+                {
+                    _swApp.SendMsgToUser("Resolve link issues before continuing:\n• " +
+                        string.Join("\n• ", issues.ToArray()));
+                    return;
+                }
+            }
+            if (_currentStep < StepCount - 1)
+            {
+                ShowStep(_currentStep + 1);
+            }
+            else
+            {
+                _okay = true;
+                _page.Close(true);
+            }
+        }
+
+        void IPropertyManagerPage2Handler9.AfterActivation()
+        {
+            ShowStep(_currentStep);
+            if (_currentStep == StepLinks && _pickFunnel != null) _pickFunnel.SetSelectionFocus();
+        }
+
         void IPropertyManagerPage2Handler9.OnButtonPress(int Id)
         {
-            switch (Id)
+            try
             {
-                case IdBackBtn:
-                    if (_currentStep > 0) ShowStep(_currentStep - 1);
-                    break;
-                case IdNextBtn:
-                    if (_currentStep < StepCount - 1) ShowStep(_currentStep + 1);
-                    else _page.Close(true);   // last step → Finish = OK
-                    break;
-                case IdLinksAddBtn:    HandleAddLink(); break;
-                case IdLinksRemoveBtn: HandleRemoveLink(); break;
-                case IdLinksClearBtn:  HandleClearLinks(); break;
-                case IdLinksReseedBtn: HandleReseedLinks(); break;
-                case IdJointsAddBtn:    HandleAddJoint(); break;
-                case IdJointsRemoveBtn: HandleRemoveJoint(); break;
-                case IdJointsClearBtn:  HandleClearJoints(); break;
-                case IdJointsRefreshBtn: HandleReloadMates(); break;
+                switch (Id)
+                {
+                    case ButtonBackID: GoBack(); break;
+                    case ButtonNextID: GoNext(); break;
+                    case ButtonAddLinkID: AddLink(); break;
+                    case ButtonRemoveLinkID: RemoveLink(); break;
+                }
+            }
+            catch (Exception e)
+            {
+                logger.Error("OnButtonPress " + Id + " threw", e);
+                MessageBox.Show("Create Robot panel error:\n" + e.Message);
             }
         }
 
         void IPropertyManagerPage2Handler9.OnClose(int Reason)
         {
-            if (Reason == (int)swPropertyManagerPageCloseReasons_e.swPropertyManagerPageClose_Cancel)
+            bool okay = Reason == (int)swPropertyManagerPageCloseReasons_e.swPropertyManagerPageClose_Okay;
+            _okay = _okay || okay;
+            if (!_okay)
             {
                 Sw2gzDocSnapshot.Restore(_snapshot, _liveDoc);
                 logger.Info("Sw2gzCreateRobotPmp: cancel → snapshot restored");
@@ -547,11 +781,38 @@ namespace SW2GZ.UI.Pmp
 
         void IPropertyManagerPage2Handler9.AfterClose()
         {
-            if (_liveDoc != null) _onCommit(_liveDoc);
+            if (_okay && _liveDoc != null) _onCommit(_liveDoc);
         }
 
-        // No-op handler stubs (PMP COM contract requires the full surface).
-        void IPropertyManagerPage2Handler9.AfterActivation() { }
+        bool IPropertyManagerPage2Handler9.OnSubmitSelection(int Id, object Selection, int SelType, ref string ItemText)
+        {
+            if (Id != PickFunnelID) return true;
+            switch ((swSelectType_e)SelType)
+            {
+                case swSelectType_e.swSelCOMPONENTS:
+                case swSelectType_e.swSelSOLIDBODIES:
+                    return true;
+                default:
+                    ItemText = "Only components or solid bodies can be assigned to a link.";
+                    return false;
+            }
+        }
+
+        void IPropertyManagerPage2Handler9.OnSelectionboxListChanged(int Id, int Count)
+        {
+            if (Id == PickFunnelID) OnFunnelChanged();
+        }
+
+        void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item)
+        {
+            if (Id == ListJointsID) { _activeJointIndex = Item; UpdateJointDetails(); }
+            else if (Id == ListMatesID)
+            {
+                if (_suppressMateListEvents) return;
+                AssignMateToActiveJoint(Item);
+            }
+        }
+
         void IPropertyManagerPage2Handler9.OnGainedFocus(int Id) { }
         void IPropertyManagerPage2Handler9.OnLostFocus(int Id) { }
         bool IPropertyManagerPage2Handler9.OnHelp() => true;
@@ -560,10 +821,8 @@ namespace SW2GZ.UI.Pmp
         bool IPropertyManagerPage2Handler9.OnPreview() => true;
         bool IPropertyManagerPage2Handler9.OnTabClicked(int Id) => true;
         bool IPropertyManagerPage2Handler9.OnKeystroke(int Wparam, int Message, int Lparam, int Id) => false;
-        bool IPropertyManagerPage2Handler9.OnSubmitSelection(int Id, object Selection, int SelType, ref string ItemText) => true;
         void IPropertyManagerPage2Handler9.OnTextboxChanged(int Id, string Text) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxFocusChanged(int Id) { }
-        void IPropertyManagerPage2Handler9.OnSelectionboxListChanged(int Id, int Count) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutCreated(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutDestroyed(int Id) { }
         void IPropertyManagerPage2Handler9.OnNumberboxChanged(int Id, double Value) { }
@@ -571,7 +830,6 @@ namespace SW2GZ.UI.Pmp
         void IPropertyManagerPage2Handler9.OnCheckboxCheck(int Id, bool Checked) { }
         void IPropertyManagerPage2Handler9.OnComboboxEditChanged(int Id, string Text) { }
         void IPropertyManagerPage2Handler9.OnComboboxSelectionChanged(int Id, int Item) { }
-        void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item) { }
         void IPropertyManagerPage2Handler9.OnListboxRMBUp(int Id, int PosX, int PosY) { }
         void IPropertyManagerPage2Handler9.OnGroupCheck(int Id, bool Checked) { }
         void IPropertyManagerPage2Handler9.OnGroupExpand(int Id, bool Expanded) { }

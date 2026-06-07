@@ -29,7 +29,12 @@ namespace SW2GZ.UI.Ribbon
         // 92 (a) reuses the registry slot SW already knows about, and
         // (b) avoids the numeric collision with ModeRobot = 0 below. A pristine
         // value like 0 caused AddCommandTab to silently refuse on first install.
-        public const int CmdGroupId = 92;
+        // Bumped 92 → 93 when DeleteConfig (cmd 17) was added — SW's persisted
+        // tab-box layout for group 92 only had 18 cmd slots; force a brand-new
+        // registry entry so SW renders the full 19-command layout from scratch
+        // instead of trying to splice DeleteConfig into the stale cached layout
+        // (which silently dropped the whole tab content to just the Create button).
+        public const int CmdGroupId = 93;
 
         // Mode flyout — Robot/World/Asset are the sub-items inside a single
         // "Mode ▾" dropdown button (ModeFlyoutGroup). The sub-item IDs (0..2)
@@ -56,6 +61,8 @@ namespace SW2GZ.UI.Ribbon
         // PreviewPmp / ExportPmp don't have to renumber.
         public const int PreviewPmp  = 11;
         public const int ExportPmp   = 12;
+        // Delete the saved "SW2GZ Doc (v1)" attribute, re-enabling mode pills.
+        public const int DeleteConfig = 17;
 
         // Mode-Create trio — three pre-registered Create buttons (one per
         // mode), each with its own static "Create Robot" / "Create World" /
@@ -96,7 +103,7 @@ namespace SW2GZ.UI.Ribbon
             ModeRobot, ModeWorld, ModeAsset,
             ModeRobotPill, ModeWorldPill, ModeAssetPill,
             ModeCreateRobot, ModeCreateWorld, ModeCreateAsset,
-            PreviewPmp, ExportPmp,
+            PreviewPmp, ExportPmp, DeleteConfig,
             RobotInertia, RobotSensors, RobotActuation, RobotStack,
             WorldGround, WorldAssets, WorldPhysics, WorldScene,
             AssetBody, AssetSurface,

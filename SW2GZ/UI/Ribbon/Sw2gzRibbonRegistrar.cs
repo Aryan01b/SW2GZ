@@ -126,8 +126,13 @@ namespace SW2GZ.UI.Ribbon
 
             // Common cluster — Coord button removed in v2.1.0 (advanced coord
             // convention moved into the Create wizard).
-            AddItem(grp, RibbonCommandIds.PreviewPmp, "Preview", "Browser-based 3D preview",  "OpenPreviewPmp", "AssemblyEnable", IMG_PREVIEW, toolbar);
-            AddItem(grp, RibbonCommandIds.ExportPmp,  "Export",  "Export ROS 2 / Gz package", "OpenExportPmp",  "AssemblyEnable", IMG_EXPORT,  toolbar);
+            AddItem(grp, RibbonCommandIds.PreviewPmp,   "Preview",       "Browser-based 3D preview",                          "OpenPreviewPmp",      "AssemblyEnable",        IMG_PREVIEW, toolbar);
+            AddItem(grp, RibbonCommandIds.ExportPmp,    "Export",        "Export ROS 2 / Gz package",                         "OpenExportPmp",       "AssemblyEnable",        IMG_EXPORT,  toolbar);
+            // Reuses image column 4 — the removed Coord glyph slot. Enable
+            // callback returns 1 only when a saved SW2GZ Doc (v1) attribute
+            // exists; otherwise the button is greyed since there's nothing to
+            // delete.
+            AddItem(grp, RibbonCommandIds.DeleteConfig, "Delete Config", "Erase the saved SW2GZ Doc (v1) so mode can change", "OpenDeleteConfigPmp", "DeleteConfigEnable",    4,           toolbar);
 
             // Robot cluster — Links/Joints moved into the Create-Robot wizard PMP.
             AddItem(grp, RibbonCommandIds.RobotInertia,   "Inertia",   "Per-link inertia",       "OpenRobotInertiaPmp",   "RobotClusterEnable", IMG_INERTIA,   toolbar);
@@ -357,6 +362,7 @@ namespace SW2GZ.UI.Ribbon
             return AddBox(tab, textBelow, new[] {
                 RibbonCommandIds.PreviewPmp,
                 RibbonCommandIds.ExportPmp,
+                RibbonCommandIds.DeleteConfig,
             });
         }
 
