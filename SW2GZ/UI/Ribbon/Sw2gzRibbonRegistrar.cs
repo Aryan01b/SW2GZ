@@ -324,8 +324,9 @@ namespace SW2GZ.UI.Ribbon
                 logger.Warn("Sw2gzRibbonRegistrar: Common tab box AddCommandTabBox returned null");
                 return;
             }
-            var cmdIds = new List<int>(4);
-            var textTypes = new List<int>(4);
+            // Capacity 8 = 1 Mode flyout + 3 pills + 3 common buttons + slack.
+            var cmdIds = new List<int>(8);
+            var textTypes = new List<int>(8);
 
             if (_modeFlyout != null)
             {
