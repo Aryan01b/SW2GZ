@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SW2GZ — Preview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg-0:        #0e1116;
+      --bg-1:        #1a1f29;
+      --panel:       #161b24;
+      --panel-edge:  #232a36;
+      --fore:        #e6e8ec;
+      --subtle:      #8b94a3;
+      --accent:      #4c9ce0;
+      --axis-x:      #ff5454;
+      --axis-y:      #54ff7a;
+      --axis-z:      #54a4ff;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: radial-gradient(ellipse at center, var(--bg-1) 0%, var(--bg-0) 80%);
+      color: var(--fore);
+      font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
+      overflow: hidden;
+    }
+    #app { display: grid; grid-template-columns: 300px 1fr; height: 100%; }
+    #side {
+      background: var(--panel);
+      border-right: 1px solid var(--panel-edge);
+      overflow-y: auto;
+      padding: 14px 16px;
+    }
+    #side h1 {
+      margin: 0 0 4px 0; font-size: 14px; letter-spacing: 0.3px;
+    }
+    #side .sub { color: var(--subtle); font-size: 11px; margin-bottom: 16px; }
+    .section {
+      margin: 16px 0; padding-top: 12px;
+      border-top: 1px solid var(--panel-edge);
+    }
+    .section h2 {
+      margin: 0 0 8px 0; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 1px; color: var(--subtle);
+    }
+    button.btn, select.btn {
+      width: 100%; padding: 7px 8px; cursor: pointer;
+      background: var(--panel-edge); color: var(--fore);
+      border: 1px solid var(--panel-edge); border-radius: 4px;
+      font: 12px/1.2 "Segoe UI", system-ui, sans-serif;
+    }
+    button.btn:hover { background: #2a3140; }
+    button.primary {
+      background: var(--accent); border-color: var(--accent); color: #0a0e14;
+      font-weight: 600;
+    }
+    button.primary:hover { filter: brightness(1.1); }
+    select.btn { background-color: #1f2733; }
+    .stack > * + * { margin-top: 8px; }
+    .joint { display: grid; grid-template-columns: 1fr; margin-bottom: 12px; }
+    .joint .name {
+      font-family: Consolas, monospace; font-size: 11px; color: var(--fore);
+    }
+    .joint .row { display: flex; gap: 8px; align-items: center; }
+    .joint input[type=range] { flex: 1; accent-color: var(--accent); }
+    .joint .val {
+      font-family: Consolas, monospace; font-size: 11px;
+      color: var(--accent); width: 56px; text-align: right;
+    }
+    .legend { font-size: 11px; color: var(--subtle); }
+    .legend .x { color: var(--axis-x); }
+    .legend .y { color: var(--axis-y); }
+    .legend .z { color: var(--axis-z); }
+    #stage { position: relative; }
+    canvas { display: block; }
+    #status {
+      position: absolute; bottom: 10px; left: 14px;
+      font-size: 11px; color: var(--subtle);
+      background: rgba(0,0,0,0.4); padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .link-label {
+      position: absolute; transform: translate(-50%, -100%);
+      pointer-events: none;
+      font: 11px/1 Consolas, monospace; color: var(--accent);
+      background: rgba(14,17,22,0.7); padding: 1px 4px; border-radius: 2px;
+      white-space: nowrap;
+    }
+    .err {
+      color: var(--axis-x);
+      font-size: 11px;
+      background: rgba(255,84,84,0.08);
+      border-left: 2px solid var(--axis-x);
+      padding: 6px 8px; margin-top: 8px;
+      font-family: Consolas, monospace;
+    }
+    #empty {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: var(--subtle); text-align: center;
+      gap: 18px;
+    }
+    #empty .big { font-size: 18px; color: var(--fore); }
+    #empty .hint { font-size: 12px; max-width: 380px; }
+    #empty button { padding: 10px 24px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <aside id="side">
+      <h1>SW2GZ Preview</h1>
+      <div class="sub" id="pkginfo">no package loaded</div>
+
+      <div class="section">
+        <h2>Workspace</h2>
+        <div class="stack">
+          <button id="openBtn" class="btn primary">Open workspace…</button>
+          <select id="pkgSelect" class="btn" style="display:none"></select>
+          <div id="wsErr"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Frames</h2>
+        <div class="legend">Per-link triads — <span class="x">X</span> · <span class="y">Y</span> · <span class="z">Z</span></div>
+      </div>
+
+      <div class="section">
+        <h2>Joints</h2>
+        <div id="joints"></div>
+        <button id="reset" class="btn" style="display:none">Zero all joints</button>
+      </div>
+
+      <div class="section">
+        <h2>View</h2>
+        <div class="legend">Drag = orbit · Right-drag = pan · Scroll = zoom</div>
+      </div>
+    </aside>
+    <div id="stage">
+      <div id="empty">
+        <div class="big">SW2GZ workspace viewer</div>
+        <div class="hint">
+          Click <strong>Open workspace…</strong> and pick the root of a ROS 2 workspace
+          (the one with <code>src/</code> inside). Any package containing a
+          <code>urdf/*.urdf.xacro</code> will load with TF triads + joint sliders.
+        </div>
+        <button id="openBtn2" class="btn primary">Open workspace…</button>
+      </div>
+      <div id="status" style="display:none"></div>
+    </div>
+  </div>
+  <script type="importmap">
+  {
+    "imports": {
+      "three":           "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/":   "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "urdf-loader":     "https://unpkg.com/urdf-loader@0.12.5/src/URDFLoader.js"
+    }
+  }
+  </script>
+  <script type="module" src="/preview.js"></script>
+</body>
+</html>
