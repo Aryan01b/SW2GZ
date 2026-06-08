@@ -168,5 +168,65 @@ namespace SW2GZ.Test.Build.Model
                 catch { /* best-effort */ }
             }
         }
+
+        [Fact]
+        [Trait("Category", "Unit")]
+        public void Build_MatePointPresent_PrintsAssemblyFramePoint()
+        {
+            var specs = new[]
+            {
+                new LinkSpec("a", new[] { "a-1@asm" }),
+                new LinkSpec("b", new[] { "b-1@asm" }),
+            };
+            var anchors = new Dictionary<string, Pose>
+            {
+                ["a"] = Pose.Identity,
+                ["b"] = new Pose(new Vector3(1, 0, 0), Quaternion.Identity),
+            };
+            var joint = new UrdfJoint(
+                "a_b_joint", UrdfJointType.Revolute, "a", "b",
+                Pose.Identity, new Vector3(0, 0, 1),
+                null, null, 0, 0, UrdfCmdInterface.Position);
+
+            var mp = new Dictionary<string, Vector3?>
+            {
+                ["a_b_joint"] = new Vector3(0.5f, 0, 0),
+            };
+
+            string s = PoseDumpWriter.Build("p", specs, anchors,
+                joints: new[] { joint },
+                jointAxesAssembly: new Dictionary<string, Vector3>(),
+                rawSource: null,
+                matePointsByJoint: mp);
+
+            Assert.Contains("MatePointAssembly: 0.5 0 0", s);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
+        public void Build_MatePointAbsent_PrintsNonePlaceholder()
+        {
+            var specs = new[]
+            {
+                new LinkSpec("a", new[] { "a-1@asm" }),
+                new LinkSpec("b", new[] { "b-1@asm" }),
+            };
+            var anchors = new Dictionary<string, Pose>
+            {
+                ["a"] = Pose.Identity,
+                ["b"] = Pose.Identity,
+            };
+            var joint = new UrdfJoint(
+                "a_b_joint", UrdfJointType.Fixed, "a", "b",
+                Pose.Identity, new Vector3(0, 0, 1),
+                null, null, 0, 0, UrdfCmdInterface.Position);
+
+            string s = PoseDumpWriter.Build("p", specs, anchors,
+                joints: new[] { joint },
+                jointAxesAssembly: new Dictionary<string, Vector3>(),
+                rawSource: null);
+
+            Assert.Contains("MatePointAssembly: (none)", s);
+        }
     }
 }
