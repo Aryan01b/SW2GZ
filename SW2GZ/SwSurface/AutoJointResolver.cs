@@ -72,6 +72,115 @@ namespace SW2GZ.SwSurface
             var children = new HashSet<string>(childComponentIds);
             if (parents.Count == 0 || children.Count == 0) return miss;
 
+            return WalkBestSpanningMate(parents, children) ?? miss;
+        }
+
+        // Per-mate API used by the Joints step's explicit mate picker. Walks
+        // MateGroup looking for a sub-feature whose Feature.Name matches
+        // mateName, then runs the standard TryResolveMate classification
+        // against that mate. Returns a Resolved with Found=true on success
+        // or Found=false on any miss (mate not found, mate not spanning the
+        // pair, etc.). COM-hygiene mirrors Resolve() — every walked
+        // Feature / Mate2 gets released.
+        public Resolved ResolveFromMateName(
+            string mateName,
+            IReadOnlyList<string> parentComponentIds,
+            IReadOnlyList<string> childComponentIds)
+        {
+            var miss = new Resolved();
+            if (_doc == null || string.IsNullOrEmpty(mateName) ||
+                parentComponentIds == null || childComponentIds == null) return miss;
+            var parents = new HashSet<string>(parentComponentIds);
+            var children = new HashSet<string>(childComponentIds);
+            if (parents.Count == 0 || children.Count == 0) return miss;
+
+            Resolved hit = null;
+            var modelDoc = (IModelDoc2)_doc;
+            Feature feat = (Feature)modelDoc.FirstFeature();
+            try
+            {
+                while (feat != null)
+                {
+                    if (feat.GetTypeName2() == "MateGroup")
+                    {
+                        Feature sub = (Feature)feat.GetFirstSubFeature();
+                        try
+                        {
+                            while (sub != null)
+                            {
+                                if (hit == null && sub.Name == mateName)
+                                {
+                                    hit = TryResolveMate(sub, parents, children);
+                                }
+                                Feature nextSub = (Feature)sub.GetNextSubFeature();
+                                Marshal.ReleaseComObject(sub);
+                                sub = nextSub;
+                            }
+                        }
+                        finally { if (sub != null) Marshal.ReleaseComObject(sub); }
+                    }
+                    Feature next = (Feature)feat.GetNextFeature();
+                    Marshal.ReleaseComObject(feat);
+                    feat = next;
+                }
+            }
+            finally { if (feat != null) Marshal.ReleaseComObject(feat); }
+
+            return hit ?? miss;
+        }
+
+        // Enumerate the names of every mate feature spanning a (parent, child)
+        // pair without running cylinder extraction or classification. Used by
+        // the Joints step UI to populate the "pick a mate" listbox. Same
+        // MateGroup walk + COM-hygiene as Resolve().
+        public IReadOnlyList<string> ListMateNamesBetween(
+            IReadOnlyList<string> parentComponentIds,
+            IReadOnlyList<string> childComponentIds)
+        {
+            var names = new List<string>();
+            if (_doc == null || parentComponentIds == null || childComponentIds == null) return names;
+            var parents = new HashSet<string>(parentComponentIds);
+            var children = new HashSet<string>(childComponentIds);
+            if (parents.Count == 0 || children.Count == 0) return names;
+
+            var modelDoc = (IModelDoc2)_doc;
+            Feature feat = (Feature)modelDoc.FirstFeature();
+            try
+            {
+                while (feat != null)
+                {
+                    if (feat.GetTypeName2() == "MateGroup")
+                    {
+                        Feature sub = (Feature)feat.GetFirstSubFeature();
+                        try
+                        {
+                            while (sub != null)
+                            {
+                                if (MateSpansPair(sub, parents, children))
+                                    names.Add(sub.Name);
+                                Feature nextSub = (Feature)sub.GetNextSubFeature();
+                                Marshal.ReleaseComObject(sub);
+                                sub = nextSub;
+                            }
+                        }
+                        finally { if (sub != null) Marshal.ReleaseComObject(sub); }
+                    }
+                    Feature next = (Feature)feat.GetNextFeature();
+                    Marshal.ReleaseComObject(feat);
+                    feat = next;
+                }
+            }
+            finally { if (feat != null) Marshal.ReleaseComObject(feat); }
+
+            return names;
+        }
+
+        // Pure walk: collect candidates, run ChooseBest. Extracted from
+        // Resolve so the public API can stay short; returns null when the
+        // assembly has no spanning mates (caller substitutes a fresh
+        // empty Resolved).
+        private Resolved WalkBestSpanningMate(HashSet<string> parents, HashSet<string> children)
+        {
             var cylinderHits = new List<Resolved>();
             Resolved nonCylinderHit = null;
             var modelDoc = (IModelDoc2)_doc;
@@ -120,7 +229,51 @@ namespace SW2GZ.SwSurface
             // derived Resolved alias the call site expects. The cast is safe
             // because we only populate the list with Resolved instances above.
             Resolved chosen = (Resolved)AutoJointResolved.ChooseBest(cylinderHits);
-            return chosen ?? nonCylinderHit ?? miss;
+            return chosen ?? nonCylinderHit;
+        }
+
+        // Cheap predicate used by ListMateNamesBetween — checks if a Mate2
+        // sub-feature's two MateEntity components fall one in parents and
+        // one in children, WITHOUT running cylinder extraction or
+        // classification. Mirrors the entity-walking prefix of TryResolveMate.
+        private static bool MateSpansPair(
+            Feature feat,
+            HashSet<string> parents,
+            HashSet<string> children)
+        {
+            object specific = feat.GetSpecificFeature2();
+            var mate = specific as Mate2;
+            if (mate == null)
+            {
+                if (specific != null) Marshal.ReleaseComObject(specific);
+                return false;
+            }
+
+            try
+            {
+                int parentEntIdx = -1, childEntIdx = -1;
+                int n = mate.GetMateEntityCount();
+                for (int i = 0; i < n; i++)
+                {
+                    MateEntity2 ent = mate.MateEntity(i);
+                    if (ent == null) continue;
+                    try
+                    {
+                        Component2 comp = ent.ReferenceComponent;
+                        if (comp == null) continue;
+                        try
+                        {
+                            string name = TopLevelName(comp);
+                            if (parentEntIdx < 0 && parents.Contains(name)) parentEntIdx = i;
+                            else if (childEntIdx < 0 && children.Contains(name)) childEntIdx = i;
+                        }
+                        finally { Marshal.ReleaseComObject(comp); }
+                    }
+                    finally { Marshal.ReleaseComObject(ent); }
+                }
+                return parentEntIdx >= 0 && childEntIdx >= 0;
+            }
+            finally { Marshal.ReleaseComObject(mate); }
         }
 
         private static Resolved TryResolveMate(
