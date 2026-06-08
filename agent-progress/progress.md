@@ -37,6 +37,19 @@ Current: **v2.1.0 UI-shell** shipped on `v2.1.0` branch. Backend wiring in next 
 - Browser-based three.js preview with live SW joint sync.
 - SW→ROS coord rotation primitives (used internally; UI moved to advanced-only).
 
+## Done (full-arm joint-frame diagnostic plumbing — this plan)
+
+- Per-export pose dump (`<ws>/sw2gz_pose_dump.dbg.txt`): link anchors,
+  joint origins/rpy, raw `Component2.Transform2.ArrayData` for each first
+  part, and the joint axis BEFORE + AFTER child-frame re-expression.
+- `IComponentRawTransformSource` side channel; implemented by
+  `WizardAssemblyWalker`.
+- `InertialAggregator.Combine(parts, linkAnchor)` overload: rebases COM +
+  inertia into link-local frame so URDF `<inertial>` is correct for
+  multi-part links. Pipeline now passes the link anchor; single-part
+  case round-trips back to the part-local COM (byte-identical for
+  the current 3R_ARM URDF).
+
 ## Next (separate plans)
 
 - **Backend wiring** — persist `Sw2gzDoc` into the SW Attribute, replace per-panel stubs with real fields, evolve `Sw2gzExportConfig` schema, full `RobotPipeline`/`WorldPipeline`/`AssetPipeline` split.
