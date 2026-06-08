@@ -303,6 +303,13 @@ namespace SW2GZ.UI.Pmp
                 "Drag to re-parent, F2 to rename, right-click to set base.",
                 leftEdge, labelOpts);
 
+            // Add/Remove BEFORE the embedded WindowFromHandle. SW PMP renders
+            // controls top-down, and controls added after a WindowFromHandle in
+            // the same group are silently dropped from the layout — the cause
+            // of the missing-buttons regression after the v2.1.0 tree port.
+            AddLinkButton(group, ButtonAddLinkID,    "Add link",    leftEdge, visibleEnabled);
+            AddLinkButton(group, ButtonRemoveLinkID, "Remove link", leftEdge, visibleEnabled);
+
             _treeHandle = (PropertyManagerPageWindowFromHandle)group.AddControl2(
                 TreeHandleID,
                 (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
@@ -326,9 +333,6 @@ namespace SW2GZ.UI.Pmp
             _pickFunnel.Mark = LinkSelectionMark;
             _pickFunnel.SetSelectionFilters((object)filters);
 
-            AddLinkButton(group, ButtonAddLinkID, "Add link", indent, visibleEnabled);
-            AddLinkButton(group, ButtonRemoveLinkID, "Remove link", indent, visibleEnabled);
-
             _linkMass = AddFieldLabel(group, LabelLinkMassID, "", leftEdge, labelOpts);
             _linkValidation = AddFieldLabel(group, LabelLinkValidationID, "", leftEdge, labelOpts);
 
@@ -339,13 +343,15 @@ namespace SW2GZ.UI.Pmp
         }
 
         private PropertyManagerPageButton AddLinkButton(
-            PropertyManagerPageGroup group, int id, string caption, int indent, int visibleEnabled)
+            PropertyManagerPageGroup group, int id, string caption, int leftAlign, int visibleEnabled)
         {
             var b = (PropertyManagerPageButton)group.AddControl2(
                 id,
                 (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                caption, (short)indent, visibleEnabled, caption);
-            ((IPropertyManagerPageControl)b).Width = 110;
+                caption, (short)leftAlign, visibleEnabled, caption);
+            if (b == null) return null;
+            var ctrl = (IPropertyManagerPageControl)b;
+            ctrl.Width = 110;
             return b;
         }
 
