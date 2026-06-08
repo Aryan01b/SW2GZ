@@ -524,6 +524,7 @@
     <Compile Include="SwSurface\SolidWorksAssemblyWalker.cs" />
     <Compile Include="SwSurface\WizardAssemblyWalker.cs" />
     <Compile Include="SwSurface\SwJointPoseReader.cs" />
+    <Compile Include="SwSurface\SwRefGeometryEnumerator.cs" />
     <Compile Include="URDFExport\Sw2gzModelExporter.cs" />
     <Compile Include="URDFExport\Sw2gzModelPreviewer.cs" />
     <Compile Include="URDFExport\PreviewServer.cs" />
