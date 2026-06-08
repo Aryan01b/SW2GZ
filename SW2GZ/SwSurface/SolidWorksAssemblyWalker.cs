@@ -232,6 +232,7 @@ namespace SW2GZ.SwSurface
                 }
 
                 Vector3 axis = kind == MateKind.Fixed ? new Vector3(0, 0, 1) : MateAxisDirection(mate);
+                Vector3? matePoint = MateReferencePoint(mate);
 
                 // Two top-level component names this mate spans — same mapping the
                 // joint list uses (ParentLink/ChildLink), so the PMP can filter the
@@ -257,7 +258,7 @@ namespace SW2GZ.SwSurface
                     finally { Marshal.ReleaseComObject(ent); }
                 }
 
-                sink.Add(new MateInfo(feat.Name, kind, axis, lower, upper, linkA, linkB));
+                sink.Add(new MateInfo(feat.Name, kind, axis, lower, upper, linkA, linkB, matePoint));
             }
             finally { Marshal.ReleaseComObject(mate); }
         }
@@ -442,6 +443,155 @@ namespace SW2GZ.SwSurface
                 }
             }
             return planarFaces >= 2;
+        }
+
+        // Mate-reference geometric point in the ASSEMBLY frame.
+        //
+        // Picks the most informative geometric reference among a mate's entities
+        // and returns a single point that "where the joint physically lives" —
+        // e.g. for a concentric mate, the cylindrical axis origin; for a coincident
+        // mate on a planar face, a point on that plane; for a coincident edge,
+        // the edge midpoint. Returns null when no usable reference is found, so
+        // JointOriginResolver falls back to its legacy anchor-only path
+        // (partial-mate-coverage is preferred over wrong-mate-coverage).
+        //
+        // Per SW SDK gotchas absorbed here:
+        //   - IFace2 + Surface.IsCylinder/IsPlane: parameter blocks are
+        //     CylinderParams [ox oy oz ax ay az radius] and PlaneParams
+        //     [nx ny nz px py pz]. Origins/points are PART-LOCAL — must be
+        //     transformed via the entity's ReferenceComponent.Transform2.
+        //   - IEdge: GetCurveParams2() returns a CurveParams record whose
+        //     StartPoint / EndPoint are part-local doubles; midpoint = mean.
+        //   - When the mate carries multiple entities, prefer the entity whose
+        //     ReferenceComponent is the PARENT side (heuristically: entity 0
+        //     when ambiguous — same convention TryAddMate uses for ordering).
+        private static Vector3? MateReferencePoint(Mate2 mate)
+        {
+            int entCount = mate.GetMateEntityCount();
+            if (entCount <= 0) return null;
+
+            // Order: pick the entity that yields the most informative geometric
+            // point.
+            //   Pass 0: cylindrical face → axis origin (concentric mates).
+            //   Pass 1: planar face     → point on the plane (face-coincident).
+            //   Pass 2: any entity's EntityParams origin block (best-effort
+            //           fallback covering edges/axes/vertices whose specific
+            //           geometric extractors vary across SW SDK versions).
+            // Returns the first successful extraction; null when every pass on
+            // every entity fails (caller falls back to legacy anchor path).
+            for (int pass = 0; pass < 3; pass++)
+            {
+                for (int i = 0; i < entCount; i++)
+                {
+                    MateEntity2 ent = mate.MateEntity(i);
+                    if (ent == null) continue;
+                    object refGeom = null;
+                    Component2 comp = null;
+                    try
+                    {
+                        try { refGeom = ent.Reference; } catch { refGeom = null; }
+                        try { comp = ent.ReferenceComponent; } catch { comp = null; }
+                        Vector3? local = TryExtractPointForPass(ent, refGeom, pass);
+                        if (!local.HasValue) continue;
+
+                        // Transform PART-LOCAL → ASSEMBLY frame via the entity's
+                        // ReferenceComponent.Transform2. Without the component
+                        // transform the point would land at the assembly origin
+                        // for any nested part — the bug we're fixing.
+                        Vector3 worldPt = comp != null
+                            ? TransformByComponent(comp, local.Value)
+                            : local.Value;
+                        return worldPt;
+                    }
+                    catch
+                    {
+                        // Defensive: any SW COM hiccup → skip this entity, try
+                        // the next one. We'd rather emit a null mate point and
+                        // fall back than crash the whole export.
+                    }
+                    finally
+                    {
+                        if (refGeom != null) try { Marshal.ReleaseComObject(refGeom); } catch { }
+                        if (comp != null)    try { Marshal.ReleaseComObject(comp);    } catch { }
+                        try { Marshal.ReleaseComObject(ent); } catch { }
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static Vector3? TryExtractPointForPass(MateEntity2 ent, object refGeom, int pass)
+        {
+            if (pass == 0 && refGeom is Face2 face0)
+            {
+                object surfObj = null;
+                try
+                {
+                    surfObj = face0.GetSurface();
+                    if (surfObj is Surface s && s.IsCylinder())
+                    {
+                        // CylinderParams: [origin.x, origin.y, origin.z,
+                        //                  axis.x,   axis.y,   axis.z, radius]
+                        if (s.CylinderParams is double[] cp && cp.Length >= 6)
+                            return new Vector3((float)cp[0], (float)cp[1], (float)cp[2]);
+                    }
+                    return null;
+                }
+                finally { if (surfObj != null) try { Marshal.ReleaseComObject(surfObj); } catch { } }
+            }
+
+            if (pass == 1 && refGeom is Face2 face1)
+            {
+                object surfObj = null;
+                try
+                {
+                    surfObj = face1.GetSurface();
+                    if (surfObj is Surface s && s.IsPlane())
+                    {
+                        // PlaneParams: [normal.x, normal.y, normal.z,
+                        //               point.x,  point.y,  point.z]
+                        if (s.PlaneParams is double[] pp && pp.Length >= 6)
+                            return new Vector3((float)pp[3], (float)pp[4], (float)pp[5]);
+                    }
+                    return null;
+                }
+                finally { if (surfObj != null) try { Marshal.ReleaseComObject(surfObj); } catch { } }
+            }
+
+            if (pass == 2)
+            {
+                // Best-effort fallback: MateEntity2.EntityParams exposes a
+                // [origin.x origin.y origin.z direction.x direction.y direction.z]
+                // pair for face/edge/axis references. Use the origin block
+                // when present so edges, reference axes and vertices still
+                // yield SOMETHING geometric for the joint origin. Not as
+                // precise as the typed Face2.GetSurface() path but better than
+                // returning null and reverting to the part-anchor bug.
+                try
+                {
+                    if (ent.EntityParams is double[] ep && ep.Length >= 3)
+                        return new Vector3((float)ep[0], (float)ep[1], (float)ep[2]);
+                }
+                catch { /* defensive: SW occasionally throws on EntityParams. */ }
+                return null;
+            }
+
+            return null;
+        }
+
+        // Applies a component's full Transform2 (3x3 rotation + translation) to a
+        // PART-LOCAL point, returning the corresponding ASSEMBLY-frame point.
+        // Different from RotateByComponent above (which is for direction
+        // vectors and ignores translation).
+        private static Vector3 TransformByComponent(Component2 comp, Vector3 v)
+        {
+            MathTransform xform = comp.Transform2;
+            if (xform == null) return v;
+            if (!(xform.ArrayData is double[] d) || d.Length < 12) return v;
+            float x = (float)(d[0] * v.X + d[1] * v.Y + d[2] * v.Z + d[9]);
+            float y = (float)(d[3] * v.X + d[4] * v.Y + d[5] * v.Z + d[10]);
+            float z = (float)(d[6] * v.X + d[7] * v.Y + d[8] * v.Z + d[11]);
+            return new Vector3(x, y, z);
         }
 
         // Applies a component's rotation (Transform2 / MathTransform 3x3 block) to a
@@ -645,18 +795,27 @@ namespace SW2GZ.SwSurface
                 // Origin: we cannot reliably derive the joint frame transform from
                 // the mate alone, so use identity. Connectivity (parent/child) is
                 // what matters for v2.1; exact origin is a follow-up. (Pose.Identity)
+                //
+                // MatePointAssembly: the mate's geometric reference point (e.g.
+                // a concentric mate's cylindrical axis origin) in assembly frame.
+                // Null when extraction couldn't find a deterministic geometric
+                // reference — JointOriginResolver falls back to the legacy
+                // anchor-only path.
+                Vector3? matePoint = MateReferencePoint(mate);
+
                 var spec = new MateSpec(
-                    Name:          mateName,
-                    Kind:          kind,
-                    Origin:        Pose.Identity,
-                    Axis:          axis,
-                    LimitLower:    null,
-                    LimitUpper:    null,
-                    LimitEffort:   0.0,
-                    LimitVelocity: 0.0,
-                    Interface:     UrdfCmdInterface.Position,
-                    ParentLink:    parentLink,
-                    ChildLink:     childLink);
+                    Name:              mateName,
+                    Kind:              kind,
+                    Origin:            Pose.Identity,
+                    Axis:              axis,
+                    LimitLower:        null,
+                    LimitUpper:        null,
+                    LimitEffort:       0.0,
+                    LimitVelocity:     0.0,
+                    Interface:         UrdfCmdInterface.Position,
+                    ParentLink:        parentLink,
+                    ChildLink:         childLink,
+                    MatePointAssembly: matePoint);
 
                 sink.Add(spec);
             }
@@ -695,8 +854,10 @@ namespace SW2GZ.SwSurface
             return s;
         }
 
-        // Recursively collect leaf-component GetPathName() values.
+        // Recursively collect leaf-component Name2 (instance-unique) identifiers.
         // A leaf is a component whose children are null/empty AND whose model is a part doc.
+        // Name2 is used instead of GetPathName() so multi-instance assemblies
+        // (same part used N times) produce N distinct anchor lookups in FindComponent.
         private static void CollectLeafPaths(Component2 comp, List<string> paths)
         {
             object[] children = (object[])comp.GetChildren();
@@ -709,7 +870,7 @@ namespace SW2GZ.SwSurface
                 if (model != null &&
                     model.GetType() == (int)swDocumentTypes_e.swDocPART)
                 {
-                    paths.Add(comp.GetPathName());
+                    paths.Add(comp.Name2);
                 }
                 return;
             }
