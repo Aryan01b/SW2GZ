@@ -225,41 +225,45 @@ namespace SW2GZ.UI.Pmp
 
         private void SeedLinksFromAssembly()
         {
+            // Populate the assembly-component pool used by the validator —
+            // independent of whether we seed the link tree or not.
             _allComponentIds.Clear();
             object[] comps = (object[])((AssemblyDoc)_modelDoc).GetComponents(true);
-            var top = new List<Component2>();
             if (comps != null)
             {
                 foreach (object o in comps)
                 {
                     var c = (Component2)o;
                     if (c.IsSuppressed()) continue;
-                    top.Add(c);
                     _allComponentIds.Add(c.Name2);
                 }
             }
 
             if (Robot.Links == null) Robot.Links = new List<LinkDef>();
-            if (Robot.Links.Count > 0) return;
 
-            int rootIdx = 0;
-            for (int i = 0; i < top.Count; i++)
+            // If the user already configured a link tree (loaded from the SW
+            // Doc attribute on a return visit), respect it verbatim — do NOT
+            // wipe it by re-seeding from the assembly. The previous behaviour
+            // clobbered the saved tree on every Create-Robot open.
+            if (Robot.Links.Count > 0)
             {
-                try { if (top[i].IsFixed()) { rootIdx = i; break; } } catch { }
+                logger.Info("Sw2gzCreateRobotPmp: loaded existing tree, " +
+                            Robot.Links.Count + " links");
+                return;
             }
-            string rootName = top.Count > 0
-                ? RosNameSanitizer.Sanitize(top[rootIdx].Name2).Value : "base_link";
 
-            for (int i = 0; i < top.Count; i++)
+            // Empty doc → seed ONE empty root link the user will fill in.
+            // Upstream's reference-CS workflow (D2+) drives joint origins
+            // off Reference Coordinate Systems chosen per joint, so the
+            // wizard no longer needs to auto-map every top-level component
+            // into its own link on first open.
+            Robot.Links.Add(new LinkDef
             {
-                Robot.Links.Add(new LinkDef
-                {
-                    Name = RosNameSanitizer.Sanitize(top[i].Name2).Value,
-                    ComponentIds = new List<string> { top[i].Name2 },
-                    ParentName = i == rootIdx ? "" : rootName,
-                });
-            }
-            logger.Info("Sw2gzCreateRobotPmp: seeded " + Robot.Links.Count + " links");
+                Name = "base_link",
+                ComponentIds = new List<string>(),
+                ParentName = string.Empty,
+            });
+            logger.Info("Sw2gzCreateRobotPmp: seeded empty base_link");
         }
 
         private void BuildLinksStep(PropertyManagerPageGroup group, int leftEdge, int indent, int visibleEnabled)
