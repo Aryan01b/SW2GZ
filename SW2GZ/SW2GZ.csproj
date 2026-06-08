@@ -441,6 +441,7 @@
     <Compile Include="Exceptions\Sw2gzExportException.cs" />
     <Compile Include="Math\Matrix3.cs" />
     <Compile Include="Math\Pose.cs" />
+    <Compile Include="Math\MathTransformPose.cs" />
     <Compile Include="Build\PackageNameSanitizer.cs" />
     <Compile Include="Build\RosNameSanitizer.cs" />
     <Compile Include="Build\MassProps.cs" />
@@ -522,6 +523,7 @@
     <Compile Include="SwSurface\Abstractions\IAssemblyWalker.cs" />
     <Compile Include="SwSurface\SolidWorksAssemblyWalker.cs" />
     <Compile Include="SwSurface\WizardAssemblyWalker.cs" />
+    <Compile Include="SwSurface\SwJointPoseReader.cs" />
     <Compile Include="URDFExport\Sw2gzModelExporter.cs" />
     <Compile Include="URDFExport\Sw2gzModelPreviewer.cs" />
     <Compile Include="URDFExport\PreviewServer.cs" />

@@ -286,11 +286,31 @@ namespace SW2GZ.URDFExport
             {
                 Pose pA = linkAnchors.TryGetValue(j.ParentLink, out Pose pp) ? pp : Pose.Identity;
                 Pose cA = linkAnchors.TryGetValue(j.ChildLink,  out Pose cc) ? cc : Pose.Identity;
-                System.Numerics.Vector3? matePoint = mateByName.TryGetValue(j.Name, out MateSpec msFound)
-                    ? msFound.MatePointAssembly : null;
+                MateSpec msFound = mateByName.TryGetValue(j.Name, out MateSpec found) ? found : null;
+                System.Numerics.Vector3? matePoint = msFound?.MatePointAssembly;
                 jointAxesAssembly[j.Name] = j.Axis;
-                JointOriginResolver.Resolved r = JointOriginResolver.Compute(pA, cA, j.Axis, matePoint);
-                joints.Add(j with { Origin = r.Origin, Axis = r.AxisInJointFrame });
+
+                // D3 — when the walker has pre-computed a parent-frame origin
+                // (Reference-CS path), use it as-is; only the axis still needs
+                // re-expression into the joint frame. Otherwise fall back to
+                // anchor-derived origin + mate-point overlay.
+                bool walkerProvidedOrigin = msFound != null && !IsIdentityPose(msFound.Origin);
+                if (walkerProvidedOrigin)
+                {
+                    // Axis in MateSpec is the assembly-frame direction read off
+                    // the Reference Axis feature. Re-express in the child link
+                    // frame so URDF <axis> stays a joint-frame vector.
+                    System.Numerics.Quaternion invChildRot =
+                        System.Numerics.Quaternion.Inverse(cA.Rotation);
+                    var axisInJoint = System.Numerics.Vector3.Transform(j.Axis, invChildRot);
+                    joints.Add(j with { Origin = msFound.Origin, Axis = axisInJoint });
+                }
+                else
+                {
+                    JointOriginResolver.Resolved r =
+                        JointOriginResolver.Compute(pA, cA, j.Axis, matePoint);
+                    joints.Add(j with { Origin = r.Origin, Axis = r.AxisInJointFrame });
+                }
             }
 
             // JointGraphBuilder warnings are non-fatal — collect them as
@@ -610,6 +630,27 @@ namespace SW2GZ.URDFExport
         // We add a generous safety margin so long link names ("base_link_revolute_drive.dae")
         // don't blow MAX_PATH=260 on Windows.
         private const int InPackageReserveChars = 90;
+
+        // D3 — "is this Pose effectively Pose.Identity?" used to detect whether
+        // the walker pre-populated MateSpec.Origin via the Reference-CS path.
+        // Tolerance is tight (1e-6); the legacy code path constructs MateSpec
+        // with literal Pose.Identity so an exact match is the common case, but
+        // floating-point noise from a no-op localize must still register as
+        // identity to keep golden output stable.
+        private static bool IsIdentityPose(Pose p)
+        {
+            if (p == null) return true;
+            const float eps = 1e-6f;
+            if (System.Math.Abs(p.Position.X) > eps) return false;
+            if (System.Math.Abs(p.Position.Y) > eps) return false;
+            if (System.Math.Abs(p.Position.Z) > eps) return false;
+            var q = p.Rotation;
+            if (System.Math.Abs(q.X) > eps) return false;
+            if (System.Math.Abs(q.Y) > eps) return false;
+            if (System.Math.Abs(q.Z) > eps) return false;
+            if (System.Math.Abs(System.Math.Abs(q.W) - 1f) > eps) return false;
+            return true;
+        }
 
         private static void ValidatePreflight(string outputDir, string sanitizedPkg)
         {

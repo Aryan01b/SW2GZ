@@ -68,17 +68,95 @@ namespace SW2GZ.SwSurface
 
         public IReadOnlyList<MateSpec> WalkMates()
         {
+            // Pre-build child-link → first-component lookup so the ref-geometry
+            // path can resolve Component2 by Name2 without re-walking the tree
+            // for every joint.
+            var compByName = new Dictionary<string, Component2>(System.StringComparer.Ordinal);
+            object[] allComps = (object[])_doc.GetComponents(true);
+            if (allComps != null)
+            {
+                foreach (object o in allComps)
+                {
+                    var c = (Component2)o;
+                    if (c.Name2 != null && !compByName.ContainsKey(c.Name2))
+                        compByName[c.Name2] = c;
+                }
+            }
+            var firstCompByLink = new Dictionary<string, Component2>(System.StringComparer.Ordinal);
+            foreach (LinkDef l in _links)
+            {
+                if (l?.ComponentIds == null) continue;
+                foreach (string id in l.ComponentIds)
+                {
+                    if (string.IsNullOrEmpty(id)) continue;
+                    if (compByName.TryGetValue(id, out Component2 comp))
+                    {
+                        firstCompByLink[l.Name] = comp;
+                        break;
+                    }
+                }
+            }
+
+            // childLink → its parent JointDef. Used to look up the parent
+            // joint's RefCsName so a non-root child can be localized against
+            // its parent's reference frame (mirrors upstream LocalizeJoint).
+            var jointByChild = new Dictionary<string, JointDef>(System.StringComparer.Ordinal);
+            foreach (JointDef j in _joints)
+                if (!string.IsNullOrEmpty(j.ChildLink) && !jointByChild.ContainsKey(j.ChildLink))
+                    jointByChild[j.ChildLink] = j;
+
+            var reader = new SwJointPoseReader(_doc);
+
             var mates = new List<MateSpec>();
             foreach (JointDef j in _joints)
             {
-                var axis = new Vector3((float)j.AxisX, (float)j.AxisY, (float)j.AxisZ);
+                var cachedAxis = new Vector3((float)j.AxisX, (float)j.AxisY, (float)j.AxisZ);
                 Vector3? matePt = j.HasMatePoint
                     ? new Vector3((float)j.MatePointX, (float)j.MatePointY, (float)j.MatePointZ)
                     : (Vector3?)null;
+
+                Pose origin = Pose.Identity;     // legacy default — pipeline derives from anchors
+                Vector3 axis = cachedAxis;       // legacy axis fallback
+
+                // D3 — Reference-geometry path. Both names required: a Reference
+                // Coordinate System feature on the child component supplies the
+                // joint's parent-frame origin; a Reference Axis feature supplies
+                // the joint axis direction. This is the upstream pattern from
+                // ros/solidworks_urdf_exporter, which the v2.x anchor-derived
+                // path replaced and broke.
+                if (!string.IsNullOrEmpty(j.RefCsName) &&
+                    !string.IsNullOrEmpty(j.RefAxisName) &&
+                    firstCompByLink.TryGetValue(j.ChildLink, out Component2 childComp))
+                {
+                    MathTransform childCs = reader.GetCsTransform(childComp, j.RefCsName);
+                    if (childCs != null)
+                    {
+                        // Parent frame: the parent joint's RefCs on the parent
+                        // component, OR identity for the root link.
+                        Pose parentGlobal = Pose.Identity;
+                        if (jointByChild.TryGetValue(j.ParentLink, out JointDef parentJoint) &&
+                            !string.IsNullOrEmpty(parentJoint.RefCsName) &&
+                            firstCompByLink.TryGetValue(parentJoint.ChildLink, out Component2 parentComp))
+                        {
+                            MathTransform parentCs = reader.GetCsTransform(parentComp, parentJoint.RefCsName);
+                            if (parentCs != null)
+                                parentGlobal = MathTransformPose.FromArrayData(parentCs.ArrayData as double[]);
+                        }
+                        Pose childGlobal = MathTransformPose.FromArrayData(childCs.ArrayData as double[]);
+                        origin = SwJointPoseMath.Localize(parentGlobal, childGlobal);
+                    }
+
+                    if (firstCompByLink.TryGetValue(j.ChildLink, out Component2 axisComp))
+                    {
+                        Vector3? d = reader.GetAxisDirection(axisComp, j.RefAxisName);
+                        if (d.HasValue) axis = d.Value;
+                    }
+                }
+
                 mates.Add(new MateSpec(
                     Name:              j.Name,
                     Kind:              ToMateKind(j.Type),
-                    Origin:            Pose.Identity,        // SW→ROS conversion deferred
+                    Origin:            origin,
                     Axis:              axis,
                     LimitLower:        j.LimitLower,
                     LimitUpper:        j.LimitUpper,
@@ -95,10 +173,9 @@ namespace SW2GZ.SwSurface
         // IComponentPoseSource — assembly-frame pose of a part. Used by
         // Sw2gzPipeline to anchor link frames at their first-part location and
         // to rebase mesh vertices / joint origins into the right URDF frames.
-        // SW Transform2.ArrayData layout: [0..8] rotation 3x3 row-major,
-        // [9..11] translation, [12] scale, [13..15] padding. Matches the
-        // convention already used by SolidWorksAssemblyWalker.RotateByComponent
-        // and SolidWorksMeshTessellator's vertex bake-in.
+        // The Pose extraction itself is in SW2GZ.Math.MathTransformPose so
+        // SwJointPoseReader can reuse the same row-major + Shepperd's path
+        // for Reference Coordinate System transforms.
         public Pose GetComponentPose(string partPath)
         {
             if (string.IsNullOrEmpty(partPath)) return Pose.Identity;
@@ -107,52 +184,7 @@ namespace SW2GZ.SwSurface
             if (comp == null) return Pose.Identity;
 
             MathTransform xform = comp.Transform2;
-            if (!(xform?.ArrayData is double[] d) || d.Length < 12) return Pose.Identity;
-
-            // Translation is direct.
-            var translation = new Vector3((float)d[9], (float)d[10], (float)d[11]);
-
-            // Build a quaternion from the 3x3 rotation block (row-major as
-            // applied throughout the codebase). Shepperd's method handles the
-            // sign-ambiguity case without trig.
-            float m00 = (float)d[0], m01 = (float)d[1], m02 = (float)d[2];
-            float m10 = (float)d[3], m11 = (float)d[4], m12 = (float)d[5];
-            float m20 = (float)d[6], m21 = (float)d[7], m22 = (float)d[8];
-            float trace = m00 + m11 + m22;
-            float qx, qy, qz, qw;
-            if (trace > 0f)
-            {
-                float s = (float)System.Math.Sqrt(trace + 1f) * 2f;   // 4 * qw
-                qw = 0.25f * s;
-                qx = (m21 - m12) / s;
-                qy = (m02 - m20) / s;
-                qz = (m10 - m01) / s;
-            }
-            else if (m00 > m11 && m00 > m22)
-            {
-                float s = (float)System.Math.Sqrt(1f + m00 - m11 - m22) * 2f;
-                qw = (m21 - m12) / s;
-                qx = 0.25f * s;
-                qy = (m01 + m10) / s;
-                qz = (m02 + m20) / s;
-            }
-            else if (m11 > m22)
-            {
-                float s = (float)System.Math.Sqrt(1f + m11 - m00 - m22) * 2f;
-                qw = (m02 - m20) / s;
-                qx = (m01 + m10) / s;
-                qy = 0.25f * s;
-                qz = (m12 + m21) / s;
-            }
-            else
-            {
-                float s = (float)System.Math.Sqrt(1f + m22 - m00 - m11) * 2f;
-                qw = (m10 - m01) / s;
-                qx = (m02 + m20) / s;
-                qy = (m12 + m21) / s;
-                qz = 0.25f * s;
-            }
-            return new Pose(translation, Quaternion.Normalize(new Quaternion(qx, qy, qz, qw)));
+            return MathTransformPose.FromArrayData(xform?.ArrayData as double[]);
         }
 
         // IComponentRawTransformSource — returns the verbatim 16 doubles SW

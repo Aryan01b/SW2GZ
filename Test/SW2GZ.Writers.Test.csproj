@@ -52,6 +52,7 @@
     <Compile Include="..\SW2GZ\Exceptions\Sw2gzExportException.cs" Link="Sources\Exceptions\Sw2gzExportException.cs" />
     <Compile Include="..\SW2GZ\Math\Matrix3.cs"               Link="Sources\Math\Matrix3.cs" />
     <Compile Include="..\SW2GZ\Math\Pose.cs"                  Link="Sources\Math\Pose.cs" />
+    <Compile Include="..\SW2GZ\Math\MathTransformPose.cs"     Link="Sources\Math\MathTransformPose.cs" />
     <Compile Include="..\SW2GZ\Build\PackageNameSanitizer.cs" Link="Sources\Build\PackageNameSanitizer.cs" />
     <Compile Include="..\SW2GZ\Build\RosNameSanitizer.cs"     Link="Sources\Build\RosNameSanitizer.cs" />
     <Compile Include="..\SW2GZ\Build\MassProps.cs"            Link="Sources\Build\MassProps.cs" />
@@ -84,6 +85,7 @@
     <Compile Include="..\SW2GZ\Build\Model\SwingTwist.cs"           Link="Sources\Build\Model\SwingTwist.cs" />
     <Compile Include="..\SW2GZ\Build\Model\CoordinateConvention.cs" Link="Sources\Build\Model\CoordinateConvention.cs" />
     <Compile Include="..\SW2GZ\Math\PoseMath.cs"                    Link="Sources\Math\PoseMath.cs" />
+    <Compile Include="..\SW2GZ\SwSurface\SwJointPoseReader.cs"      Link="Sources\SwSurface\SwJointPoseReader.cs" />
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\IComponentPoseSource.cs" Link="Sources\SwSurface\Abstractions\IComponentPoseSource.cs" />
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\IComponentRawTransformSource.cs" Link="Sources\SwSurface\Abstractions\IComponentRawTransformSource.cs" />
     <Compile Include="..\SW2GZ\Build\Model\PoseDumpWriter.cs" Link="Sources\Build\Model\PoseDumpWriter.cs" />
