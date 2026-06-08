@@ -107,6 +107,20 @@ namespace SW2GZ.UI
                 if (n.Tag is LinkDef l && l.Name == name) { SelectedNode = n; return; }
         }
 
+        // Update the SELECTED node's display label without rebuilding the tree.
+        // Used by the rename textbox so each keystroke doesn't fire a Rebuild +
+        // ActiveLinkChanged cascade that would reset the textbox cursor to 0.
+        public void RefreshActiveNodeLabel()
+        {
+            TreeNode n = SelectedNode;
+            if (n == null || !(n.Tag is LinkDef link)) return;
+            bool isRoot = string.IsNullOrEmpty(link.ParentName);
+            int parts = link.ComponentIds?.Count ?? 0;
+            n.Text = (link.Name ?? "")
+                + (isRoot ? "  (base)" : "")
+                + "  [" + parts + (parts == 1 ? " part]" : " parts]");
+        }
+
         private static IEnumerable<TreeNode> AllNodes(TreeNodeCollection nodes)
         {
             foreach (TreeNode n in nodes)

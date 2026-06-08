@@ -385,23 +385,24 @@ namespace SW2GZ.UI.Pmp
             _activeLink.Name = unique;
             foreach (LinkDef l in Robot.Links)
                 if (l.ParentName == old) l.ParentName = unique;
-            _suppressLinkSelectionLoad = true;
-            try { _linkTree.SetLinks(Robot.Links); _linkTree.SelectByLinkName(unique); }
-            finally { _suppressLinkSelectionLoad = false; }
+            // DO NOT call SetLinks here — it fires ActiveLinkChanged →
+            // UpdateLinkNameBox resets textbox.Text mid-keystroke, cursor
+            // jumps to 0, next char prepends, "link" becomes "knil". The
+            // tree's node label is refreshed in-place instead.
+            _linkTree.RefreshActiveNodeLabel();
             UpdateValidationLabel();
         }
 
-        // SW PMP's WindowFromHandle hosts a WinForms control on a white
-        // (SystemColors.Window) surface — same as PMP's textboxes / tree. Match
-        // that so the embedded bar blends instead of showing a Control-gray
-        // band around the buttons.
+        // PMP group surface = SystemColors.Control (theme-aware light grey on
+        // Windows light, dark grey on dark). Matching it makes the embedded
+        // bar dissolve into the panel instead of showing as a white slab.
         private static System.Windows.Forms.Panel NewBar(int width, int height)
         {
             return new System.Windows.Forms.Panel
             {
                 Width = width,
                 Height = height,
-                BackColor = System.Drawing.SystemColors.Window,
+                BackColor = System.Drawing.SystemColors.Control,
             };
         }
 
