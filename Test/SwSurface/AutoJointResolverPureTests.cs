@@ -70,5 +70,42 @@ namespace SW2GZ.Test.SwSurface
             Assert.Equal(Vector3.Zero, r.AxisAssembly);
             Assert.False(r.OriginAssembly.HasValue);
         }
+
+        [Fact]
+        public void ChooseBest_NullOrEmpty_ReturnsNull()
+        {
+            Assert.Null(AutoJointResolved.ChooseBest(null));
+            Assert.Null(AutoJointResolved.ChooseBest(new AutoJointResolved[0]));
+        }
+
+        [Fact]
+        public void ChooseBest_PrefersLimitBearingOverPlainConcentric()
+        {
+            // Plain concentric (no limit) + limit-angle → limit-angle wins so
+            // the joint is Revolute, not Continuous.
+            var plain = new AutoJointResolved { MateName = "Concentric1", Kind = MateKind.Continuous };
+            var limited = new AutoJointResolved {
+                MateName = "LimitAngle1", Kind = MateKind.Revolute,
+                LimitLower = -1.0, LimitUpper = 1.0,
+            };
+            Assert.Same(limited, AutoJointResolved.ChooseBest(new[] { plain, limited }));
+            Assert.Same(limited, AutoJointResolved.ChooseBest(new[] { limited, plain }));
+        }
+
+        [Fact]
+        public void ChooseBest_AllNonLimit_ReturnsFirstSeen()
+        {
+            var a = new AutoJointResolved { MateName = "Concentric1" };
+            var b = new AutoJointResolved { MateName = "Concentric2" };
+            Assert.Same(a, AutoJointResolved.ChooseBest(new[] { a, b }));
+        }
+
+        [Fact]
+        public void ChooseBest_MultipleLimit_ReturnsFirstLimit()
+        {
+            var l1 = new AutoJointResolved { MateName = "L1", LimitLower = -1, LimitUpper = 1 };
+            var l2 = new AutoJointResolved { MateName = "L2", LimitLower = -2, LimitUpper = 2 };
+            Assert.Same(l1, AutoJointResolved.ChooseBest(new[] { l1, l2 }));
+        }
     }
 }

@@ -24,5 +24,24 @@ namespace SW2GZ.SwSurface
         public Vector3? OriginAssembly;               // point on the joint axis, assembly frame
         public double? LimitLower;
         public double? LimitUpper;
+
+        public bool HasLimit => LimitLower.HasValue || LimitUpper.HasValue;
+
+        // Pick the preferred candidate when multiple mates span the same
+        // (parent, child) pair. Limit-bearing mates win (→ Revolute / Prismatic
+        // > Continuous). Within the same bucket the first-seen entry wins so
+        // the MateGroup feature order acts as a deterministic tie-break.
+        public static AutoJointResolved ChooseBest(System.Collections.Generic.IReadOnlyList<AutoJointResolved> candidates)
+        {
+            if (candidates == null || candidates.Count == 0) return null;
+            AutoJointResolved firstAny = null, firstLimit = null;
+            foreach (AutoJointResolved c in candidates)
+            {
+                if (c == null) continue;
+                if (firstAny == null) firstAny = c;
+                if (firstLimit == null && c.HasLimit) firstLimit = c;
+            }
+            return firstLimit ?? firstAny;
+        }
     }
 }

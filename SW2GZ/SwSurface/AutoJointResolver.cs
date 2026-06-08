@@ -23,8 +23,13 @@ when multiple span the same pair) via ISurface.CylinderParams +
 Component2.Transform2 (math lives in pure CylinderTransform so it can be
 unit-tested off-COM).
 
-Returns the first matching mate; when several mates span the pair, a mate
-with a cylindrical face wins.
+Selection priority when multiple mates span the same (parent, child) pair:
+  1. cylinder-bearing AND limit-bearing  (→ Revolute / Prismatic)
+  2. cylinder-bearing, no limit          (→ Continuous)
+  3. non-cylinder fallback               (→ Fixed)
+Within each priority bucket the first hit wins. The pure ChooseBest helper
+(AutoJointResolved.ChooseBest in AutoJointResolved.cs) implements the rank,
+unit-testable off-COM; the COM walk just collects candidates.
 
 The entire class is gated on SW_INTEROP because it touches Mate2 /
 MateEntity2 / IFace2 / ISurface / Component2 / MathTransform. The pure-C#
@@ -67,6 +72,7 @@ namespace SW2GZ.SwSurface
             var children = new HashSet<string>(childComponentIds);
             if (parents.Count == 0 || children.Count == 0) return miss;
 
+            var cylinderHits = new List<Resolved>();
             Resolved nonCylinderHit = null;
             var modelDoc = (IModelDoc2)_doc;
             Feature feat = (Feature)modelDoc.FirstFeature();
@@ -86,10 +92,15 @@ namespace SW2GZ.SwSurface
                                 {
                                     if (hit.OriginAssembly.HasValue)
                                     {
-                                        // Cylinder-derived geometry — preferred. Return immediately.
-                                        return hit;
+                                        // Cylinder-derived geometry — collect and
+                                        // pick the limit-bearing one (if any)
+                                        // after the walk finishes.
+                                        cylinderHits.Add(hit);
                                     }
-                                    if (nonCylinderHit == null) nonCylinderHit = hit;
+                                    else if (nonCylinderHit == null)
+                                    {
+                                        nonCylinderHit = hit;
+                                    }
                                 }
                                 Feature nextSub = (Feature)sub.GetNextSubFeature();
                                 Marshal.ReleaseComObject(sub);
@@ -105,7 +116,11 @@ namespace SW2GZ.SwSurface
             }
             finally { if (feat != null) Marshal.ReleaseComObject(feat); }
 
-            return nonCylinderHit ?? miss;
+            // ChooseBest returns the base AutoJointResolved; cast back to the
+            // derived Resolved alias the call site expects. The cast is safe
+            // because we only populate the list with Resolved instances above.
+            Resolved chosen = (Resolved)AutoJointResolved.ChooseBest(cylinderHits);
+            return chosen ?? nonCylinderHit ?? miss;
         }
 
         private static Resolved TryResolveMate(
