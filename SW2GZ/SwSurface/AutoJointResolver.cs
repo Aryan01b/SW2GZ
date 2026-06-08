@@ -189,6 +189,15 @@ namespace SW2GZ.SwSurface
                     res.AxisAssembly   = cyl.dir;
                     res.OriginAssembly = cyl.origin;
                 }
+                else
+                {
+                    // No usable cylinder face (axis-axis concentric, non-face
+                    // entity, etc.). A Revolute/Continuous/Prismatic joint with
+                    // a zero axis vector trips the pre-write validator, so
+                    // demote to Fixed — the user can add a cleaner mate and
+                    // hit Re-detect.
+                    res.Kind = MateKind.Fixed;
+                }
                 return res;
             }
             finally { Marshal.ReleaseComObject(mate); }
