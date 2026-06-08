@@ -58,6 +58,18 @@ scene.add(grid);
 
 scene.add(new THREE.AxesHelper(0.3));
 
+// ── Gz corner gizmo ─────────────────────────────────────────────
+// Small RGB axes triad pinned to the top-right corner of the viewport that
+// shows the world coord frame at a glance — does NOT move with orbit. Drawn
+// as a separate scene + ortho camera overlay, rendered after the main scene
+// each frame with autoClear=false.
+const gizmoSize = 90; // pixels
+const gizmoScene = new THREE.Scene();
+const gizmoCam = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, 0.1, 10);
+gizmoCam.position.set(0, 0, 3);
+gizmoCam.up.set(0, 0, 1);
+gizmoScene.add(new THREE.AxesHelper(1));
+
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0, 0.25);
 controls.enableDamping = true;
@@ -105,13 +117,19 @@ function findPackages() {
 }
 
 // ── Xacro → URDF strip (mirrors serve.ps1 ConvertTo-Urdf) ────────
-function xacroToUrdf(text) {
+function xacroToUrdf(text, opts) {
   // self-closing xacro tags
   text = text.replace(/<xacro:[a-zA-Z_:]+\b[^/>]*\/>/g, '');
   // paired xacro blocks (DOTALL via [\s\S])
   text = text.replace(/<xacro:([a-zA-Z_:]+)\b[^>]*>[\s\S]*?<\/xacro:\1>/g, '');
   // xmlns:xacro on root
   text = text.replace(/\s+xmlns:xacro="[^"]*"/g, '');
+  // Optionally rewrite package://<pkg>/<rest> to a relative path so URDFLoader
+  // can lookup meshes via the existing fileMap or HTTP loader without needing
+  // its `packages` lookup populated.
+  if (opts && opts.packageRoot != null) {
+    text = text.replace(/package:\/\/[^/]+\//g, opts.packageRoot);
+  }
   return text;
 }
 
@@ -120,11 +138,12 @@ function xacroToUrdf(text) {
 // "package://full_arm/meshes/foo.dae" — strip "package://<pkg>/" and look
 // the rest up in fileMap under <pkgRoot>/.
 async function blobForMesh(packageRoot, urdfPath) {
-  // urdfPath looks like package://full_arm/meshes/foo.dae (URDFLoader has
-  // already resolved it against loader.packages — when we set packages to
-  // {} it passes through). Normalize.
+  // urdfPath looks like "<pkgRoot>/meshes/foo.dae" after xacroToUrdf rewrote
+  // package:// → "<pkgRoot>/", or "package://full_arm/meshes/foo.dae" if a
+  // future code path skips that rewrite. Normalize both shapes.
   let rel = urdfPath;
   rel = rel.replace(/^package:\/\/[^/]+\//, '');
+  rel = rel.replace(new RegExp('^' + packageRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/'), '');
   // candidate paths to try, in order
   const candidates = [];
   candidates.push(`${packageRoot}/${rel}`);
@@ -160,14 +179,19 @@ async function loadPackage(pkg) {
   jointsDiv.innerHTML = '';
   resetBtn.style.display = 'none';
 
-  // Read + strip xacro.
+  // Read + strip xacro. Rewrite package:// to "<pkgRoot>/" so URDFLoader's
+  // mesh URLs match what blobForMesh expects when looking them up in fileMap.
   const xacroFile  = await fileMap.get(pkg.xacro).getFile();
   const xacroText  = await xacroFile.text();
-  const urdfText   = xacroToUrdf(xacroText);
+  const urdfText   = xacroToUrdf(xacroText, { packageRoot: `${pkg.root}/` });
 
   // Configure URDFLoader.
   const loader = new URDFLoader();
-  loader.packages = {};   // no remapping; mesh URLs come in as package://...
+  // URDFLoader warns "<pkg> not found in provided package list" and skips
+  // loadMeshCb when packages is empty — even with a custom loadMeshCb. Set a
+  // function that accepts ANY package name; loadMeshCb below handles the actual
+  // resolution (either via fileMap or our HTTP-fallback proxy).
+  loader.packages = () => '.';
   loader.loadMeshCb = async (path, manager, done) => {
     try {
       const resolved = await blobForMesh(pkg.root, path);
@@ -214,12 +238,31 @@ async function loadPackage(pkg) {
     linkLabels.push({ link, el });
   }
 
+  // Joint TF markers — smaller triads at each movable joint's child-link
+  // frame. After the joint-origin fix these should overlap the link triad
+  // exactly; any visible offset is a frame-resolution bug we want to expose.
+  const moveTypesViz = new Set(['revolute', 'continuous', 'prismatic']);
+  for (const [, joint] of Object.entries(robot.joints)) {
+    if (!moveTypesViz.has(joint.jointType)) continue;
+    const childName = joint.child;
+    const childLink = childName ? robot.links[childName] : null;
+    const host = childLink || joint;
+    host.add(new THREE.AxesHelper(0.06));
+  }
+
   // Joint sliders.
   const moveTypes = new Set(['revolute', 'continuous', 'prismatic']);
   const jointEntries = Object.entries(robot.joints).filter(([, j]) => moveTypes.has(j.jointType));
   for (const [name, joint] of jointEntries) {
-    const lower = Number.isFinite(joint.limit?.lower) ? joint.limit.lower : -Math.PI;
-    const upper = Number.isFinite(joint.limit?.upper) ? joint.limit.upper :  Math.PI;
+    // URDF says continuous joints don't have limits. URDFLoader still
+    // populates joint.limit.{lower,upper}=0 when the <limit> element exists
+    // without lower/upper attrs (which is our exporter's output). Treat
+    // continuous AND zero-range as "no limit" and fall back to ±π.
+    const isCont = joint.jointType === 'continuous';
+    const lo = joint.limit?.lower, up = joint.limit?.upper;
+    const zeroRange = lo === 0 && up === 0;
+    const lower = (isCont || zeroRange || !Number.isFinite(lo)) ? -Math.PI : lo;
+    const upper = (isCont || zeroRange || !Number.isFinite(up)) ?  Math.PI : up;
     const row = document.createElement('div');
     row.className = 'joint';
     row.innerHTML = `
@@ -291,6 +334,30 @@ const tmp = new THREE.Vector3();
 function tick() {
   controls.update();
   renderer.render(scene, camera);
+
+  // Draw the world-frame gizmo as a viewport overlay in the top-right corner.
+  // Mirrors the main camera's orientation but stays anchored — pan/zoom
+  // does not move it. Uses autoClear=false + scissor to keep the rest of
+  // the viewport intact.
+  const w = renderer.domElement.width  || renderer.domElement.clientWidth;
+  const h = renderer.domElement.height || renderer.domElement.clientHeight;
+  const dpr = renderer.getPixelRatio();
+  const px = gizmoSize * dpr;
+  gizmoCam.position.copy(camera.position)
+    .sub(controls.target).normalize().multiplyScalar(3);
+  gizmoCam.up.copy(camera.up);
+  gizmoCam.lookAt(0, 0, 0);
+  const prevAutoClear = renderer.autoClear;
+  renderer.autoClear = false;
+  renderer.clearDepth();
+  renderer.setScissorTest(true);
+  renderer.setScissor(w - px - 4 * dpr, h - px - 4 * dpr, px, px);
+  renderer.setViewport(w - px - 4 * dpr, h - px - 4 * dpr, px, px);
+  renderer.render(gizmoScene, gizmoCam);
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, w, h);
+  renderer.autoClear = prevAutoClear;
+
   for (const { link, el } of linkLabels) {
     link.getWorldPosition(tmp);
     tmp.project(camera);
@@ -355,3 +422,38 @@ async function pickWorkspace() {
 
 openBtn.addEventListener('click', pickWorkspace);
 openBtn2.addEventListener('click', pickWorkspace);
+
+// HTTP-fallback load — for headless/preview-server usage where no user gesture
+// is available to invoke showDirectoryPicker. Synthesizes fileMap entries that
+// fetch from the standalone serve.ps1 HTTP server (routes /urdf/* and /meshes/*
+// are exposed there). Triggered by ?serve=<pkgName> in the URL.
+async function loadFromServer(pkgName) {
+  wsErr.innerHTML = '';
+  const origGet = fileMap.get.bind(fileMap);
+  fileMap.get = (key) => {
+    const direct = origGet(key);
+    if (direct) return direct;
+    // Handle both single-slash ("pkg/meshes/foo") and double-slash ("pkg//meshes/foo")
+    // — URDFLoader concatenates packageBase + relPath which can produce either.
+    const m = String(key).match(/^[^/]*\/+(meshes|urdf|worlds|config|launch)\/(.+)$/);
+    if (!m) return undefined;
+    return {
+      getFile: async () => {
+        const r = await fetch(`/${m[1]}/${m[2]}`);
+        if (!r.ok) throw new Error(`fetch ${r.url} -> ${r.status}`);
+        const b = await r.blob();
+        return new File([b], m[2]);
+      },
+    };
+  };
+  await loadPackage({
+    name: pkgName,
+    root: pkgName,
+    xacro: `${pkgName}/urdf/${pkgName}.urdf.xacro`,
+  });
+}
+window.sw2gzLoadFromServer = loadFromServer;
+const _serveParam = new URLSearchParams(window.location.search).get('serve');
+if (_serveParam) {
+  loadFromServer(_serveParam).catch(e => showError(`Server load failed: ${e.message}`));
+}
