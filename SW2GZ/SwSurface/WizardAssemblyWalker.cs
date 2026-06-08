@@ -68,96 +68,43 @@ namespace SW2GZ.SwSurface
 
         public IReadOnlyList<MateSpec> WalkMates()
         {
-            // Pre-build child-link → first-component lookup so the ref-geometry
-            // path can resolve Component2 by Name2 without re-walking the tree
-            // for every joint.
-            var compByName = new Dictionary<string, Component2>(System.StringComparer.Ordinal);
-            object[] allComps = (object[])_doc.GetComponents(true);
-            if (allComps != null)
-            {
-                foreach (object o in allComps)
-                {
-                    var c = (Component2)o;
-                    if (c.Name2 != null && !compByName.ContainsKey(c.Name2))
-                        compByName[c.Name2] = c;
-                }
-            }
-            var firstCompByLink = new Dictionary<string, Component2>(System.StringComparer.Ordinal);
-            foreach (LinkDef l in _links)
-            {
-                if (l?.ComponentIds == null) continue;
-                foreach (string id in l.ComponentIds)
-                {
-                    if (string.IsNullOrEmpty(id)) continue;
-                    if (compByName.TryGetValue(id, out Component2 comp))
-                    {
-                        firstCompByLink[l.Name] = comp;
-                        break;
-                    }
-                }
-            }
-
-            // childLink → its parent JointDef. Used to look up the parent
-            // joint's RefCsName so a non-root child can be localized against
-            // its parent's reference frame (mirrors upstream LocalizeJoint).
-            var jointByChild = new Dictionary<string, JointDef>(System.StringComparer.Ordinal);
-            foreach (JointDef j in _joints)
-                if (!string.IsNullOrEmpty(j.ChildLink) && !jointByChild.ContainsKey(j.ChildLink))
-                    jointByChild[j.ChildLink] = j;
-
-            var reader = new SwJointPoseReader(_doc);
-
+            // Auto-detect path (D2 of the AutoJointResolver plan). The PMP's
+            // Joints step runs AutoJointResolver once per JointDef and writes
+            // the cylinder axis + origin into AxisX/Y/Z + OriginX/Y/Z. Here
+            // we just translate that cached data into MateSpecs — no more
+            // Reference-CS or Reference-Axis lookups at export time.
+            //
+            // RefCsName / RefAxisName remain on JointDef as DataMembers for
+            // back-compat with older saved Sw2gzDocs, but their values are
+            // ignored on this path.
             var mates = new List<MateSpec>();
             foreach (JointDef j in _joints)
             {
                 var cachedAxis = new Vector3((float)j.AxisX, (float)j.AxisY, (float)j.AxisZ);
-                Vector3? matePt = j.HasMatePoint
-                    ? new Vector3((float)j.MatePointX, (float)j.MatePointY, (float)j.MatePointZ)
-                    : (Vector3?)null;
 
-                Pose origin = Pose.Identity;     // legacy default — pipeline derives from anchors
-                Vector3 axis = cachedAxis;       // legacy axis fallback
+                // Joint origin: prefer the new auto-detect HasOrigin field;
+                // fall back to legacy HasMatePoint for payloads written by
+                // the pre-D2 wizard (so existing saved docs keep working).
+                Vector3? originAsm = null;
+                if (j.HasOrigin)
+                    originAsm = new Vector3((float)j.OriginX, (float)j.OriginY, (float)j.OriginZ);
+                else if (j.HasMatePoint)
+                    originAsm = new Vector3((float)j.MatePointX, (float)j.MatePointY, (float)j.MatePointZ);
 
-                // D3 — Reference-geometry path. Both names required: a Reference
-                // Coordinate System feature on the child component supplies the
-                // joint's parent-frame origin; a Reference Axis feature supplies
-                // the joint axis direction. This is the upstream pattern from
-                // ros/solidworks_urdf_exporter, which the v2.x anchor-derived
-                // path replaced and broke.
-                if (!string.IsNullOrEmpty(j.RefCsName) &&
-                    !string.IsNullOrEmpty(j.RefAxisName) &&
-                    firstCompByLink.TryGetValue(j.ChildLink, out Component2 childComp))
-                {
-                    MathTransform childCs = reader.GetCsTransform(childComp, j.RefCsName);
-                    if (childCs != null)
-                    {
-                        // Parent frame: the parent joint's RefCs on the parent
-                        // component, OR identity for the root link.
-                        Pose parentGlobal = Pose.Identity;
-                        if (jointByChild.TryGetValue(j.ParentLink, out JointDef parentJoint) &&
-                            !string.IsNullOrEmpty(parentJoint.RefCsName) &&
-                            firstCompByLink.TryGetValue(parentJoint.ChildLink, out Component2 parentComp))
-                        {
-                            MathTransform parentCs = reader.GetCsTransform(parentComp, parentJoint.RefCsName);
-                            if (parentCs != null)
-                                parentGlobal = MathTransformPose.FromArrayData(parentCs.ArrayData as double[]);
-                        }
-                        Pose childGlobal = MathTransformPose.FromArrayData(childCs.ArrayData as double[]);
-                        origin = SwJointPoseMath.Localize(parentGlobal, childGlobal);
-                    }
-
-                    if (firstCompByLink.TryGetValue(j.ChildLink, out Component2 axisComp))
-                    {
-                        Vector3? d = reader.GetAxisDirection(axisComp, j.RefAxisName);
-                        if (d.HasValue) axis = d.Value;
-                    }
-                }
-
+                // MateSpec.Origin stays Identity. The assembly-frame mate point
+                // travels on MatePointAssembly and Sw2gzPipeline routes it
+                // through JointOriginResolver.Compute(... , matePoint), which
+                // localizes it into the parent frame (R_parent⁻¹ · (matePoint
+                // − parentAnchor.pos)) and computes the joint rotation from
+                // the parent/child anchor pair. Setting Origin to a non-
+                // identity pose here would make the pipeline's
+                // walkerProvidedOrigin branch fire and emit the raw
+                // assembly-frame point as a parent-frame origin — wrong.
                 mates.Add(new MateSpec(
                     Name:              j.Name,
                     Kind:              ToMateKind(j.Type),
-                    Origin:            origin,
-                    Axis:              axis,
+                    Origin:            Pose.Identity,
+                    Axis:              cachedAxis,
                     LimitLower:        j.LimitLower,
                     LimitUpper:        j.LimitUpper,
                     LimitEffort:       0.0,
@@ -165,7 +112,7 @@ namespace SW2GZ.SwSurface
                     Interface:         UrdfCmdInterface.Position,
                     ParentLink:        j.ParentLink,
                     ChildLink:         j.ChildLink,
-                    MatePointAssembly: matePt));
+                    MatePointAssembly: originAsm));
             }
             return mates.AsReadOnly();
         }

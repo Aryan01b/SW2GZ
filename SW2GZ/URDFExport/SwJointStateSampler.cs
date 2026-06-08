@@ -78,7 +78,7 @@ namespace SW2GZ.URDFExport
                     var c = (Component2)o;
                     if (!byName.TryGetValue(c.Name2, out var list))
                         byName[c.Name2] = list = new List<string>();
-                    list.Add(c.GetPathName());
+                    list.Add(c.Name2);
                 }
             foreach (LinkDef l in links ?? new List<LinkDef>())
             {

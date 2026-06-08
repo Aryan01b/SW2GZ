@@ -34,15 +34,36 @@ namespace SW2GZ.Build.Model
         [DataMember] public double AxisY { get; set; }
         [DataMember] public double AxisZ { get; set; }
 
-        // Reference-geometry path (mirrors upstream solidworks_urdf_exporter):
-        // a Reference Coordinate System feature drives joint origin xyz+rpy,
-        // and a Reference Axis feature drives joint axis direction. Both are
-        // looked up by name on the child component at export time
-        // (Component2.Extension.GetCoordinateSystemTransformByName /
-        //  SelectByID2 "AXIS"). Empty string = unset; the legacy mate-based
-        // path takes over so existing assemblies still export.
+        // LEGACY back-compat fields (D2 of the auto-detect plan deprecates them).
+        // The Joints step no longer exposes Reference-CS / Reference-Axis pickers
+        // and WizardAssemblyWalker.WalkMates() no longer reads these — joints
+        // are now driven by AutoJointResolver-populated OriginXYZ + AxisXYZ.
+        // Kept as DataMembers so older saved Sw2gzDoc payloads still round-trip.
         [DataMember] public string RefCsName { get; set; } = string.Empty;
         [DataMember] public string RefAxisName { get; set; } = string.Empty;
+
+        // Auto-detected joint origin in the ASSEMBLY frame (e.g. a concentric
+        // mate's cylindrical-axis origin). When HasOrigin is true, the wizard
+        // walker emits this as MateSpec.Origin / MatePointAssembly and the
+        // pipeline anchors the URDF joint origin here in the parent frame
+        // (Origin.Position - parentAnchor.Position, rotated by parentAnchor⁻¹).
+        // Defaults to (0, 0, 0) / false so legacy payloads load unchanged.
+        [DataMember] public double OriginX { get; set; }
+        [DataMember] public double OriginY { get; set; }
+        [DataMember] public double OriginZ { get; set; }
+        [DataMember] public bool HasOrigin { get; set; }
+
+        public void SetOrigin(System.Numerics.Vector3 p)
+        {
+            OriginX = p.X; OriginY = p.Y; OriginZ = p.Z;
+            HasOrigin = true;
+        }
+
+        public void ClearOrigin()
+        {
+            OriginX = 0; OriginY = 0; OriginZ = 0;
+            HasOrigin = false;
+        }
 
         [DataMember] public double? LimitLower { get; set; }
         [DataMember] public double? LimitUpper { get; set; }

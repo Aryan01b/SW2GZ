@@ -104,15 +104,18 @@ namespace SW2GZ.SwSurface
         internal void Seed(string path, MassProps props) => _cache[path] = props;
 
 #if SW_INTEROP
-        // Depth-first search through Component2 tree by GetPathName().
-        // Internal so SolidWorksMeshTessellator can reuse it without duplication.
+        // Depth-first search through Component2 tree by Name2 (instance-unique).
+        // Targets are Component2.Name2 values (e.g. "link1-1@asm") — instance-
+        // unique, unlike GetPathName() which is a part-file path shared across
+        // every instance of the same part. Internal so SolidWorksMeshTessellator
+        // can reuse it without duplication.
         internal static Component2 FindComponent(object[] topLevel, string targetPath)
         {
             if (topLevel == null) return null;
             foreach (object obj in topLevel)
             {
                 Component2 comp = (Component2)obj;
-                if (string.Equals(comp.GetPathName(), targetPath,
+                if (string.Equals(comp.Name2, targetPath,
                         StringComparison.OrdinalIgnoreCase))
                     return comp;
 
