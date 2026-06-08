@@ -179,13 +179,20 @@ namespace SW2GZ.URDFExport
                 // Build real convex hull (QuickHull) collision mesh from the visual mesh.
                 MeshData collision = ConvexHullCollider.Build(visual, ColliderStrategy.ConvexHull);
 
-                // Aggregate mass over all flattened parts at identity pose (v2.0 limitation —
-                // inter-part transforms deferred to v2.1).
+                // Aggregate mass over all flattened parts at the link anchor
+                // (assembly-frame pose of the link's first part). The Combine
+                // call yields COM + inertia in assembly coords; the overload
+                // then rebases both into the LINK-local frame for the URDF
+                // <inertial> block. For single-part links this round-trips
+                // back to the part-local COM and inertia (anchor cancels).
+                // Multi-part links: the per-part inter-frame is still
+                // unresolved (deferred to a follow-up walker change), but at
+                // least the link-frame rebase is now applied consistently.
                 var partsForAgg = new List<(MassProps, Pose)>(spec.FlattenedPartPaths.Count);
                 foreach (string partPath in spec.FlattenedPartPaths)
-                    partsForAgg.Add((massCache[partPath], Pose.Identity));
+                    partsForAgg.Add((massCache[partPath], anchor));
 
-                MassProps agg = InertialAggregator.Combine(partsForAgg);
+                MassProps agg = InertialAggregator.Combine(partsForAgg, anchor);
 
                 UrdfLink link = LinkBuilder.Build(spec.Name, agg, visual, collision);
                 links.Add(link);
