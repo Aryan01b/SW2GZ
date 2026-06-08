@@ -34,6 +34,16 @@ namespace SW2GZ.Build.Model
         [DataMember] public double AxisY { get; set; }
         [DataMember] public double AxisZ { get; set; }
 
+        // Reference-geometry path (mirrors upstream solidworks_urdf_exporter):
+        // a Reference Coordinate System feature drives joint origin xyz+rpy,
+        // and a Reference Axis feature drives joint axis direction. Both are
+        // looked up by name on the child component at export time
+        // (Component2.Extension.GetCoordinateSystemTransformByName /
+        //  SelectByID2 "AXIS"). Empty string = unset; the legacy mate-based
+        // path takes over so existing assemblies still export.
+        [DataMember] public string RefCsName { get; set; } = string.Empty;
+        [DataMember] public string RefAxisName { get; set; } = string.Empty;
+
         [DataMember] public double? LimitLower { get; set; }
         [DataMember] public double? LimitUpper { get; set; }
 
@@ -70,6 +80,20 @@ namespace SW2GZ.Build.Model
             float len = dir.Length();
             if (len > 1e-9f) { dir /= len; }
             AxisX = dir.X; AxisY = dir.Y; AxisZ = dir.Z;
+        }
+
+        // DataContractSerializer leaves missing string members as null. Legacy
+        // checkpoints predate RefCsName / RefAxisName, so coerce nulls to ""
+        // post-deserialization to keep downstream consumers single-pathed.
+        [OnDeserialized]
+        internal void OnDeserializedHook(StreamingContext _)
+        {
+            if (Name        == null) Name        = string.Empty;
+            if (ParentLink  == null) ParentLink  = string.Empty;
+            if (ChildLink   == null) ChildLink   = string.Empty;
+            if (MateName    == null) MateName    = string.Empty;
+            if (RefCsName   == null) RefCsName   = string.Empty;
+            if (RefAxisName == null) RefAxisName = string.Empty;
         }
     }
 }
