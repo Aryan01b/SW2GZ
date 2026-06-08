@@ -528,6 +528,7 @@
     <Compile Include="SwSurface\SwRefGeometryEnumerator.cs" />
     <Compile Include="SwSurface\AutoJointResolved.cs" />
     <Compile Include="SwSurface\AutoJointResolver.cs" />
+    <Compile Include="SwSurface\SwRefAxisCreator.cs" />
     <Compile Include="URDFExport\Sw2gzModelExporter.cs" />
     <Compile Include="URDFExport\Sw2gzModelPreviewer.cs" />
     <Compile Include="URDFExport\PreviewServer.cs" />

@@ -764,6 +764,24 @@ namespace SW2GZ.UI.Pmp
                     // Keep legacy MatePoint in sync so code paths that still
                     // read HasMatePoint see the same point.
                     j.SetMatePoint(o);
+
+                    // Create a visible SolidWorks Reference Axis feature in
+                    // the FeatureManager tree so the user sees the joint
+                    // axis as a real SW feature, not just hidden numbers in
+                    // the wizard. Failure is non-fatal — the JointDef-side
+                    // axis numbers above are already populated.
+                    try
+                    {
+                        var creator = new SwRefAxisCreator(_modelDoc);
+                        string axisName = creator.CreateFromMate(
+                            j.MateName, j.Name, p.ComponentIds, c.ComponentIds);
+                        if (!string.IsNullOrEmpty(axisName))
+                            j.RefAxisName = axisName;
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Warn("Reference axis creation failed for joint " + j.Name, ex);
+                    }
                 }
                 else
                 {
