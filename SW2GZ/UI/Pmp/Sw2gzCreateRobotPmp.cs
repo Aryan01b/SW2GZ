@@ -79,6 +79,7 @@ namespace SW2GZ.UI.Pmp
         private const int LabelJointInstrID    = StepIdBase + 1 * 20 + 2;
         private const int JointBarHandleID     = StepIdBase + 1 * 20 + 3;
         private const int ListJointsID         = StepIdBase + 1 * 20 + 4;
+        private const int LabelMatesCapID      = StepIdBase + 1 * 20 + 5;
         private const int LabelDetailCapID     = StepIdBase + 1 * 20 + 6;
         private const int LabelDetailLinksID   = StepIdBase + 1 * 20 + 7;
         private const int LabelDetailMateID    = StepIdBase + 1 * 20 + 8;
@@ -86,6 +87,7 @@ namespace SW2GZ.UI.Pmp
         private const int LabelDetailLimitsID  = StepIdBase + 1 * 20 + 10;
         private const int LabelDetailFrameSwID  = StepIdBase + 1 * 20 + 11;
         private const int LabelDetailFrameRosID = StepIdBase + 1 * 20 + 12;
+        private const int ListMatesID          = StepIdBase + 1 * 20 + 13;
 
         private const int LabelReviewInstrID     = StepIdBase + 2 * 20 + 2;
         private const int LabelReviewModeID      = StepIdBase + 2 * 20 + 3;
@@ -120,6 +122,8 @@ namespace SW2GZ.UI.Pmp
         private readonly List<string> _allComponentIds = new List<string>();
 
         private PropertyManagerPageListbox _jointsListBox;
+        private PropertyManagerPageListbox _matesListBox;
+        private PropertyManagerPageLabel _matesCap;
         private PropertyManagerPageLabel _detailLinks;
         private PropertyManagerPageLabel _detailMate;
         private PropertyManagerPageLabel _detailType;
@@ -127,14 +131,16 @@ namespace SW2GZ.UI.Pmp
         private PropertyManagerPageLabel _detailFrameSw;
         private PropertyManagerPageLabel _detailFrameRos;
         private int _activeJointIndex = -1;
+        private int _activeMateIndex = -1;
+        private List<string> _activeMateNames = new List<string>();
 
-        // D3 — Re-detect bar (WinForms-embedded, dark theme) above the joints
-        // listbox. Click runs the EnterJointsStep auto-detect loop again so
-        // the user can edit mates in SolidWorks, click here, and see the
-        // recomputed type/axis/origin in the detail labels below.
+        // Apply-mate button bar (WinForms-embedded, dark theme). Sits between
+        // the mates listbox and the detail labels. Click runs
+        // AutoJointResolver.ResolveFromMateName against the selected mate
+        // for the currently active joint, then UpdateJointDetails.
         private PropertyManagerPageWindowFromHandle _jointBarHandle;
         private System.Windows.Forms.Panel _jointBtnBar;
-        private System.Windows.Forms.Button _redetectBtn;
+        private System.Windows.Forms.Button _applyMateBtn;
 
         private PropertyManagerPageLabel _reviewMode;
         private PropertyManagerPageLabel _reviewLinksCap;
@@ -601,35 +607,45 @@ namespace SW2GZ.UI.Pmp
             int labelOpts = (int)swAddControlOptions_e.swControlOptions_Visible;
 
             AddFieldLabel(group, LabelJointInstrID,
-                "Joints come from the link tree — auto-detected from assembly mates. " +
-                "Click Re-detect after editing mates.",
+                "Pick a joint, pick the mate that defines it, click Apply mate. " +
+                "The mate's cylindrical face becomes the joint axis + origin.",
                 leftEdge, labelOpts);
-
-            // D3 — WinForms Re-detect button bar (dark-theme, embedded). Sits
-            // ABOVE the joints listbox so the user can replay auto-detect
-            // after editing mates in SolidWorks without leaving the wizard.
-            // Must be added BEFORE the listbox: SW PMP drops controls added
-            // after a WindowFromHandle in the same group.
-            BuildJointButtonBar();
-            _jointBarHandle = (PropertyManagerPageWindowFromHandle)group.AddControl2(
-                JointBarHandleID,
-                (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
-                "", (short)leftEdge, visibleEnabled, "Re-run auto-detect against the current MateGroup");
-            _jointBarHandle.Height = 34;
-            _jointBarHandle.SetWindowHandlex64(_jointBtnBar.Handle.ToInt64());
 
             _jointsListBox = (PropertyManagerPageListbox)group.AddControl2(
                 ListJointsID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
                 "", (short)leftEdge, visibleEnabled, "Joints (from the link tree) — select one");
-            ((IPropertyManagerPageListbox)_jointsListBox).Height = 110;
+            ((IPropertyManagerPageListbox)_jointsListBox).Height = 96;
+
+            _matesCap = AddFieldLabel(group, LabelMatesCapID,
+                "— Mates between parent and child —", leftEdge, labelOpts);
+
+            _matesListBox = (PropertyManagerPageListbox)group.AddControl2(
+                ListMatesID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
+                "", (short)leftEdge, visibleEnabled, "Mates spanning the active joint's parent and child — pick one and click Apply mate");
+            ((IPropertyManagerPageListbox)_matesListBox).Height = 80;
+
+            // Apply-mate button bar — WinForms-embedded (dark theme). Must be
+            // added AFTER the listboxes but BEFORE the trailing detail labels:
+            // SW PMP drops controls added after a WindowFromHandle in the same
+            // group, so any labels after the bar still render fine — they're
+            // added below.
+            BuildJointButtonBar();
+            _jointBarHandle = (PropertyManagerPageWindowFromHandle)group.AddControl2(
+                JointBarHandleID,
+                (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
+                "", (short)leftEdge, visibleEnabled,
+                "Apply the selected mate's geometry to the active joint");
+            _jointBarHandle.Height = 34;
+            _jointBarHandle.SetWindowHandlex64(_jointBtnBar.Handle.ToInt64());
 
             AddFieldLabel(group, LabelDetailCapID, "— Selected joint —", leftEdge, labelOpts);
             _detailLinks  = AddFieldLabel(group, LabelDetailLinksID, "", leftEdge, labelOpts);
             _detailMate   = AddFieldLabel(group, LabelDetailMateID, "", leftEdge, labelOpts);
             _detailType   = AddFieldLabel(group, LabelDetailTypeID, "", leftEdge, labelOpts);
             _detailLimits = AddFieldLabel(group, LabelDetailLimitsID, "", leftEdge, labelOpts);
-            // D2 — side-by-side SW and ROS frame readout for the active joint's
+            // Side-by-side SW and ROS frame readout for the active joint's
             // axis + origin. ROS row applies the SwToRosRotation matrix built
             // from the export config's (up, forward) — defaults to +Y up / +Z
             // forward (the stock SW template convention).
@@ -640,78 +656,132 @@ namespace SW2GZ.UI.Pmp
         private void BuildJointButtonBar()
         {
             _jointBtnBar = NewBar(260, 32);
-            _redetectBtn = NewBarButton("Re-detect", 110);
-            _redetectBtn.Click += (s, e) =>
+            _applyMateBtn = NewBarButton("Apply mate", 110);
+            _applyMateBtn.Click += (s, e) =>
             {
-                try { RedetectAllJoints(); UpdateJointDetails(); }
-                catch (Exception ex) { logger.Error("Re-detect click threw", ex); }
+                try { ApplySelectedMate(); }
+                catch (Exception ex) { logger.Error("Apply mate click threw", ex); }
             };
-            _jointBtnBar.Controls.Add(_redetectBtn);
-            _jointBtnBar.Resize += (s, e) => CenterRow(_jointBtnBar, _redetectBtn);
-            CenterRow(_jointBtnBar, _redetectBtn);
+            _jointBtnBar.Controls.Add(_applyMateBtn);
+            _jointBtnBar.Resize += (s, e) => CenterRow(_jointBtnBar, _applyMateBtn);
+            CenterRow(_jointBtnBar, _applyMateBtn);
         }
 
         private void EnterJointsStep()
         {
+            // Seed JointDef[] from the link-edge graph but DO NOT auto-detect
+            // mates — the user picks each joint's mate explicitly via the
+            // mates listbox + Apply-mate button below.
             Robot.Joints = JointSeeder.Sync(Robot.Links, Robot.Joints);
-            RedetectAllJoints();
             if (_activeJointIndex < 0 && Robot.Joints.Count > 0) _activeJointIndex = 0;
             PopulateJointList();
+            RepopulateMatesForActiveJoint();
         }
 
-        // D2/D3 — auto-detect the mate / joint type / axis / origin for every
-        // JointDef from the SW assembly's MateGroup. Called once on entry
-        // into the Joints step and again whenever the user clicks "Re-detect"
-        // after editing mates in SolidWorks. JointSeeder.Sync handles the
-        // link-edge graph; this fills in the geometric joint state.
-        private void RedetectAllJoints()
+        // Populate _matesListBox with the mates spanning the active joint's
+        // parent and child links. Pre-selects the JointDef.MateName if it's
+        // still in the list (so a previously-assigned mate stays visible on
+        // wizard reopen).
+        private void RepopulateMatesForActiveJoint()
         {
-            if (Robot.Joints == null || Robot.Joints.Count == 0) return;
+            _activeMateNames = new List<string>();
+            _activeMateIndex = -1;
+            if (_matesListBox == null) return;
+            _matesListBox.Clear();
+
+            JointDef j = ActiveJoint();
+            if (j == null) return;
+            LinkDef p = Robot.Links?.FirstOrDefault(l => l.Name == j.ParentLink);
+            LinkDef c = Robot.Links?.FirstOrDefault(l => l.Name == j.ChildLink);
+            if (p == null || c == null) return;
+
             AutoJointResolver resolver;
             try { resolver = new AutoJointResolver((AssemblyDoc)_modelDoc); }
             catch (Exception e) { logger.Warn("AutoJointResolver init failed", e); return; }
 
-            foreach (JointDef j in Robot.Joints)
+            IReadOnlyList<string> mates;
+            try { mates = resolver.ListMateNamesBetween(p.ComponentIds, c.ComponentIds); }
+            catch (Exception e)
             {
-                LinkDef p = Robot.Links?.FirstOrDefault(l => l.Name == j.ParentLink);
-                LinkDef c = Robot.Links?.FirstOrDefault(l => l.Name == j.ChildLink);
-                if (p == null || c == null) continue;
+                logger.Warn("ListMateNamesBetween threw for " + j.Name, e);
+                mates = new List<string>();
+            }
 
-                AutoJointResolver.Resolved r;
-                try { r = resolver.Resolve(p.ComponentIds, c.ComponentIds); }
-                catch (Exception e) { logger.Warn("AutoJointResolver.Resolve threw for " + j.Name, e); continue; }
+            foreach (string m in mates)
+            {
+                _activeMateNames.Add(m);
+                _matesListBox.AddItems(m);
+            }
 
-                if (r != null && r.Found)
+            if (_activeMateNames.Count > 0)
+            {
+                int preIdx = !string.IsNullOrEmpty(j.MateName)
+                    ? _activeMateNames.IndexOf(j.MateName) : -1;
+                _activeMateIndex = preIdx >= 0 ? preIdx : 0;
+                _matesListBox.CurrentSelection = (short)_activeMateIndex;
+            }
+        }
+
+        // Click handler for the Apply-mate button. Reads the selected mate
+        // name out of _activeMateNames, runs AutoJointResolver.ResolveFromMateName
+        // for the active joint's (parent, child) pair, and writes the resulting
+        // type / axis / origin / limits onto the JointDef. Demotes to Fixed
+        // when the cylinder extract fails (existing safety net inherited from
+        // TryResolveMate).
+        private void ApplySelectedMate()
+        {
+            JointDef j = ActiveJoint();
+            if (j == null) return;
+            if (_activeMateIndex < 0 || _activeMateIndex >= _activeMateNames.Count) return;
+            string mateName = _activeMateNames[_activeMateIndex];
+
+            LinkDef p = Robot.Links?.FirstOrDefault(l => l.Name == j.ParentLink);
+            LinkDef c = Robot.Links?.FirstOrDefault(l => l.Name == j.ChildLink);
+            if (p == null || c == null) return;
+
+            AutoJointResolver resolver;
+            try { resolver = new AutoJointResolver((AssemblyDoc)_modelDoc); }
+            catch (Exception e) { logger.Warn("AutoJointResolver init failed", e); return; }
+
+            AutoJointResolver.Resolved r;
+            try { r = resolver.ResolveFromMateName(mateName, p.ComponentIds, c.ComponentIds); }
+            catch (Exception e)
+            {
+                logger.Warn("ResolveFromMateName threw for " + j.Name + " / " + mateName, e);
+                return;
+            }
+
+            if (r != null && r.Found)
+            {
+                j.Type       = MapMateKindToJointType(r.Kind);
+                j.MateName   = r.MateName;
+                j.SetAxis(r.AxisAssembly);
+                j.LimitLower = r.LimitLower;
+                j.LimitUpper = r.LimitUpper;
+                if (r.OriginAssembly is Vector3 o)
                 {
-                    j.Type       = MapMateKindToJointType(r.Kind);
-                    j.MateName   = r.MateName;
-                    j.SetAxis(r.AxisAssembly);
-                    j.LimitLower = r.LimitLower;
-                    j.LimitUpper = r.LimitUpper;
-                    if (r.OriginAssembly is Vector3 o)
-                    {
-                        j.SetOrigin(o);
-                        // Keep legacy MatePoint in sync so any code path that
-                        // still reads HasMatePoint sees the same point.
-                        j.SetMatePoint(o);
-                    }
-                    else
-                    {
-                        j.ClearOrigin();
-                        j.ClearMatePoint();
-                    }
+                    j.SetOrigin(o);
+                    // Keep legacy MatePoint in sync so code paths that still
+                    // read HasMatePoint see the same point.
+                    j.SetMatePoint(o);
                 }
                 else
                 {
-                    j.Type     = UrdfJointType.Fixed;
-                    j.MateName = string.Empty;
-                    j.SetAxis(Vector3.Zero);
-                    j.LimitLower = null;
-                    j.LimitUpper = null;
                     j.ClearOrigin();
                     j.ClearMatePoint();
                 }
             }
+            else
+            {
+                // Selected mate didn't classify (didn't span the pair, etc.).
+                // Leave the JointDef alone except for the recorded mate name,
+                // so the user can see what they tried.
+                j.MateName = mateName;
+            }
+
+            // Refresh the joints listbox row caption (it shows mate name) and
+            // the detail labels.
+            PopulateJointList();
             UpdateJointDetails();
         }
 
@@ -812,10 +882,10 @@ namespace SW2GZ.UI.Pmp
             }
             else
             {
-                if (_detailMate != null) _detailMate.Caption = "NOT DETECTED";
+                if (_detailMate != null) _detailMate.Caption = "NOT ASSIGNED";
                 if (_detailLimits != null)
                     _detailLimits.Caption =
-                        "Add a concentric mate between the parent's and child's components, then click Re-detect.";
+                        "Pick a mate from the list above and click Apply mate.";
                 if (_detailFrameSw  != null) _detailFrameSw.Caption  = "";
                 if (_detailFrameRos != null) _detailFrameRos.Caption = "";
             }
@@ -1001,7 +1071,16 @@ namespace SW2GZ.UI.Pmp
 
         void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item)
         {
-            if (Id == ListJointsID) { _activeJointIndex = Item; UpdateJointDetails(); }
+            if (Id == ListJointsID)
+            {
+                _activeJointIndex = Item;
+                RepopulateMatesForActiveJoint();
+                UpdateJointDetails();
+            }
+            else if (Id == ListMatesID)
+            {
+                _activeMateIndex = Item;
+            }
         }
 
         void IPropertyManagerPage2Handler9.OnGainedFocus(int Id) { }
