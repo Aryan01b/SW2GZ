@@ -59,10 +59,9 @@ namespace SW2GZ.UI.Pmp
 
         private Sw2gzRobotConfig Robot => _liveDoc.Robot;
 
-        private const int HeaderGroupID = 1;
-        private const int HeaderLabelID = 2;
-        private const int ButtonBackID  = 4;
-        private const int ButtonNextID  = 5;
+        private const int HeaderGroupID  = 1;
+        private const int HeaderLabelID  = 2;
+        private const int NavBarHandleID = 3;
 
         private const int StepIdBase = 100;
         private int StepGroupId(int step) => StepIdBase + step * 20;
@@ -102,8 +101,10 @@ namespace SW2GZ.UI.Pmp
 
         private PropertyManagerPageLabel _hdrLabel;
         private PropertyManagerPageGroup[] _stepGroups;
-        private PropertyManagerPageButton _backBtn;
-        private PropertyManagerPageButton _nextBtn;
+        private PropertyManagerPageWindowFromHandle _navHandle;
+        private System.Windows.Forms.Panel _navBar;
+        private System.Windows.Forms.Button _backBtn;
+        private System.Windows.Forms.Button _nextBtn;
 
         private PropertyManagerPageWindowFromHandle _treeHandle;
         private PropertyManagerPageWindowFromHandle _btnBarHandle;
@@ -206,18 +207,15 @@ namespace SW2GZ.UI.Pmp
                 HeaderLabelID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Label,
                 "", (short)leftEdge, visibleEnabled, "");
-            // Nav buttons live in the Progress group — no separate "Navigation"
-            // panel. ◀ is purely symbolic; ▶ flips to "Finish" on the last step.
-            _backBtn = (PropertyManagerPageButton)header.AddControl2(
-                ButtonBackID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "◀", 0, visibleEnabled, "Previous step");
-            ((IPropertyManagerPageControl)_backBtn).Width = 40;
-            _nextBtn = (PropertyManagerPageButton)header.AddControl2(
-                ButtonNextID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "▶", 0, visibleEnabled, "Next step");
-            ((IPropertyManagerPageControl)_nextBtn).Width = 40;
+            // Nav bar — WinForms (PMP can't lay out horizontally). Embedded as
+            // a WindowFromHandle so the two buttons sit on one row, centered.
+            BuildNavBar();
+            _navHandle = (PropertyManagerPageWindowFromHandle)header.AddControl2(
+                NavBarHandleID,
+                (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
+                "", (short)leftEdge, visibleEnabled, "Step navigation");
+            _navHandle.Height = 34;
+            _navHandle.SetWindowHandlex64(_navBar.Handle.ToInt64());
 
             _stepGroups = new PropertyManagerPageGroup[StepCount];
             for (int step = 0; step < StepCount; step++)
@@ -393,26 +391,66 @@ namespace SW2GZ.UI.Pmp
             UpdateValidationLabel();
         }
 
+        // SW PMP's WindowFromHandle hosts a WinForms control on a white
+        // (SystemColors.Window) surface — same as PMP's textboxes / tree. Match
+        // that so the embedded bar blends instead of showing a Control-gray
+        // band around the buttons.
+        private static System.Windows.Forms.Panel NewBar(int width, int height)
+        {
+            return new System.Windows.Forms.Panel
+            {
+                Width = width,
+                Height = height,
+                BackColor = System.Drawing.SystemColors.Window,
+            };
+        }
+
+        private static System.Windows.Forms.Button NewBarButton(string text, int width)
+        {
+            return new System.Windows.Forms.Button
+            {
+                Text = text,
+                Width = width,
+                Height = 26,
+                Top = 3,
+                FlatStyle = System.Windows.Forms.FlatStyle.Standard,
+                UseVisualStyleBackColor = true,
+            };
+        }
+
+        private static void CenterRow(System.Windows.Forms.Panel bar, params System.Windows.Forms.Button[] btns)
+        {
+            const int gap = 8;
+            int total = -gap;
+            foreach (var b in btns) total += b.Width + gap;
+            int x = System.Math.Max(0, (bar.Width - total) / 2);
+            foreach (var b in btns) { b.Left = x; x += b.Width + gap; }
+        }
+
         private void BuildLinkButtonBar()
         {
-            _linkBtnBar = new System.Windows.Forms.Panel { Height = 32, Width = 260 };
-            _addLinkBtn    = new System.Windows.Forms.Button { Text = "Add link",    Width = 90, Height = 26, Top = 3 };
-            _removeLinkBtn = new System.Windows.Forms.Button { Text = "Remove link", Width = 90, Height = 26, Top = 3 };
+            _linkBtnBar    = NewBar(260, 32);
+            _addLinkBtn    = NewBarButton("Add link",    90);
+            _removeLinkBtn = NewBarButton("Remove link", 90);
             _addLinkBtn.Click    += (s, e) => AddLink();
             _removeLinkBtn.Click += (s, e) => RemoveLink();
             _linkBtnBar.Controls.Add(_addLinkBtn);
             _linkBtnBar.Controls.Add(_removeLinkBtn);
-            _linkBtnBar.Resize += (s, e) => CenterLinkButtons();
-            CenterLinkButtons();
+            _linkBtnBar.Resize += (s, e) => CenterRow(_linkBtnBar, _addLinkBtn, _removeLinkBtn);
+            CenterRow(_linkBtnBar, _addLinkBtn, _removeLinkBtn);
         }
 
-        private void CenterLinkButtons()
+        private void BuildNavBar()
         {
-            const int gap = 8;
-            int total = _addLinkBtn.Width + gap + _removeLinkBtn.Width;
-            int x = System.Math.Max(0, (_linkBtnBar.Width - total) / 2);
-            _addLinkBtn.Left    = x;
-            _removeLinkBtn.Left = x + _addLinkBtn.Width + gap;
+            _navBar  = NewBar(260, 32);
+            _backBtn = NewBarButton("◀", 50);
+            _nextBtn = NewBarButton("▶", 50);
+            _backBtn.Click += (s, e) => GoBack();
+            _nextBtn.Click += (s, e) => GoNext();
+            _navBar.Controls.Add(_backBtn);
+            _navBar.Controls.Add(_nextBtn);
+            _navBar.Resize += (s, e) => CenterRow(_navBar, _backBtn, _nextBtn);
+            CenterRow(_navBar, _backBtn, _nextBtn);
         }
 
         private void OnFunnelChanged()
@@ -883,14 +921,9 @@ namespace SW2GZ.UI.Pmp
             _hdrLabel.Caption = "Step " + (_currentStep + 1) + " of " + StepCount +
                                 " — " + StepNames[_currentStep];
 
-            ((IPropertyManagerPageControl)_backBtn).Enabled = _currentStep > 0;
-            // DEFENSIVE: explicitly re-enable Next on every step show. Without
-            // this, an SW SDK first-show race occasionally left _nextBtn in a
-            // disabled state on a freshly opened wizard, producing the
-            // "first time Joints Next doesn't work, reopen fixes it" bug.
-            try { ((IPropertyManagerPageControl)_nextBtn).Enabled = true; }
-            catch (Exception ex) { logger.Warn("ShowStep: re-enable _nextBtn failed", ex); }
-            _nextBtn.Caption = (_currentStep == StepCount - 1) ? "Finish" : "▶";
+            _backBtn.Enabled = _currentStep > 0;
+            _nextBtn.Enabled = true;
+            _nextBtn.Text = (_currentStep == StepCount - 1) ? "Finish" : "▶";
 
             logger.Info("Sw2gzCreateRobotPmp.ShowStep -> step=" + _currentStep +
                         " (" + StepNames[_currentStep] + ")");
@@ -940,13 +973,10 @@ namespace SW2GZ.UI.Pmp
             // it's being swallowed by SW upstream (focus on a listbox etc.).
             logger.Info("Sw2gzCreateRobotPmp.OnButtonPress id=" + Id +
                         " step=" + _currentStep);
+            // All buttons (nav + add/remove) are WinForms-embedded — they fire
+            // via Click handlers directly. Nothing to dispatch from PMP.
             try
             {
-                switch (Id)
-                {
-                    case ButtonBackID: GoBack(); break;
-                    case ButtonNextID: GoNext(); break;
-                }
             }
             catch (Exception e)
             {
