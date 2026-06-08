@@ -126,7 +126,7 @@ namespace SW2GZ.UI.Ribbon
 
             // Common cluster — Coord button removed in v2.1.0 (advanced coord
             // convention moved into the Create wizard).
-            AddItem(grp, RibbonCommandIds.PreviewPmp, "Preview", "Browser-based 3D preview",  "OpenPreviewPmp", "AssemblyEnable", IMG_PREVIEW, toolbar);
+            AddItem(grp, RibbonCommandIds.PreviewPmp, "Preview", "Browser-based 3D preview",  "OpenPreviewPmp", "PreviewEnable",  IMG_PREVIEW, toolbar);
             AddItem(grp, RibbonCommandIds.ExportPmp,  "Export",  "Export ROS 2 / Gz package", "OpenExportPmp",  "ExportEnable",   IMG_EXPORT,  toolbar);
 
             // Robot cluster — Links/Joints moved into the Create-Robot wizard PMP.

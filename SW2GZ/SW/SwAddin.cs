@@ -663,6 +663,24 @@ namespace SW2GZ.SW
         // ─── Per-cluster enable callbacks ─────────────────────────────
         public int AssemblyEnable() => WizardEnable();   // reuse the existing asm-only gate
 
+        // Preview-specific gate: enabled only when an assembly is active AND
+        // the Robot subtree has at least one link with components assigned and
+        // at least one auto-detected joint (HasOrigin). Greys Preview until the
+        // user has actually configured something worth previewing — clicking
+        // an empty Robot would otherwise spin up the browser preview against
+        // a header-only URDF.
+        public int PreviewEnable()
+        {
+            try
+            {
+                if (AssemblyEnable() == 0) return 0;
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
+                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                return SW2GZ.UI.Ribbon.ClusterVisibility.IsRobotReady(doc?.Robot) ? 1 : 0;
+            }
+            catch (Exception e) { logger.Warn("PreviewEnable failed", e); return 0; }
+        }
+
         // Export-specific gate: enabled only when an assembly is active AND
         // a "SW2GZ Doc (v1)" attribute has been saved (i.e. the user has run
         // a Create wizard at least once). Mirrors the pill-lock idiom so

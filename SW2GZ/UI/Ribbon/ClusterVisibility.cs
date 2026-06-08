@@ -8,7 +8,12 @@ appears.
 
 Used by SwAddin's per-cluster OnEnableCallback returning 1 (visible) or 0
 (hidden).
+
+Also hosts the Robot-subtree readiness predicate consumed by the Preview ribbon
+button's enable callback — gates Preview until the user has actually assigned
+components to a link and auto-detected at least one joint.
 */
+using System.Linq;
 using SW2GZ.URDFExport;
 
 namespace SW2GZ.UI.Ribbon
@@ -27,6 +32,21 @@ namespace SW2GZ.UI.Ribbon
                 case RibbonCluster.Asset: return mode == Sw2gzMode.Asset;
                 default:                  return false;
             }
+        }
+
+        /// True iff the Robot subtree has enough content for Preview to render
+        /// something meaningful: at least one LinkDef with components assigned
+        /// AND at least one JointDef whose auto-detect succeeded (HasOrigin).
+        /// Pure / null-safe so the SW addin's command-enable callback can call
+        /// it on every UI tick without throwing.
+        public static bool IsRobotReady(Sw2gzRobotConfig robot)
+        {
+            if (robot == null) return false;
+            bool hasLink = robot.Links != null
+                && robot.Links.Any(l => l.ComponentIds != null && l.ComponentIds.Count > 0);
+            bool hasJoint = robot.Joints != null
+                && robot.Joints.Any(j => j.HasOrigin);
+            return hasLink && hasJoint;
         }
     }
 }
