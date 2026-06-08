@@ -206,10 +206,15 @@ namespace SW2GZ.URDFExport
             // child frame). Axis = assembly-frame axis re-expressed in child
             // (= joint) frame. Identity anchors → joint emerges byte-identical
             // to JointGraphBuilder's output for back-compat with tests.
+            //
+            // We capture the assembly-frame axis BEFORE re-expression so the
+            // pose dump can show both vectors side by side.
+            var jointAxesAssembly = new Dictionary<string, System.Numerics.Vector3>(graphJoints.Count);
             foreach (UrdfJoint j in graphJoints)
             {
                 Pose pA = linkAnchors.TryGetValue(j.ParentLink, out Pose pp) ? pp : Pose.Identity;
                 Pose cA = linkAnchors.TryGetValue(j.ChildLink,  out Pose cc) ? cc : Pose.Identity;
+                jointAxesAssembly[j.Name] = j.Axis;
                 JointOriginResolver.Resolved r = JointOriginResolver.Compute(pA, cA, j.Axis);
                 joints.Add(j with { Origin = r.Origin, Axis = r.AxisInJointFrame });
             }
@@ -453,6 +458,24 @@ namespace SW2GZ.URDFExport
                 {
                     System.Diagnostics.Debug.WriteLine(
                         "sw2gz_export.log write failed: " + logEx.Message);
+                }
+
+                // ── Step 7.5: Pose dump for diagnostics ───────────────────────────
+                // Captures the link-anchor poses, joint origins, axis-pre/post
+                // re-expression, and the raw Transform2.ArrayData for each link's
+                // first part. Lets the next bug report attach a single text file
+                // instead of re-running the export under a debugger. Best-effort.
+                try
+                {
+                    IComponentRawTransformSource rawSource = _walker as IComponentRawTransformSource;
+                    PoseDumpWriter.Write(
+                        Path.Combine(writeBaseDir, "sw2gz_pose_dump.dbg.txt"),
+                        pkg, specs, linkAnchors, joints, jointAxesAssembly, rawSource);
+                }
+                catch (Exception dumpEx)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        "sw2gz_pose_dump.dbg.txt write failed: " + dumpEx.Message);
                 }
 
                 // ── Step 8: Re-export swap (only when prior workspace existed) ────

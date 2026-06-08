@@ -26,7 +26,7 @@ using SolidWorks.Interop.swconst;
 
 namespace SW2GZ.SwSurface
 {
-    public sealed class WizardAssemblyWalker : IAssemblyWalker, IComponentPoseSource
+    public sealed class WizardAssemblyWalker : IAssemblyWalker, IComponentPoseSource, IComponentRawTransformSource
     {
         private readonly AssemblyDoc _doc;
         private readonly IReadOnlyList<LinkDef> _links;
@@ -151,6 +151,25 @@ namespace SW2GZ.SwSurface
             return new Pose(translation, Quaternion.Normalize(new Quaternion(qx, qy, qz, qw)));
         }
 
+        // IComponentRawTransformSource — returns the verbatim 16 doubles SW
+        // hands back from Component2.Transform2.ArrayData. Used by the
+        // PoseDumpWriter diagnostic so the column-major vs row-major
+        // interpretation can be inspected against live values without
+        // changing the production pose-extraction path. Returns null when
+        // the part is unknown.
+        public double[] GetComponentRawTransform(string partPath)
+        {
+            if (string.IsNullOrEmpty(partPath)) return null;
+            object[] comps = (object[])_doc.GetComponents(false);
+            Component2 comp = SolidWorksMassProperties.FindComponent(comps, partPath);
+            if (comp == null) return null;
+            MathTransform xform = comp.Transform2;
+            if (!(xform?.ArrayData is double[] d)) return null;
+            var copy = new double[d.Length];
+            System.Array.Copy(d, copy, d.Length);
+            return copy;
+        }
+
         private static MateKind ToMateKind(UrdfJointType t)
         {
             switch (t)
@@ -164,8 +183,13 @@ namespace SW2GZ.SwSurface
             }
         }
 
-        // Recursively collect leaf-component part-doc paths (mirrors the assembly
-        // walker): a leaf is a childless component whose model is a part doc.
+        // Recursively collect leaf-component INSTANCE identifiers (Component2.Name2).
+        // Mirrors SolidWorksAssemblyWalker.CollectLeafPaths: Name2 is instance-
+        // unique ("base-1@3R_ARM"), whereas GetPathName() returns the part-file
+        // path — shared across instances of the same part. The downstream lookup
+        // (SolidWorksMassProperties.FindComponent / SolidWorksMeshTessellator)
+        // matches against Name2, so emitting GetPathName() here yielded the
+        // "Component path not found in active assembly: ...\foo.SLDPRT" error.
         private static void CollectLeafPaths(Component2 comp, List<string> paths)
         {
             object[] children = (object[])comp.GetChildren();
@@ -174,7 +198,7 @@ namespace SW2GZ.SwSurface
             {
                 IModelDoc2 m = (IModelDoc2)comp.GetModelDoc2();
                 if (m != null && m.GetType() == (int)swDocumentTypes_e.swDocPART)
-                    paths.Add(comp.GetPathName());
+                    paths.Add(comp.Name2);
                 return;
             }
             foreach (object o in children) CollectLeafPaths((Component2)o, paths);

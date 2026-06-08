@@ -85,6 +85,8 @@
     <Compile Include="..\SW2GZ\Build\Model\CoordinateConvention.cs" Link="Sources\Build\Model\CoordinateConvention.cs" />
     <Compile Include="..\SW2GZ\Math\PoseMath.cs"                    Link="Sources\Math\PoseMath.cs" />
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\IComponentPoseSource.cs" Link="Sources\SwSurface\Abstractions\IComponentPoseSource.cs" />
+    <Compile Include="..\SW2GZ\SwSurface\Abstractions\IComponentRawTransformSource.cs" Link="Sources\SwSurface\Abstractions\IComponentRawTransformSource.cs" />
+    <Compile Include="..\SW2GZ\Build\Model\PoseDumpWriter.cs" Link="Sources\Build\Model\PoseDumpWriter.cs" />
     <Compile Include="..\SW2GZ\Build\Model\RobotMeta.cs"          Link="Sources\Build\Model\RobotMeta.cs" />
     <Compile Include="..\SW2GZ\Build\Model\GazeboLinkProps.cs"    Link="Sources\Build\Model\GazeboLinkProps.cs" />
     <Compile Include="..\SW2GZ\Build\Model\ModelLink.cs"          Link="Sources\Build\Model\ModelLink.cs" />

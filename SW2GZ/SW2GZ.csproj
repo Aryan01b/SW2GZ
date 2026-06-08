@@ -474,6 +474,8 @@
     <Compile Include="Build\Model\CoordinateConvention.cs" />
     <Compile Include="Math\PoseMath.cs" />
     <Compile Include="SwSurface\Abstractions\IComponentPoseSource.cs" />
+    <Compile Include="SwSurface\Abstractions\IComponentRawTransformSource.cs" />
+    <Compile Include="Build\Model\PoseDumpWriter.cs" />
     <Compile Include="Build\Model\RobotMeta.cs" />
     <Compile Include="Build\Model\GazeboLinkProps.cs" />
     <Compile Include="Build\Model\ModelLink.cs" />
