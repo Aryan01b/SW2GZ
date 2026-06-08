@@ -75,6 +75,8 @@ namespace SW2GZ.UI.Pmp
         private const int LabelLinkMassID       = StepIdBase + 0 * 20 + 6;
         private const int LabelLinkValidationID = StepIdBase + 0 * 20 + 7;
         private const int LabelLinkInstrID      = StepIdBase + 0 * 20 + 8;
+        private const int LabelLinkNameCapID    = StepIdBase + 0 * 20 + 9;
+        private const int TextLinkNameID        = StepIdBase + 0 * 20 + 10;
 
         private const int LabelJointInstrID  = StepIdBase + 1 * 20 + 2;
         private const int ListJointsID       = StepIdBase + 1 * 20 + 3;
@@ -110,8 +112,10 @@ namespace SW2GZ.UI.Pmp
         private PropertyManagerPageSelectionbox _pickFunnel;
         private PropertyManagerPageLabel _linkMass;
         private PropertyManagerPageLabel _linkValidation;
+        private PropertyManagerPageTextbox _linkNameBox;
         private LinkDef _activeLink;
         private bool _suppressLinkSelectionLoad;
+        private bool _suppressLinkNameEvents;
         private IMassProperties _massProps;
         private readonly List<string> _allComponentIds = new List<string>();
 
@@ -216,16 +220,17 @@ namespace SW2GZ.UI.Pmp
             }
 
             var navGroup = (PropertyManagerPageGroup)_page.AddGroupBox(NavGroupID, "Navigation", grpOptions);
+            // Unicode triangles render in SW's native PMP font; no bitmap needed.
             _backBtn = (PropertyManagerPageButton)navGroup.AddControl2(
                 ButtonBackID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "< Back", 0, visibleEnabled, "Previous step");
-            ((IPropertyManagerPageControl)_backBtn).Width = 70;
+                "◀", 0, visibleEnabled, "Previous step");
+            ((IPropertyManagerPageControl)_backBtn).Width = 40;
             _nextBtn = (PropertyManagerPageButton)navGroup.AddControl2(
                 ButtonNextID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Next >", 0, visibleEnabled, "Next step");
-            ((IPropertyManagerPageControl)_nextBtn).Width = 70;
+                "▶", 0, visibleEnabled, "Next step");
+            ((IPropertyManagerPageControl)_nextBtn).Width = 40;
         }
 
         private PropertyManagerPageLabel AddFieldLabel(
@@ -294,6 +299,7 @@ namespace SW2GZ.UI.Pmp
                 _activeLink = l;
                 if (_activeLink != null) UpdateMassReadout(_activeLink);
                 UpdateValidationLabel();
+                UpdateLinkNameBox();
                 if (!_suppressLinkSelectionLoad) LoadLinkSelection(_activeLink);
             };
             _linkTree.LinksChanged += (s, e) => UpdateValidationLabel();
@@ -333,12 +339,51 @@ namespace SW2GZ.UI.Pmp
             _pickFunnel.Mark = LinkSelectionMark;
             _pickFunnel.SetSelectionFilters((object)filters);
 
+            // Link name editor — live-rename the selected link. Children's
+            // ParentName is rewritten too so the tree stays connected.
+            AddFieldLabel(group, LabelLinkNameCapID, "Link name", leftEdge, labelOpts);
+            _linkNameBox = (PropertyManagerPageTextbox)group.AddControl2(
+                TextLinkNameID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "", (short)leftEdge, visibleEnabled,
+                "Edit the active link's name (ROS-safe characters only)");
+            _linkNameBox.Height = 20;
+
             _linkMass = AddFieldLabel(group, LabelLinkMassID, "", leftEdge, labelOpts);
             _linkValidation = AddFieldLabel(group, LabelLinkValidationID, "", leftEdge, labelOpts);
 
             _linkTree.SetLinks(Robot.Links);
             var roots = LinkHierarchy.Roots(Robot.Links);
             if (roots.Count > 0) _linkTree.SelectByLinkName(roots[0].Name);
+            UpdateValidationLabel();
+            UpdateLinkNameBox();
+        }
+
+        private void UpdateLinkNameBox()
+        {
+            if (_linkNameBox == null) return;
+            _suppressLinkNameEvents = true;
+            try { _linkNameBox.Text = _activeLink?.Name ?? ""; }
+            finally { _suppressLinkNameEvents = false; }
+        }
+
+        private void RenameActiveLink(string proposed)
+        {
+            if (_activeLink == null) return;
+            string sanitized = RosNameSanitizer.Sanitize(proposed ?? "").Value;
+            if (string.IsNullOrEmpty(sanitized) || sanitized == _activeLink.Name) return;
+            // Block dup: pick a unique variant rather than refuse silently.
+            string unique = sanitized;
+            int n = 2;
+            while (Robot.Links.Any(l => l != _activeLink && l.Name == unique))
+                unique = sanitized + "_" + n++;
+            string old = _activeLink.Name;
+            _activeLink.Name = unique;
+            foreach (LinkDef l in Robot.Links)
+                if (l.ParentName == old) l.ParentName = unique;
+            _suppressLinkSelectionLoad = true;
+            try { _linkTree.SetLinks(Robot.Links); _linkTree.SelectByLinkName(unique); }
+            finally { _suppressLinkSelectionLoad = false; }
             UpdateValidationLabel();
         }
 
@@ -950,7 +995,11 @@ namespace SW2GZ.UI.Pmp
         bool IPropertyManagerPage2Handler9.OnPreview() => true;
         bool IPropertyManagerPage2Handler9.OnTabClicked(int Id) => true;
         bool IPropertyManagerPage2Handler9.OnKeystroke(int Wparam, int Message, int Lparam, int Id) => false;
-        void IPropertyManagerPage2Handler9.OnTextboxChanged(int Id, string Text) { }
+        void IPropertyManagerPage2Handler9.OnTextboxChanged(int Id, string Text)
+        {
+            if (_suppressLinkNameEvents) return;
+            if (Id == TextLinkNameID) RenameActiveLink(Text);
+        }
         void IPropertyManagerPage2Handler9.OnSelectionboxFocusChanged(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutCreated(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutDestroyed(int Id) { }
