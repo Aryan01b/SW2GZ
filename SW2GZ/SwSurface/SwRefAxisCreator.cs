@@ -124,6 +124,12 @@ namespace SW2GZ.SwSurface
 
                 try
                 {
+                    // Defensive double-check — FindNewFeature already filters
+                    // GetTypeName2() == "RefAxis", but verify once more before
+                    // mutating Name. Renaming a non-RefAxis feature is the
+                    // class of bug that corrupted SW state previously.
+                    string tn = null; try { tn = created.GetTypeName2(); } catch { }
+                    if (tn != "RefAxis") return null;
                     created.Name = desiredName;
                     return desiredName;
                 }
@@ -318,22 +324,44 @@ namespace SW2GZ.SwSurface
         }
 
         // Diff before/after FeatureManager snapshots to find the Feature
-        // that InsertAxis2 just created. Walk after-snapshot in reverse
-        // because new features are appended at the end of the tree —
-        // mirrors ExportHelperExtension.InsertAxis's reverse-walk trick.
-        // Releases the discarded after-snapshot entries it walks past.
+        // InsertAxis2 just created. Walks after-snapshot in REVERSE because
+        // new features are appended at the end of the tree.
+        //
+        // CRITICAL: must compare by Feature.Name + GetTypeName2(), NOT by
+        // RCW (COM wrapper) identity. Each GetFeatures(true) call returns a
+        // FRESH set of Runtime Callable Wrappers wrapping the same underlying
+        // SW Feature COM objects. HashSet<object> reference equality across
+        // two GetFeatures snapshots returns FALSE for every entry — so the
+        // old object-identity diff misidentified an arbitrary existing
+        // feature as "new", and the rename clobbered an unrelated feature
+        // (a mate, sketch, etc.) leaving SW in a corrupt state that crashed
+        // on the next traversal.
+        //
+        // Filter to GetTypeName2() == "RefAxis" so we never rename anything
+        // that isn't actually a Reference Axis.
         private static Feature FindNewFeature(object[] before, object[] after)
         {
-            var beforeSet = new HashSet<object>(before);
-            Feature found = null;
-            for (int i = after.Length - 1; i >= 0; i--)
+            var beforeNames = new HashSet<string>(System.StringComparer.Ordinal);
+            foreach (object o in before)
             {
-                if (found == null && !beforeSet.Contains(after[i]))
+                if (o is Feature f)
                 {
-                    found = after[i] as Feature;
+                    string n = null; try { n = f.Name; } catch { }
+                    if (!string.IsNullOrEmpty(n)) beforeNames.Add(n);
                 }
             }
-            return found;
+            for (int i = after.Length - 1; i >= 0; i--)
+            {
+                if (!(after[i] is Feature f)) continue;
+                string n = null, t = null;
+                try { n = f.Name; } catch { }
+                try { t = f.GetTypeName2(); } catch { }
+                if (string.IsNullOrEmpty(n)) continue;
+                if (t != "RefAxis") continue;
+                if (beforeNames.Contains(n)) continue;
+                return f;
+            }
+            return null;
         }
 
         // Walk up the component owner chain to its top-level instance name —
