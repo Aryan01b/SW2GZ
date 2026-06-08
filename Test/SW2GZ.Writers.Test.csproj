@@ -53,6 +53,8 @@
     <Compile Include="..\SW2GZ\Math\Matrix3.cs"               Link="Sources\Math\Matrix3.cs" />
     <Compile Include="..\SW2GZ\Math\Pose.cs"                  Link="Sources\Math\Pose.cs" />
     <Compile Include="..\SW2GZ\Math\MathTransformPose.cs"     Link="Sources\Math\MathTransformPose.cs" />
+    <Compile Include="..\SW2GZ\Math\CylinderTransform.cs"     Link="Sources\Math\CylinderTransform.cs" />
+    <Compile Include="..\SW2GZ\SwSurface\AutoJointResolved.cs" Link="Sources\SwSurface\AutoJointResolved.cs" />
     <Compile Include="..\SW2GZ\Build\PackageNameSanitizer.cs" Link="Sources\Build\PackageNameSanitizer.cs" />
     <Compile Include="..\SW2GZ\Build\RosNameSanitizer.cs"     Link="Sources\Build\RosNameSanitizer.cs" />
     <Compile Include="..\SW2GZ\Build\MassProps.cs"            Link="Sources\Build\MassProps.cs" />

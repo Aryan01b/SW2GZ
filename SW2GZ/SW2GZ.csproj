@@ -442,6 +442,7 @@
     <Compile Include="Math\Matrix3.cs" />
     <Compile Include="Math\Pose.cs" />
     <Compile Include="Math\MathTransformPose.cs" />
+    <Compile Include="Math\CylinderTransform.cs" />
     <Compile Include="Build\PackageNameSanitizer.cs" />
     <Compile Include="Build\RosNameSanitizer.cs" />
     <Compile Include="Build\MassProps.cs" />
@@ -525,6 +526,8 @@
     <Compile Include="SwSurface\WizardAssemblyWalker.cs" />
     <Compile Include="SwSurface\SwJointPoseReader.cs" />
     <Compile Include="SwSurface\SwRefGeometryEnumerator.cs" />
+    <Compile Include="SwSurface\AutoJointResolved.cs" />
+    <Compile Include="SwSurface\AutoJointResolver.cs" />
     <Compile Include="URDFExport\Sw2gzModelExporter.cs" />
     <Compile Include="URDFExport\Sw2gzModelPreviewer.cs" />
     <Compile Include="URDFExport\PreviewServer.cs" />
