@@ -90,6 +90,10 @@ namespace SW2GZ.URDFExport
                     AxisZ = j.AxisZ,
                     LimitLower = j.LimitLower,
                     LimitUpper = j.LimitUpper,
+                    MatePointX = j.MatePointX,
+                    MatePointY = j.MatePointY,
+                    MatePointZ = j.MatePointZ,
+                    HasMatePoint = j.HasMatePoint,
                 });
             }
             return list;

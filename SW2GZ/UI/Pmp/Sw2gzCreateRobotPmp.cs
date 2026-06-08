@@ -416,26 +416,16 @@ namespace SW2GZ.UI.Pmp
         {
             if (_linkMass == null || _massProps == null) return;
             double total = 0; bool missing = false;
+            // ComponentIds are Name2 strings; SolidWorksMassProperties.FindComponent
+            // now matches Name2, so pass id directly (no PathName conversion).
             foreach (string id in link.ComponentIds)
             {
-                try { total += _massProps.Get(ComponentPathForId(id)).Mass; }
+                try { total += _massProps.Get(id).Mass; }
                 catch (Exception) { missing = true; }
             }
             string s = link.ComponentIds.Count + " component(s), mass " + total.ToString("0.###") + " kg";
             if (missing) s += " (set material on all parts)";
             _linkMass.Caption = s;
-        }
-
-        private string ComponentPathForId(string name2)
-        {
-            object[] comps = (object[])((AssemblyDoc)_modelDoc).GetComponents(true);
-            if (comps != null)
-                foreach (object o in comps)
-                {
-                    var c = (Component2)o;
-                    if (c.Name2 == name2) return c.GetPathName();
-                }
-            return name2;
         }
 
         private void UpdateValidationLabel()
@@ -628,6 +618,12 @@ namespace SW2GZ.UI.Pmp
             j.SetAxis(m.Axis);
             j.LimitLower = m.LimitLower;
             j.LimitUpper = m.LimitUpper;
+            // The mate's geometric reference point (assembly frame) is the new
+            // URDF link-frame origin for this joint's child. Without it the
+            // joint pivots around the child part's design origin, which can be
+            // far from the actual mate axis. Null = fall back to legacy anchor.
+            if (m.MatePointAssembly.HasValue) j.SetMatePoint(m.MatePointAssembly.Value);
+            else j.ClearMatePoint();
 
             PopulateJointList();
         }
@@ -709,7 +705,16 @@ namespace SW2GZ.UI.Pmp
                                 " — " + StepNames[_currentStep];
 
             ((IPropertyManagerPageControl)_backBtn).Enabled = _currentStep > 0;
+            // DEFENSIVE: explicitly re-enable Next on every step show. Without
+            // this, an SW SDK first-show race occasionally left _nextBtn in a
+            // disabled state on a freshly opened wizard, producing the
+            // "first time Joints Next doesn't work, reopen fixes it" bug.
+            try { ((IPropertyManagerPageControl)_nextBtn).Enabled = true; }
+            catch (Exception ex) { logger.Warn("ShowStep: re-enable _nextBtn failed", ex); }
             _nextBtn.Caption = (_currentStep == StepCount - 1) ? "Finish" : "Next >";
+
+            logger.Info("Sw2gzCreateRobotPmp.ShowStep -> step=" + _currentStep +
+                        " (" + StepNames[_currentStep] + ")");
 
             if (_currentStep == StepJoints) EnterJointsStep();
             else if (_currentStep == StepReview) EnterReviewStep();
@@ -751,6 +756,11 @@ namespace SW2GZ.UI.Pmp
 
         void IPropertyManagerPage2Handler9.OnButtonPress(int Id)
         {
+            // Log every button press so the "Next doesn't work" bug is visible
+            // in sw2gz.log if it ever recurs — the click either arrives here or
+            // it's being swallowed by SW upstream (focus on a listbox etc.).
+            logger.Info("Sw2gzCreateRobotPmp.OnButtonPress id=" + Id +
+                        " step=" + _currentStep);
             try
             {
                 switch (Id)

@@ -18,5 +18,9 @@ namespace SW2GZ.Build
         double? LimitLower,
         double? LimitUpper,
         string LinkA = null,
-        string LinkB = null);
+        string LinkB = null,
+        // Geometric mate-reference point in the assembly frame (e.g. the axis
+        // origin of a concentric mate's cylindrical face). Nullable — fallback
+        // (null) means "use the legacy part-anchor as the joint frame".
+        Vector3? MatePointAssembly = null);
 }

@@ -37,6 +37,29 @@ namespace SW2GZ.Build.Model
         [DataMember] public double? LimitLower { get; set; }
         [DataMember] public double? LimitUpper { get; set; }
 
+        // Mate-reference geometric point in the assembly frame (e.g. the axis
+        // origin of the assigned concentric mate's cylindrical face). When
+        // HasMatePoint is true the joint's URDF <origin> is anchored here in
+        // the parent frame instead of at the child part's design origin —
+        // fixes hinges that pivot around the wrong fulcrum. Defaults to
+        // (0,0,0) / false so legacy JointDefs round-trip unchanged.
+        [DataMember] public double MatePointX { get; set; }
+        [DataMember] public double MatePointY { get; set; }
+        [DataMember] public double MatePointZ { get; set; }
+        [DataMember] public bool HasMatePoint { get; set; }
+
+        public void SetMatePoint(System.Numerics.Vector3 p)
+        {
+            MatePointX = p.X; MatePointY = p.Y; MatePointZ = p.Z;
+            HasMatePoint = true;
+        }
+
+        public void ClearMatePoint()
+        {
+            MatePointX = 0; MatePointY = 0; MatePointZ = 0;
+            HasMatePoint = false;
+        }
+
         // True when a non-zero axis direction has been set (from a mate, a selected
         // reference axis, or a generated one).
         public bool HasAxis =>

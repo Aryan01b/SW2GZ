@@ -71,6 +71,10 @@ namespace SW2GZ.URDFExport
             AxisZ = src.AxisZ,
             LimitLower = src.LimitLower,
             LimitUpper = src.LimitUpper,
+            MatePointX = src.MatePointX,
+            MatePointY = src.MatePointY,
+            MatePointZ = src.MatePointZ,
+            HasMatePoint = src.HasMatePoint,
         };
 
         private static Sw2gzWorldConfig CloneWorld(Sw2gzWorldConfig src) => new Sw2gzWorldConfig

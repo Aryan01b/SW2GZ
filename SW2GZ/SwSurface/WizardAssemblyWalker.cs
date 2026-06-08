@@ -72,18 +72,22 @@ namespace SW2GZ.SwSurface
             foreach (JointDef j in _joints)
             {
                 var axis = new Vector3((float)j.AxisX, (float)j.AxisY, (float)j.AxisZ);
+                Vector3? matePt = j.HasMatePoint
+                    ? new Vector3((float)j.MatePointX, (float)j.MatePointY, (float)j.MatePointZ)
+                    : (Vector3?)null;
                 mates.Add(new MateSpec(
-                    Name:          j.Name,
-                    Kind:          ToMateKind(j.Type),
-                    Origin:        Pose.Identity,        // SW→ROS conversion deferred
-                    Axis:          axis,
-                    LimitLower:    j.LimitLower,
-                    LimitUpper:    j.LimitUpper,
-                    LimitEffort:   0.0,
-                    LimitVelocity: 0.0,
-                    Interface:     UrdfCmdInterface.Position,
-                    ParentLink:    j.ParentLink,
-                    ChildLink:     j.ChildLink));
+                    Name:              j.Name,
+                    Kind:              ToMateKind(j.Type),
+                    Origin:            Pose.Identity,        // SW→ROS conversion deferred
+                    Axis:              axis,
+                    LimitLower:        j.LimitLower,
+                    LimitUpper:        j.LimitUpper,
+                    LimitEffort:       0.0,
+                    LimitVelocity:     0.0,
+                    Interface:         UrdfCmdInterface.Position,
+                    ParentLink:        j.ParentLink,
+                    ChildLink:         j.ChildLink,
+                    MatePointAssembly: matePt));
             }
             return mates.AsReadOnly();
         }
