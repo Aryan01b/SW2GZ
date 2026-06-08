@@ -34,6 +34,11 @@ namespace SW2GZ.UI
             AllowDrop = true;
             HideSelection = false;
             ShowNodeToolTips = true;
+            // Dark theme — match the surrounding SW PMP. Default would render
+            // a white block on the dark panel.
+            BackColor = System.Drawing.Color.FromArgb(45, 45, 48);
+            ForeColor = System.Drawing.Color.FromArgb(220, 220, 220);
+            LineColor = System.Drawing.Color.FromArgb(120, 120, 120);
             ItemDrag += OnItemDrag;
             DragEnter += (s, e) => e.Effect = DragDropEffects.Move;
             DragOver += OnDragOver;

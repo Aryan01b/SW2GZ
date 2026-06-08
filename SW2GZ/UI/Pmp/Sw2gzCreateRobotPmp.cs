@@ -393,30 +393,42 @@ namespace SW2GZ.UI.Pmp
             UpdateValidationLabel();
         }
 
-        // PMP group surface = SystemColors.Control (theme-aware light grey on
-        // Windows light, dark grey on dark). Matching it makes the embedded
-        // bar dissolve into the panel instead of showing as a white slab.
+        // Dark-theme palette — matches SW PMP's dark group surface so embedded
+        // WinForms bars dissolve into the panel instead of showing as a slab.
+        // Hardcoded (not SystemColors) because SW PMP is dark regardless of
+        // the Windows theme.
+        private static readonly System.Drawing.Color DarkBarBg     = System.Drawing.Color.FromArgb(53, 53, 53);
+        private static readonly System.Drawing.Color DarkBtnBg     = System.Drawing.Color.FromArgb(70, 70, 72);
+        private static readonly System.Drawing.Color DarkBtnHover  = System.Drawing.Color.FromArgb(95, 95, 98);
+        private static readonly System.Drawing.Color DarkFg        = System.Drawing.Color.FromArgb(220, 220, 220);
+        private static readonly System.Drawing.Color DarkBtnBorder = System.Drawing.Color.FromArgb(100, 100, 102);
+
         private static System.Windows.Forms.Panel NewBar(int width, int height)
         {
             return new System.Windows.Forms.Panel
             {
                 Width = width,
                 Height = height,
-                BackColor = System.Drawing.SystemColors.Control,
+                BackColor = DarkBarBg,
             };
         }
 
         private static System.Windows.Forms.Button NewBarButton(string text, int width)
         {
-            return new System.Windows.Forms.Button
+            var b = new System.Windows.Forms.Button
             {
                 Text = text,
                 Width = width,
                 Height = 26,
                 Top = 3,
-                FlatStyle = System.Windows.Forms.FlatStyle.Standard,
-                UseVisualStyleBackColor = true,
+                FlatStyle = System.Windows.Forms.FlatStyle.Flat,
+                BackColor = DarkBtnBg,
+                ForeColor = DarkFg,
+                UseVisualStyleBackColor = false,
             };
+            b.FlatAppearance.BorderColor = DarkBtnBorder;
+            b.FlatAppearance.MouseOverBackColor = DarkBtnHover;
+            return b;
         }
 
         private static void CenterRow(System.Windows.Forms.Panel bar, params System.Windows.Forms.Button[] btns)
