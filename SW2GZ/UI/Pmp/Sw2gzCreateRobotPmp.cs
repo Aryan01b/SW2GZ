@@ -61,7 +61,6 @@ namespace SW2GZ.UI.Pmp
 
         private const int HeaderGroupID = 1;
         private const int HeaderLabelID = 2;
-        private const int NavGroupID    = 3;
         private const int ButtonBackID  = 4;
         private const int ButtonNextID  = 5;
 
@@ -70,8 +69,7 @@ namespace SW2GZ.UI.Pmp
 
         private const int TreeHandleID          = StepIdBase + 0 * 20 + 2;
         private const int PickFunnelID          = StepIdBase + 0 * 20 + 3;
-        private const int ButtonAddLinkID       = StepIdBase + 0 * 20 + 4;
-        private const int ButtonRemoveLinkID    = StepIdBase + 0 * 20 + 5;
+        private const int BtnBarHandleID        = StepIdBase + 0 * 20 + 4;
         private const int LabelLinkMassID       = StepIdBase + 0 * 20 + 6;
         private const int LabelLinkValidationID = StepIdBase + 0 * 20 + 7;
         private const int LabelLinkInstrID      = StepIdBase + 0 * 20 + 8;
@@ -108,6 +106,10 @@ namespace SW2GZ.UI.Pmp
         private PropertyManagerPageButton _nextBtn;
 
         private PropertyManagerPageWindowFromHandle _treeHandle;
+        private PropertyManagerPageWindowFromHandle _btnBarHandle;
+        private System.Windows.Forms.Panel _linkBtnBar;
+        private System.Windows.Forms.Button _addLinkBtn;
+        private System.Windows.Forms.Button _removeLinkBtn;
         private LinkTreeView _linkTree;
         private PropertyManagerPageSelectionbox _pickFunnel;
         private PropertyManagerPageLabel _linkMass;
@@ -204,6 +206,18 @@ namespace SW2GZ.UI.Pmp
                 HeaderLabelID,
                 (short)swPropertyManagerPageControlType_e.swControlType_Label,
                 "", (short)leftEdge, visibleEnabled, "");
+            // Nav buttons live in the Progress group — no separate "Navigation"
+            // panel. ◀ is purely symbolic; ▶ flips to "Finish" on the last step.
+            _backBtn = (PropertyManagerPageButton)header.AddControl2(
+                ButtonBackID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Button,
+                "◀", 0, visibleEnabled, "Previous step");
+            ((IPropertyManagerPageControl)_backBtn).Width = 40;
+            _nextBtn = (PropertyManagerPageButton)header.AddControl2(
+                ButtonNextID,
+                (short)swPropertyManagerPageControlType_e.swControlType_Button,
+                "▶", 0, visibleEnabled, "Next step");
+            ((IPropertyManagerPageControl)_nextBtn).Width = 40;
 
             _stepGroups = new PropertyManagerPageGroup[StepCount];
             for (int step = 0; step < StepCount; step++)
@@ -218,19 +232,6 @@ namespace SW2GZ.UI.Pmp
                     case StepReview: BuildReviewStep(stepGroup, leftEdge, indent, visibleEnabled); break;
                 }
             }
-
-            var navGroup = (PropertyManagerPageGroup)_page.AddGroupBox(NavGroupID, "Navigation", grpOptions);
-            // Unicode triangles render in SW's native PMP font; no bitmap needed.
-            _backBtn = (PropertyManagerPageButton)navGroup.AddControl2(
-                ButtonBackID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "◀", 0, visibleEnabled, "Previous step");
-            ((IPropertyManagerPageControl)_backBtn).Width = 40;
-            _nextBtn = (PropertyManagerPageButton)navGroup.AddControl2(
-                ButtonNextID,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "▶", 0, visibleEnabled, "Next step");
-            ((IPropertyManagerPageControl)_nextBtn).Width = 40;
         }
 
         private PropertyManagerPageLabel AddFieldLabel(
@@ -309,12 +310,17 @@ namespace SW2GZ.UI.Pmp
                 "Drag to re-parent, F2 to rename, right-click to set base.",
                 leftEdge, labelOpts);
 
-            // Add/Remove BEFORE the embedded WindowFromHandle. SW PMP renders
-            // controls top-down, and controls added after a WindowFromHandle in
-            // the same group are silently dropped from the layout — the cause
-            // of the missing-buttons regression after the v2.1.0 tree port.
-            AddLinkButton(group, ButtonAddLinkID,    "Add link",    leftEdge, visibleEnabled);
-            AddLinkButton(group, ButtonRemoveLinkID, "Remove link", leftEdge, visibleEnabled);
+            // WinForms button bar — PMP can't lay buttons horizontally, so we
+            // embed a Panel via WindowFromHandle and center two Buttons inside.
+            // Must come BEFORE the tree's WindowFromHandle (SW PMP drops controls
+            // added after a WindowFromHandle in the same group).
+            BuildLinkButtonBar();
+            _btnBarHandle = (PropertyManagerPageWindowFromHandle)group.AddControl2(
+                BtnBarHandleID,
+                (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
+                "", (short)leftEdge, visibleEnabled, "Add or remove a link");
+            _btnBarHandle.Height = 34;
+            _btnBarHandle.SetWindowHandlex64(_linkBtnBar.Handle.ToInt64());
 
             _treeHandle = (PropertyManagerPageWindowFromHandle)group.AddControl2(
                 TreeHandleID,
@@ -387,17 +393,26 @@ namespace SW2GZ.UI.Pmp
             UpdateValidationLabel();
         }
 
-        private PropertyManagerPageButton AddLinkButton(
-            PropertyManagerPageGroup group, int id, string caption, int leftAlign, int visibleEnabled)
+        private void BuildLinkButtonBar()
         {
-            var b = (PropertyManagerPageButton)group.AddControl2(
-                id,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                caption, (short)leftAlign, visibleEnabled, caption);
-            if (b == null) return null;
-            var ctrl = (IPropertyManagerPageControl)b;
-            ctrl.Width = 110;
-            return b;
+            _linkBtnBar = new System.Windows.Forms.Panel { Height = 32, Width = 260 };
+            _addLinkBtn    = new System.Windows.Forms.Button { Text = "Add link",    Width = 90, Height = 26, Top = 3 };
+            _removeLinkBtn = new System.Windows.Forms.Button { Text = "Remove link", Width = 90, Height = 26, Top = 3 };
+            _addLinkBtn.Click    += (s, e) => AddLink();
+            _removeLinkBtn.Click += (s, e) => RemoveLink();
+            _linkBtnBar.Controls.Add(_addLinkBtn);
+            _linkBtnBar.Controls.Add(_removeLinkBtn);
+            _linkBtnBar.Resize += (s, e) => CenterLinkButtons();
+            CenterLinkButtons();
+        }
+
+        private void CenterLinkButtons()
+        {
+            const int gap = 8;
+            int total = _addLinkBtn.Width + gap + _removeLinkBtn.Width;
+            int x = System.Math.Max(0, (_linkBtnBar.Width - total) / 2);
+            _addLinkBtn.Left    = x;
+            _removeLinkBtn.Left = x + _addLinkBtn.Width + gap;
         }
 
         private void OnFunnelChanged()
@@ -875,7 +890,7 @@ namespace SW2GZ.UI.Pmp
             // "first time Joints Next doesn't work, reopen fixes it" bug.
             try { ((IPropertyManagerPageControl)_nextBtn).Enabled = true; }
             catch (Exception ex) { logger.Warn("ShowStep: re-enable _nextBtn failed", ex); }
-            _nextBtn.Caption = (_currentStep == StepCount - 1) ? "Finish" : "Next >";
+            _nextBtn.Caption = (_currentStep == StepCount - 1) ? "Finish" : "▶";
 
             logger.Info("Sw2gzCreateRobotPmp.ShowStep -> step=" + _currentStep +
                         " (" + StepNames[_currentStep] + ")");
@@ -931,8 +946,6 @@ namespace SW2GZ.UI.Pmp
                 {
                     case ButtonBackID: GoBack(); break;
                     case ButtonNextID: GoNext(); break;
-                    case ButtonAddLinkID: AddLink(); break;
-                    case ButtonRemoveLinkID: RemoveLink(); break;
                 }
             }
             catch (Exception e)
