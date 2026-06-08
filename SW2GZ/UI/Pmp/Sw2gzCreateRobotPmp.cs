@@ -84,6 +84,8 @@ namespace SW2GZ.UI.Pmp
         private const int LabelDetailMateID    = StepIdBase + 1 * 20 + 8;
         private const int LabelDetailTypeID    = StepIdBase + 1 * 20 + 9;
         private const int LabelDetailLimitsID  = StepIdBase + 1 * 20 + 10;
+        private const int LabelDetailFrameSwID  = StepIdBase + 1 * 20 + 11;
+        private const int LabelDetailFrameRosID = StepIdBase + 1 * 20 + 12;
 
         private const int LabelReviewInstrID     = StepIdBase + 2 * 20 + 2;
         private const int LabelReviewModeID      = StepIdBase + 2 * 20 + 3;
@@ -122,6 +124,8 @@ namespace SW2GZ.UI.Pmp
         private PropertyManagerPageLabel _detailMate;
         private PropertyManagerPageLabel _detailType;
         private PropertyManagerPageLabel _detailLimits;
+        private PropertyManagerPageLabel _detailFrameSw;
+        private PropertyManagerPageLabel _detailFrameRos;
         private int _activeJointIndex = -1;
 
         // D3 — Re-detect bar (WinForms-embedded, dark theme) above the joints
@@ -625,6 +629,12 @@ namespace SW2GZ.UI.Pmp
             _detailMate   = AddFieldLabel(group, LabelDetailMateID, "", leftEdge, labelOpts);
             _detailType   = AddFieldLabel(group, LabelDetailTypeID, "", leftEdge, labelOpts);
             _detailLimits = AddFieldLabel(group, LabelDetailLimitsID, "", leftEdge, labelOpts);
+            // D2 — side-by-side SW and ROS frame readout for the active joint's
+            // axis + origin. ROS row applies the SwToRosRotation matrix built
+            // from the export config's (up, forward) — defaults to +Y up / +Z
+            // forward (the stock SW template convention).
+            _detailFrameSw  = AddFieldLabel(group, LabelDetailFrameSwID,  "", leftEdge, labelOpts);
+            _detailFrameRos = AddFieldLabel(group, LabelDetailFrameRosID, "", leftEdge, labelOpts);
         }
 
         private void BuildJointButtonBar()
@@ -757,8 +767,10 @@ namespace SW2GZ.UI.Pmp
 
             if (j == null)
             {
-                if (_detailMate   != null) _detailMate.Caption   = "";
-                if (_detailLimits != null) _detailLimits.Caption = "";
+                if (_detailMate     != null) _detailMate.Caption     = "";
+                if (_detailLimits   != null) _detailLimits.Caption   = "";
+                if (_detailFrameSw  != null) _detailFrameSw.Caption  = "";
+                if (_detailFrameRos != null) _detailFrameRos.Caption = "";
                 return;
             }
 
@@ -768,18 +780,35 @@ namespace SW2GZ.UI.Pmp
                     _detailMate.Caption = "Source: mate '" +
                         (string.IsNullOrEmpty(j.MateName) ? "(unnamed)" : j.MateName) + "'";
 
-                string limitsSuffix = "";
-                if (limited && j.LimitLower.HasValue && j.LimitUpper.HasValue)
-                {
-                    limitsSuffix = "  Limits: [" + Fmt(j.LimitLower) + ", " + Fmt(j.LimitUpper) + "]";
-                }
                 if (_detailLimits != null)
-                    _detailLimits.Caption = string.Format(
+                {
+                    _detailLimits.Caption =
+                        (limited && j.LimitLower.HasValue && j.LimitUpper.HasValue)
+                            ? "Limits: [" + Fmt(j.LimitLower) + ", " + Fmt(j.LimitUpper) + "]"
+                            : "";
+                }
+
+                // D2 — apply the export config's coord-convention rotation to
+                // show the user how the auto-detected axis/origin lands in the
+                // ROS world frame. Defaults match Sw2gzExportConfig: +Y up,
+                // +Z forward (the stock SW assembly template).
+                AxisDirection up      = AxisDirection.PlusY;
+                AxisDirection forward = AxisDirection.PlusZ;
+                var R = SwToRosRotation.Build(up, forward);
+                (double ax, double ay, double az) = R.Mul(j.AxisX,   j.AxisY,   j.AxisZ);
+                (double ox, double oy, double oz) = R.Mul(j.OriginX, j.OriginY, j.OriginZ);
+
+                if (_detailFrameSw != null)
+                    _detailFrameSw.Caption = string.Format(
                         CultureInfo.InvariantCulture,
-                        "Axis: ({0:F3}, {1:F3}, {2:F3})  Origin: ({3:F3}, {4:F3}, {5:F3}) m{6}",
+                        "SW:  axis=({0:F3}, {1:F3}, {2:F3})  origin=({3:F3}, {4:F3}, {5:F3}) m",
                         j.AxisX, j.AxisY, j.AxisZ,
-                        j.OriginX, j.OriginY, j.OriginZ,
-                        limitsSuffix);
+                        j.OriginX, j.OriginY, j.OriginZ);
+                if (_detailFrameRos != null)
+                    _detailFrameRos.Caption = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "ROS: axis=({0:F3}, {1:F3}, {2:F3})  origin=({3:F3}, {4:F3}, {5:F3}) m",
+                        ax, ay, az, ox, oy, oz);
             }
             else
             {
@@ -787,6 +816,8 @@ namespace SW2GZ.UI.Pmp
                 if (_detailLimits != null)
                     _detailLimits.Caption =
                         "Add a concentric mate between the parent's and child's components, then click Re-detect.";
+                if (_detailFrameSw  != null) _detailFrameSw.Caption  = "";
+                if (_detailFrameRos != null) _detailFrameRos.Caption = "";
             }
         }
 
