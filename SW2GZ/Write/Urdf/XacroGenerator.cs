@@ -23,6 +23,7 @@ the same byte-parity reason the original serializer kept it.
 */
 using System.Collections.Generic;
 using System.Globalization;
+using System.Numerics;
 using System.Security;
 using System.Text;
 using SW2GZ.Build.Model;
@@ -186,17 +187,29 @@ namespace SW2GZ.Write.Urdf
         }
 
         // Per-link emission. Byte-for-byte match of the legacy BuildUrdfBodyXml
-        // when ml.MaterialName is null; emits a <material name="..."/> reference
-        // inside the <visual> block when MaterialName is non-null (P5).
+        // when ml.MaterialName is null AND link.FrameOffset == Vector3.Zero;
+        // emits a <material name="..."/> reference inside the <visual> block
+        // when MaterialName is non-null (P5).
+        //
+        // When link.FrameOffset is non-zero the link's URDF frame is at a
+        // mate-reference point and the mesh/inertial must shift by FrameOffset
+        // to keep their world placement: <visual>/<collision> get an explicit
+        // <origin xyz="<offset>" rpy="0 0 0"/>, and the inertial <origin>
+        // adds the offset to ComLocal (the rotation between the part frame
+        // and the link frame is identity by construction, so the principal-axis
+        // inertia tensor is unchanged).
         private static void AppendLink(StringBuilder sb, ModelLink ml, string pkgEsc)
         {
             UrdfLink link = ml.Link;
             string nameEsc = SecurityElement.Escape(link.Name);
+            Vector3 off = link.FrameOffset;
+            bool hasOff = off.X != 0f || off.Y != 0f || off.Z != 0f;
+
             sb.AppendLine($"  <link name=\"{nameEsc}\">");
             sb.AppendLine("    <inertial>");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
                 "      <origin xyz=\"{0} {1} {2}\" rpy=\"0 0 0\"/>",
-                link.ComLocal.X, link.ComLocal.Y, link.ComLocal.Z));
+                link.ComLocal.X + off.X, link.ComLocal.Y + off.Y, link.ComLocal.Z + off.Z));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
                 "      <mass value=\"{0}\"/>", link.Mass));
             Matrix3 I = link.InertiaAtComLocal;
@@ -206,23 +219,57 @@ namespace SW2GZ.Write.Urdf
             sb.AppendLine("    </inertial>");
             if (ml.MaterialName == null)
             {
-                sb.AppendLine("    <visual><geometry>");
-                sb.AppendLine($"      <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.VisualMeshFile)}\"/>");
-                sb.AppendLine("    </geometry></visual>");
+                if (!hasOff)
+                {
+                    sb.AppendLine("    <visual><geometry>");
+                    sb.AppendLine($"      <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.VisualMeshFile)}\"/>");
+                    sb.AppendLine("    </geometry></visual>");
+                }
+                else
+                {
+                    sb.AppendLine("    <visual>");
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "      <origin xyz=\"{0} {1} {2}\" rpy=\"0 0 0\"/>",
+                        off.X, off.Y, off.Z));
+                    sb.AppendLine("      <geometry>");
+                    sb.AppendLine($"        <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.VisualMeshFile)}\"/>");
+                    sb.AppendLine("      </geometry>");
+                    sb.AppendLine("    </visual>");
+                }
             }
             else
             {
                 string matEsc = SecurityElement.Escape(ml.MaterialName);
                 sb.AppendLine("    <visual>");
+                if (hasOff)
+                {
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "      <origin xyz=\"{0} {1} {2}\" rpy=\"0 0 0\"/>",
+                        off.X, off.Y, off.Z));
+                }
                 sb.AppendLine("      <geometry>");
                 sb.AppendLine($"        <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.VisualMeshFile)}\"/>");
                 sb.AppendLine("      </geometry>");
                 sb.AppendLine($"      <material name=\"{matEsc}\"/>");
                 sb.AppendLine("    </visual>");
             }
-            sb.AppendLine("    <collision><geometry>");
-            sb.AppendLine($"      <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.CollisionMeshFile)}\"/>");
-            sb.AppendLine("    </geometry></collision>");
+            if (!hasOff)
+            {
+                sb.AppendLine("    <collision><geometry>");
+                sb.AppendLine($"      <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.CollisionMeshFile)}\"/>");
+                sb.AppendLine("    </geometry></collision>");
+            }
+            else
+            {
+                sb.AppendLine("    <collision>");
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                    "      <origin xyz=\"{0} {1} {2}\" rpy=\"0 0 0\"/>",
+                    off.X, off.Y, off.Z));
+                sb.AppendLine("      <geometry>");
+                sb.AppendLine($"        <mesh filename=\"package://{pkgEsc}/meshes/{SecurityElement.Escape(link.CollisionMeshFile)}\"/>");
+                sb.AppendLine("      </geometry>");
+                sb.AppendLine("    </collision>");
+            }
             sb.AppendLine("  </link>");
         }
 

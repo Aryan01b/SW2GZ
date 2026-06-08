@@ -73,10 +73,16 @@ namespace SW2GZ.Gz
                     SecurityElement.Escape(pj.ParentLink), p.X, p.Y, p.Z, r, pi, y));
             }
 
+            // FrameOffset shifts inertial COM + visual + collision when the link
+            // frame was moved to a mate-reference point (URDF link is anchored at
+            // the mate axis; the part's design origin sits at FrameOffset).
+            var off = link.FrameOffset;
+            bool hasOff = off.X != 0f || off.Y != 0f || off.Z != 0f;
+
             sb.AppendLine("      <inertial>");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
                 "        <pose>{0} {1} {2} 0 0 0</pose>",
-                link.ComLocal.X, link.ComLocal.Y, link.ComLocal.Z));
+                link.ComLocal.X + off.X, link.ComLocal.Y + off.Y, link.ComLocal.Z + off.Z));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
                 "        <mass>{0}</mass>", link.Mass));
             Matrix3 I = link.InertiaAtComLocal;
@@ -88,6 +94,11 @@ namespace SW2GZ.Gz
             sb.AppendLine("      </inertial>");
 
             sb.AppendLine($"      <visual name=\"{linkEsc}_visual\">");
+            if (hasOff)
+            {
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                    "        <pose>{0} {1} {2} 0 0 0</pose>", off.X, off.Y, off.Z));
+            }
             sb.AppendLine("        <geometry>");
             sb.AppendLine($"          <mesh><uri>model://{modelEsc}/meshes/{SecurityElement.Escape(link.VisualMeshFile)}</uri></mesh>");
             sb.AppendLine("        </geometry>");
@@ -103,6 +114,11 @@ namespace SW2GZ.Gz
             sb.AppendLine("      </visual>");
 
             sb.AppendLine($"      <collision name=\"{linkEsc}_collision\">");
+            if (hasOff)
+            {
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                    "        <pose>{0} {1} {2} 0 0 0</pose>", off.X, off.Y, off.Z));
+            }
             sb.AppendLine("        <geometry>");
             sb.AppendLine($"          <mesh><uri>model://{modelEsc}/meshes/{SecurityElement.Escape(link.CollisionMeshFile)}</uri></mesh>");
             sb.AppendLine("        </geometry>");

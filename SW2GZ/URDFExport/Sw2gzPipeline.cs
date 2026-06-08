@@ -138,6 +138,52 @@ namespace SW2GZ.URDFExport
             IReadOnlyDictionary<string, Pose> linkAnchors =
                 LinkAnchorMap.Build(specs, poseSource);
 
+            // ── Step 2.6: Mate-point overrides ────────────────────────────────
+            // When a mate carries a geometric MatePointAssembly (e.g. the axis
+            // origin of a concentric mate's cylindrical face), the child link's
+            // URDF frame moves from the child part's design origin to that mate
+            // point. We keep the child's ORIENTATION (so meshes need only a pure
+            // translation offset to keep their world position) and replace the
+            // position with the mate point. FrameOffset per link captures the
+            // residual translation from the new frame to the part origin so the
+            // emitters can shift <visual>/<collision>/<inertial>.
+            //
+            // Walking mates here (before link build) so the mesh-rebase uses
+            // the FINAL link frame, not the legacy part-origin frame.
+            IReadOnlyList<MateSpec> matesEarly = _walker.WalkMates();
+            var matePointByChild = new Dictionary<string, System.Numerics.Vector3>(System.StringComparer.Ordinal);
+            foreach (MateSpec ms in matesEarly)
+            {
+                if (ms == null || ms.ChildLink == null || !ms.MatePointAssembly.HasValue) continue;
+                // First mate wins on duplicate child (kinematic tree => at most
+                // one parent joint per child, but JointGraphBuilder validates).
+                if (!matePointByChild.ContainsKey(ms.ChildLink))
+                    matePointByChild[ms.ChildLink] = ms.MatePointAssembly.Value;
+            }
+
+            // Effective link frames + per-link FrameOffset. For a link without a
+            // mate-point override: linkFrame = legacy anchor, FrameOffset = 0
+            // (byte-identical to pre-fix behavior). For one WITH a mate-point:
+            // linkFrame.pos = mate point, linkFrame.rot = childAnchor.rot;
+            // FrameOffset = childAnchor.rot⁻¹ · (childAnchor.pos − matePoint).
+            var linkFrames = new Dictionary<string, Pose>(System.StringComparer.Ordinal);
+            var frameOffsets = new Dictionary<string, System.Numerics.Vector3>(System.StringComparer.Ordinal);
+            foreach (var kv in linkAnchors)
+            {
+                Pose ca = kv.Value;
+                if (matePointByChild.TryGetValue(kv.Key, out System.Numerics.Vector3 mp))
+                {
+                    linkFrames[kv.Key] = new Pose(mp, ca.Rotation);
+                    var invR = System.Numerics.Quaternion.Inverse(ca.Rotation);
+                    frameOffsets[kv.Key] = System.Numerics.Vector3.Transform(ca.Position - mp, invR);
+                }
+                else
+                {
+                    linkFrames[kv.Key] = ca;
+                    frameOffsets[kv.Key] = System.Numerics.Vector3.Zero;
+                }
+            }
+
             // ── Step 3: Build links ───────────────────────────────────────────
             var links = new List<UrdfLink>(specs.Count);
             // P5 — parallel list of (link, primary part path) for appearance lookup.
@@ -195,24 +241,43 @@ namespace SW2GZ.URDFExport
                 MassProps agg = InertialAggregator.Combine(partsForAgg, anchor);
 
                 UrdfLink link = LinkBuilder.Build(spec.Name, agg, visual, collision);
+                // FrameOffset shifts <visual>/<collision>/<inertial> when the
+                // link's URDF frame is the mate point rather than the part
+                // origin. Zero when no mate point applies, so legacy goldens
+                // remain byte-identical.
+                if (frameOffsets.TryGetValue(spec.Name, out System.Numerics.Vector3 fo) &&
+                    fo != System.Numerics.Vector3.Zero)
+                {
+                    link = link with { FrameOffset = fo };
+                }
                 links.Add(link);
                 // First part path drives appearance lookup (DefaultAppearanceSource).
                 linksWithPaths.Add((link, spec.FlattenedPartPaths[0]));
             }
 
             // ── Step 4: Joints (P2) ──────────────────────────────────────────
-            // Walk the assembly mates and assemble the joint tree. WalkMates may
+            // Reuse the mate list walked in Step 2.6 (matePoint extraction needs
+            // it BEFORE link build to size the link frames). WalkMates may
             // return an empty list (no mates / skeleton walker) — joints then stay
             // empty, identical to the pre-P2 behaviour (links export at origin).
-            IReadOnlyList<MateSpec> mates = _walker.WalkMates();
+            IReadOnlyList<MateSpec> mates = matesEarly;
             var (graphJoints, rootLink, jointWarnings) = JointGraphBuilder.Build(links, mates);
             var joints = new List<UrdfJoint>(graphJoints.Count);
 
+            // mateSpec per joint name → recover the (optional) MatePointAssembly
+            // so JointOriginResolver knows whether to use the mate-point path.
+            var mateByName = new Dictionary<string, MateSpec>(System.StringComparer.Ordinal);
+            foreach (MateSpec ms in mates)
+                if (ms != null && !string.IsNullOrEmpty(ms.Name) && !mateByName.ContainsKey(ms.Name))
+                    mateByName[ms.Name] = ms;
+
             // Patch each joint's <origin> and <axis> using the link anchors.
-            // Origin = parentAnchor⁻¹ ∘ childAnchor (parent-frame transform to
-            // child frame). Axis = assembly-frame axis re-expressed in child
-            // (= joint) frame. Identity anchors → joint emerges byte-identical
-            // to JointGraphBuilder's output for back-compat with tests.
+            // - Legacy (no mate point): origin = parentAnchor⁻¹ ∘ childAnchor.
+            // - Mate-point: origin.pos sits at the mate point in the parent
+            //   frame; child link frame is at the mate point. Both modes also
+            //   re-express axis into the child (= joint) frame.
+            // Identity anchors → joint emerges byte-identical to JointGraphBuilder's
+            // output for back-compat with tests.
             //
             // We capture the assembly-frame axis BEFORE re-expression so the
             // pose dump can show both vectors side by side.
@@ -221,8 +286,10 @@ namespace SW2GZ.URDFExport
             {
                 Pose pA = linkAnchors.TryGetValue(j.ParentLink, out Pose pp) ? pp : Pose.Identity;
                 Pose cA = linkAnchors.TryGetValue(j.ChildLink,  out Pose cc) ? cc : Pose.Identity;
+                System.Numerics.Vector3? matePoint = mateByName.TryGetValue(j.Name, out MateSpec msFound)
+                    ? msFound.MatePointAssembly : null;
                 jointAxesAssembly[j.Name] = j.Axis;
-                JointOriginResolver.Resolved r = JointOriginResolver.Compute(pA, cA, j.Axis);
+                JointOriginResolver.Resolved r = JointOriginResolver.Compute(pA, cA, j.Axis, matePoint);
                 joints.Add(j with { Origin = r.Origin, Axis = r.AxisInJointFrame });
             }
 
@@ -475,9 +542,16 @@ namespace SW2GZ.URDFExport
                 try
                 {
                     IComponentRawTransformSource rawSource = _walker as IComponentRawTransformSource;
+                    var matePointsByJoint = new Dictionary<string, System.Numerics.Vector3?>(System.StringComparer.Ordinal);
+                    foreach (UrdfJoint j in joints)
+                    {
+                        matePointsByJoint[j.Name] = mateByName.TryGetValue(j.Name, out MateSpec ms)
+                            ? ms.MatePointAssembly : null;
+                    }
                     PoseDumpWriter.Write(
                         Path.Combine(writeBaseDir, "sw2gz_pose_dump.dbg.txt"),
-                        pkg, specs, linkAnchors, joints, jointAxesAssembly, rawSource);
+                        pkg, specs, linkAnchors, joints, jointAxesAssembly, rawSource,
+                        matePointsByJoint);
                 }
                 catch (Exception dumpEx)
                 {
