@@ -50,6 +50,28 @@ Current: **v2.1.0 UI-shell** shipped on `v2.1.0` branch. Backend wiring in next 
   case round-trips back to the part-local COM (byte-identical for
   the current 3R_ARM URDF).
 
+## Done (Reference-CS joint-origin port from upstream — this plan)
+
+- D1: Create-Robot PMP no longer auto-seeds Robot.Links on every open;
+  loads the saved tree verbatim and only seeds an empty `base_link` on
+  truly-fresh docs. Sw2gzDocCodec round-trip test guards A→B→C survival.
+- D2: JointDef gains `RefCsName` + `RefAxisName` DataMembers. Legacy
+  payloads without the fields deserialize with empty-string defaults
+  via [OnDeserialized] hook.
+- D3: SwJointPoseReader ports upstream `GetCoordinateSystemTransform` /
+  `GetRefAxis` / `LocalizeJoint`. WizardAssemblyWalker.WalkMates resolves
+  RefCs on the child component (via `componentModel.Extension.GetCoordinateSystemTransformByName`
+  ⨯ `Component2.Transform2`) and localises against the parent joint's
+  RefCs. Sw2gzPipeline uses MateSpec.Origin verbatim when non-Identity.
+  MathTransformPose helper extracted from WizardAssemblyWalker; pure-C#
+  SwJointPoseMath.Localize covered by source-linked tests.
+- D4: Create-Robot Joints step gains a per-joint Reference Coord System
+  + Reference Axis combobox pair, populated by SwRefGeometryEnumerator
+  (FeatureManager walk filtered by GetTypeName2() == "CoordSys"/"RefAxis").
+  Mate-driven fallback retained when both fields empty.
+
+Test count: 688 → 700.
+
 ## Next (separate plans)
 
 - **Backend wiring** — persist `Sw2gzDoc` into the SW Attribute, replace per-panel stubs with real fields, evolve `Sw2gzExportConfig` schema, full `RobotPipeline`/`WorldPipeline`/`AssetPipeline` split.
