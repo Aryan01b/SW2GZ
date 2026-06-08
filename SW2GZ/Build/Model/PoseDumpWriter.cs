@@ -38,13 +38,20 @@ namespace SW2GZ.Build.Model
     public static class PoseDumpWriter
     {
         /// Build the dump string. Pure: takes resolved data, no I/O.
+        ///
+        /// `mateePointsByJoint` is optional and maps joint name → the geometric
+        /// mate-reference point (assembly frame) the resolver used to anchor
+        /// that joint's URDF <origin>. Pass null for the legacy dump (no mate
+        /// point shown); pass an empty dict when there are no mates with
+        /// extracted points. The dump prints "(none)" per joint that's missing.
         public static string Build(
             string packageName,
             IReadOnlyList<LinkSpec> specs,
             IReadOnlyDictionary<string, Pose> linkAnchors,
             IReadOnlyList<UrdfJoint> joints,
             IReadOnlyDictionary<string, Vector3> jointAxesAssembly,
-            IComponentRawTransformSource rawSource)
+            IComponentRawTransformSource rawSource,
+            IReadOnlyDictionary<string, Vector3?> matePointsByJoint = null)
         {
             var sb = new StringBuilder();
             CultureInfo c = CultureInfo.InvariantCulture;
@@ -60,6 +67,9 @@ namespace SW2GZ.Build.Model
             sb.AppendLine("  Joint origin xyz/rpy already in PARENT-link frame (URDF emit).");
             sb.AppendLine("  AxisAssembly = mate axis as read from SW assembly frame (BEFORE re-expression).");
             sb.AppendLine("  AxisChildFrame = axis as written into URDF (AFTER childAnchor.Rotation^-1).");
+            sb.AppendLine("  MatePointAssembly = mate geometric reference point (assembly frame)");
+            sb.AppendLine("    used by JointOriginResolver to anchor the joint's URDF <origin>.");
+            sb.AppendLine("    \"(none)\" means the legacy parentAnchor-only path was taken.");
             sb.AppendLine();
 
             // ── Links ──────────────────────────────────────────────────────
@@ -131,6 +141,12 @@ namespace SW2GZ.Build.Model
                     sb.AppendLine("      AxisAssembly:   " + Fmt(axisAssembly, c));
                     sb.AppendLine("      AxisChildFrame: " + Fmt(j.Axis, c));
 
+                    Vector3? matePt = (matePointsByJoint != null &&
+                        matePointsByJoint.TryGetValue(j.Name, out Vector3? mp))
+                        ? mp : null;
+                    sb.AppendLine("      MatePointAssembly: " +
+                        (matePt.HasValue ? Fmt(matePt.Value, c) : "(none)"));
+
                     sb.AppendLine("      LimitLower: " + (j.LimitLower?.ToString("R", c) ?? "(none)"));
                     sb.AppendLine("      LimitUpper: " + (j.LimitUpper?.ToString("R", c) ?? "(none)"));
                     sb.AppendLine("      LimitEffort:   " + j.LimitEffort.ToString("R", c));
@@ -151,13 +167,14 @@ namespace SW2GZ.Build.Model
             IReadOnlyDictionary<string, Pose> linkAnchors,
             IReadOnlyList<UrdfJoint> joints,
             IReadOnlyDictionary<string, Vector3> jointAxesAssembly,
-            IComponentRawTransformSource rawSource)
+            IComponentRawTransformSource rawSource,
+            IReadOnlyDictionary<string, Vector3?> matePointsByJoint = null)
         {
             string parent = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
                 Directory.CreateDirectory(parent);
             File.WriteAllText(path, Build(packageName, specs, linkAnchors, joints,
-                jointAxesAssembly, rawSource));
+                jointAxesAssembly, rawSource, matePointsByJoint));
         }
 
         private static string Fmt(Vector3 v, CultureInfo c) =>
