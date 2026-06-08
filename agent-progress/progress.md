@@ -72,6 +72,28 @@ Current: **v2.1.0 UI-shell** shipped on `v2.1.0` branch. Backend wiring in next 
 
 Test count: 688 → 700.
 
+## Done (AutoJointResolver auto-detect wiring — this plan)
+
+- D1: AutoJointResolver walks the MateGroup, classifies the spanning
+  parent/child mate (LOCK/CONCENTRIC/DISTANCE/ANGLE → Fixed/Continuous-
+  or-Revolute/Prismatic/Revolute), and extracts the cylinder axis +
+  point from the parent-side MateEntity's cylindrical face.
+- D2: JointDef gains OriginX/Y/Z + HasOrigin DataMembers populated by
+  AutoJointResolver in EnterJointsStep. WizardAssemblyWalker.WalkMates
+  rewrites to ride those cached fields (MateSpec.MatePointAssembly =
+  origin when HasOrigin, MateSpec.Origin stays Identity so the pipeline
+  routes through JointOriginResolver.Compute(..., matePoint)). Legacy
+  XMLs without the new fields default to 0/false. SolidWorksMassProperties
+  + SwJointStateSampler now match on Component2.Name2 so multi-instance
+  parts resolve correctly.
+- D3: Joints step UI restructured. Mate listbox + Ref-CS/Ref-Axis combo
+  pickers removed; a dark-theme "Re-detect" button bar sits above the
+  joints listbox; detail labels show axis + origin + source mate when
+  HasOrigin, "NOT DETECTED" + remediation hint otherwise.
+- D4: AutoJointResolved unsealed (D1 inheritance fix) so the SW add-in
+  builds; D2 legacy-XML test rewritten to synthesize via codec round-
+  trip + regex strip. 714 tests green.
+
 ## Next (separate plans)
 
 - **Backend wiring** — persist `Sw2gzDoc` into the SW Attribute, replace per-panel stubs with real fields, evolve `Sw2gzExportConfig` schema, full `RobotPipeline`/`WorldPipeline`/`AssetPipeline` split.
