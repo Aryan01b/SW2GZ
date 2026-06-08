@@ -11,7 +11,11 @@ using SW2GZ.Build;
 
 namespace SW2GZ.SwSurface
 {
-    public sealed class AutoJointResolved
+    // Not sealed: SW_INTEROP-gated AutoJointResolver.Resolved is a thin alias
+    // that derives from this DTO so tests reference the base type and the SW
+    // add-in references AutoJointResolver.Resolved without a switch on the
+    // call site.
+    public class AutoJointResolved
     {
         public bool Found;
         public string MateName = string.Empty;

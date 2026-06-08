@@ -75,33 +75,49 @@ namespace SW2GZ.Test.Build.Model
             // also absent. Must round-trip with HasOrigin == false and the
             // numeric origin fields == 0. Element order mirrors the
             // DataContract default ordering so the parser accepts it.
-            const string legacyXml =
-@"<?xml version=""1.0"" encoding=""utf-16""?>
-<Sw2gzDoc xmlns:i=""http://www.w3.org/2001/XMLSchema-instance"">
-  <Robot>
-    <Links>
-      <LinkDef>
-        <Name>base_link</Name>
-        <ParentName/>
-        <ComponentIds><string>base-1@asm</string></ComponentIds>
-      </LinkDef>
-    </Links>
-    <Joints>
-      <JointDef>
-        <Name>j_legacy</Name>
-        <ParentLink>base_link</ParentLink>
-        <ChildLink>arm</ChildLink>
-        <Type>Revolute</Type>
-        <MateName>OldMate</MateName>
-        <AxisX>1</AxisX>
-        <AxisY>0</AxisY>
-        <AxisZ>0</AxisZ>
-        <LimitLower>-1</LimitLower>
-        <LimitUpper>1</LimitUpper>
-      </JointDef>
-    </Joints>
-  </Robot>
-</Sw2gzDoc>";
+            // Sw2gzDocCodec writes/reads UTF-8 (see Sw2gzDocCodec.ToXmlString),
+            // so the XML declaration must match — the .NET XmlReader rejects
+            // declared-encoding/actual-stream-encoding mismatches outright.
+            // Build the legacy XML by round-tripping a doc through the codec
+            // first, then stripping out the new D2 elements. This guarantees
+            // the namespace + DataContract element ordering match whatever
+            // the live serializer expects today, instead of hand-typing.
+            var seed = new Sw2gzDoc();
+            seed.Robot.Links = new List<LinkDef>
+            {
+                new LinkDef { Name = "base_link", ParentName = "", ComponentIds = new List<string> { "base-1@asm" } },
+                new LinkDef { Name = "arm",       ParentName = "base_link", ComponentIds = new List<string> { "arm-1@asm" } },
+            };
+            var seedJoint = new JointDef
+            {
+                Name       = "j_legacy",
+                ParentLink = "base_link",
+                ChildLink  = "arm",
+                Type       = UrdfJointType.Revolute,
+                MateName   = "OldMate",
+                LimitLower = -1.0,
+                LimitUpper =  1.0,
+            };
+            seedJoint.SetAxis(new Vector3(1, 0, 0));
+            seed.Robot.Joints = new List<JointDef> { seedJoint };
+            string legacyXml = Sw2gzDocCodec.ToXmlString(seed);
+
+            // Strip every D2-introduced element so the parser sees a payload
+            // that looks like it was written by the pre-D2 wizard. Drops:
+            //   - HasOrigin / OriginX/Y/Z       (D2 auto-detect fields)
+            //   - HasMatePoint / MatePointX/Y/Z (legacy mate-point fields)
+            //   - RefCsName / RefAxisName       (D2 of the ref-CS plan)
+            // The remaining XML must still round-trip with the new fields
+            // defaulting to 0 / false.
+            string[] toStrip =
+            {
+                "HasOrigin", "OriginX", "OriginY", "OriginZ",
+                "HasMatePoint", "MatePointX", "MatePointY", "MatePointZ",
+                "RefCsName", "RefAxisName",
+            };
+            foreach (string elem in toStrip)
+                legacyXml = System.Text.RegularExpressions.Regex.Replace(
+                    legacyXml, @"<" + elem + @"[^>]*/>|<" + elem + @">[^<]*</" + elem + ">", "");
 
             Sw2gzDoc dst = Sw2gzDocCodec.FromXmlString(legacyXml);
             Assert.NotNull(dst);
