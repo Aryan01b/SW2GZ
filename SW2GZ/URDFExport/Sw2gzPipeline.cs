@@ -294,6 +294,8 @@ namespace SW2GZ.URDFExport
                 // (Reference-CS path), use it as-is; only the axis still needs
                 // re-expression into the joint frame. Otherwise fall back to
                 // anchor-derived origin + mate-point overlay.
+                Pose finalOrigin;
+                System.Numerics.Vector3 finalAxis;
                 bool walkerProvidedOrigin = msFound != null && !IsIdentityPose(msFound.Origin);
                 if (walkerProvidedOrigin)
                 {
@@ -302,15 +304,52 @@ namespace SW2GZ.URDFExport
                     // frame so URDF <axis> stays a joint-frame vector.
                     System.Numerics.Quaternion invChildRot =
                         System.Numerics.Quaternion.Inverse(cA.Rotation);
-                    var axisInJoint = System.Numerics.Vector3.Transform(j.Axis, invChildRot);
-                    joints.Add(j with { Origin = msFound.Origin, Axis = axisInJoint });
+                    finalOrigin = msFound.Origin;
+                    finalAxis = System.Numerics.Vector3.Transform(j.Axis, invChildRot);
                 }
                 else
                 {
                     JointOriginResolver.Resolved r =
                         JointOriginResolver.Compute(pA, cA, j.Axis, matePoint);
-                    joints.Add(j with { Origin = r.Origin, Axis = r.AxisInJointFrame });
+                    finalOrigin = r.Origin;
+                    finalAxis = r.AxisInJointFrame;
                 }
+
+                // Shift the SW raw mate limits so URDF joint=0 corresponds to
+                // the SW current assembly pose (which is what `finalOrigin`
+                // captures). Without this shift, the URDF origin bakes in the
+                // SW current angle around `axis` AND the limits stay relative
+                // to SW's neutral; sliding to lower/upper drives the child
+                // PAST the real SW range, e.g. for a hinge whose SW current is
+                // at the lower limit, the slider min would put the child at
+                // -2 × lower instead of 0.
+                //
+                // For revolute / continuous: subtract the twist component of
+                //   finalOrigin.Rotation around finalAxis.
+                // For prismatic: subtract the projection of finalOrigin.Position
+                //   onto finalAxis.
+                // Fixed joints have no limits to shift; continuous joints
+                // ignore limits at runtime, but we still shift defensively so
+                // any downstream "treat continuous as wide revolute" code
+                // sees consistent values.
+                double limitShift = 0.0;
+                switch (j.Type)
+                {
+                    case UrdfJointType.Revolute:
+                    case UrdfJointType.Continuous:
+                        limitShift = PoseMath.TwistAngle(finalOrigin.Rotation, finalAxis);
+                        break;
+                    case UrdfJointType.Prismatic:
+                        limitShift = PoseMath.SlideDistance(finalOrigin.Position, finalAxis);
+                        break;
+                }
+                joints.Add(j with
+                {
+                    Origin = finalOrigin,
+                    Axis = finalAxis,
+                    LimitLower = j.LimitLower - limitShift,
+                    LimitUpper = j.LimitUpper - limitShift,
+                });
             }
 
             // JointGraphBuilder warnings are non-fatal — collect them as
