@@ -6,16 +6,18 @@ In-addin browser preview for SW2GZ exports. Loads /robot.urdf, fetches
 DAE / STL meshes from /meshes/, parses the URDF for inertial / joint
 metadata, and renders via three.js + urdf-loader.
 
-Layout: 300 px sidebar (workspace, frames, links, joints, view) + 1 fr
-3D stage. World-frame gizmo pinned top-right, floating link labels in
-the scene. Live joint values stream from SW via /joint_states @ 10 Hz —
-the matching slider follows.
+Layout (Option D — Minimal):
+  - 60 px icon rail at left with Links + Joints drawer buttons.
+  - Slide-out drawer (300 px) with Links pane or Joints pane.
+  - 3D viewport fills the rest; HUD overlays surface key state.
+  - Bottom HUD strip holds display toggles (no separate panel).
 
 Conventions:
   - Z-up world (REP-103). Camera up = +Z. Axes overlay X red / Y green / Z blue.
   - Mouse: left-drag orbit, wheel zoom, right-drag (or shift+drag) pan.
 
 Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
+Modules load from ./vendor/* — zero network calls at runtime.
 -->
 <html lang="en">
 <head>
@@ -24,126 +26,269 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
   <title>SW2GZ — 3D preview</title>
   <style>
     :root {
-      --bg-0:        #0e1116;
-      --bg-1:        #1a1f29;
-      --panel:       #161b24;
-      --panel-edge:  #232a36;
-      --fore:        #e6e8ec;
-      --subtle:      #8b94a3;
-      --accent:      #4c9ce0;
-      --warn:        #f0a352;
-      --axis-x:      #ff5454;
-      --axis-y:      #54ff7a;
-      --axis-z:      #54a4ff;
+      --bg:        #14171c;
+      --panel:     #1a1e25;
+      --panel-2:   #20252e;
+      --panel-3:   #232831;
+      --edge:      #2a313c;
+      --edge-2:    #353d4a;
+      --fore:      #d6dae1;
+      --fore-2:    #a8aeb8;
+      --muted:     #6c7280;
+      --accent:    #5aa8e0;
+      --good:      #6ed084;
+      --warn:      #e6a25a;
+      --bad:       #d86060;
+      --x:         #e26c6c;
+      --y:         #6ed084;
+      --z:         #5aa8e0;
     }
     * { box-sizing: border-box; }
     html, body {
       margin: 0; padding: 0; height: 100%;
-      background: radial-gradient(ellipse at center, var(--bg-1) 0%, var(--bg-0) 80%);
-      color: var(--fore);
-      font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
+      background: var(--bg); color: var(--fore);
+      font: 12.5px/1.5 "Segoe UI", system-ui, sans-serif;
       overflow: hidden;
     }
-    #app { display: grid; grid-template-columns: 320px 1fr; height: 100%; }
-    #side {
-      background: var(--panel);
-      border-right: 1px solid var(--panel-edge);
-      overflow-y: auto;
-      padding: 14px 16px 24px;
+    #app {
+      display: grid; grid-template-columns: 60px 1fr; height: 100vh;
+      position: relative;
     }
-    #side h1 { margin: 0 0 4px 0; font-size: 14px; letter-spacing: 0.3px; }
-    #side .sub { color: var(--subtle); font-size: 11px; margin-bottom: 14px; }
-    .section {
-      margin: 14px 0 0; padding-top: 12px;
-      border-top: 1px solid var(--panel-edge);
+
+    /* ── Icon rail ────────────────────────────────────────────── */
+    #rail {
+      background: var(--panel); border-right: 1px solid var(--edge);
+      display: flex; flex-direction: column;
     }
-    .section h2 {
-      margin: 0 0 8px 0; font-size: 11px;
-      text-transform: uppercase; letter-spacing: 1px; color: var(--subtle);
+    #rail .logo {
+      height: 50px;
+      display: flex; align-items: center; justify-content: center;
+      border-bottom: 1px solid var(--edge); color: var(--accent);
+      font-weight: 700; font-size: 12.5px; letter-spacing: 1px;
+      font-family: Consolas, monospace;
     }
-    .legend { font-size: 11px; color: var(--subtle); }
-    .legend .x { color: var(--axis-x); }
-    .legend .y { color: var(--axis-y); }
-    .legend .z { color: var(--axis-z); }
-    label.toggle {
-      display: flex; align-items: center; gap: 6px;
-      cursor: pointer; user-select: none; font-size: 12px;
-      padding: 3px 0;
+    .rail-btn {
+      height: 60px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 4px;
+      cursor: pointer; color: var(--muted); user-select: none;
+      border-left: 2px solid transparent;
+      transition: background 0.1s, color 0.1s;
     }
-    label.toggle input { accent-color: var(--accent); }
+    .rail-btn:hover { color: var(--fore-2); background: var(--panel-2); }
+    .rail-btn.on {
+      color: var(--accent); background: var(--panel-2);
+      border-left-color: var(--accent);
+    }
+    .rail-btn .ico {
+      font-size: 18px; line-height: 1;
+      font-family: Consolas, monospace; font-weight: 600;
+    }
+    .rail-btn .lbl {
+      font-size: 9.5px; letter-spacing: 0.6px; text-transform: uppercase;
+    }
+    .rail-btn .count {
+      position: absolute; right: 4px; top: 6px;
+      background: var(--edge-2); color: var(--fore-2);
+      font-size: 9px; font-family: Consolas, monospace;
+      padding: 1px 4px; border-radius: 2px;
+    }
+    .rail-btn { position: relative; }
+    #rail .spacer { flex: 1; }
+
+    /* ── Drawer ──────────────────────────────────────────────── */
+    #drawer {
+      position: absolute; left: 60px; top: 0; height: 100%;
+      width: 320px; background: var(--panel-2);
+      border-right: 1px solid var(--edge); z-index: 5;
+      overflow: hidden;
+      transform: translateX(-100%); transition: transform 0.18s ease;
+      box-shadow: 4px 0 16px rgba(0,0,0,0.3);
+      display: flex; flex-direction: column;
+    }
+    #drawer.open { transform: translateX(0); }
+    .drawer-h {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 14px; border-bottom: 1px solid var(--edge);
+      flex-shrink: 0;
+    }
+    .drawer-h .title {
+      font-size: 11.5px; letter-spacing: 1.2px; text-transform: uppercase;
+      color: var(--fore-2);
+    }
+    .drawer-h .count {
+      color: var(--muted); font-size: 11px;
+      font-family: Consolas, monospace;
+    }
+    .drawer-h .close {
+      margin-left: auto; cursor: pointer; color: var(--muted);
+      font-family: Consolas, monospace; font-size: 14px;
+      width: 22px; height: 22px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid transparent;
+    }
+    .drawer-h .close:hover { color: var(--fore); border-color: var(--edge-2); }
+
+    .filter {
+      padding: 8px 12px; border-bottom: 1px solid var(--edge);
+      flex-shrink: 0;
+    }
+    .filter input {
+      width: 100%; background: var(--bg); color: var(--fore);
+      border: 1px solid var(--edge-2); padding: 5px 8px;
+      font: 11.5px Consolas, monospace; outline: none;
+    }
+    .filter input:focus { border-color: var(--accent); }
+
+    .drawer-body {
+      flex: 1; overflow-y: auto;
+      padding: 4px 0;
+    }
+    .drawer-body::-webkit-scrollbar { width: 10px; }
+    .drawer-body::-webkit-scrollbar-thumb { background: var(--edge-2); }
+
+    /* List entries (Links + Joints share styling) */
     .entry {
-      border: 1px solid transparent; border-radius: 4px;
-      padding: 6px 8px; margin-bottom: 4px;
-      cursor: pointer; transition: background 0.1s;
-      font-family: Consolas, monospace; font-size: 11px;
+      border-left: 2px solid transparent;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-family: Consolas, monospace; font-size: 11.5px;
     }
-    .entry:hover { background: rgba(76,156,224,0.06); border-color: var(--panel-edge); }
-    .entry.active { background: rgba(76,156,224,0.12); border-color: var(--accent); }
+    .entry:hover { background: var(--panel-3); }
+    .entry.active {
+      background: rgba(90, 168, 224, 0.10);
+      border-left-color: var(--accent);
+    }
+    .entry .row1 {
+      display: flex; align-items: center; gap: 6px;
+    }
     .entry .name { color: var(--fore); }
-    .entry .meta { color: var(--subtle); font-size: 10px; margin-top: 2px; }
-    .entry .type { color: var(--accent); }
-    .entry .type.fixed { color: var(--subtle); }
-    .entry .type.revolute, .entry .type.continuous { color: var(--axis-y); }
-    .entry .type.prismatic { color: var(--axis-z); }
-    .entry .type.floating, .entry .type.planar { color: var(--warn); }
-    .detail {
+    .entry .badge {
+      font-size: 9.5px; padding: 0 5px; border-radius: 2px;
+      letter-spacing: 0.4px; text-transform: uppercase;
+    }
+    .entry .badge.rev,
+    .entry .badge.continuous {
+      color: var(--y);
+      background: rgba(110, 208, 132, 0.08);
+      border: 1px solid rgba(110, 208, 132, 0.25);
+    }
+    .entry .badge.prismatic {
+      color: var(--z);
+      background: rgba(90, 164, 255, 0.08);
+      border: 1px solid rgba(90, 164, 255, 0.25);
+    }
+    .entry .badge.fixed {
+      color: var(--muted);
+      background: rgba(108, 114, 128, 0.08);
+      border: 1px solid var(--edge-2);
+    }
+    .entry .badge.floating,
+    .entry .badge.planar {
+      color: var(--warn);
+      background: rgba(230, 162, 90, 0.08);
+      border: 1px solid rgba(230, 162, 90, 0.25);
+    }
+    .entry .meta {
+      color: var(--muted); font-size: 10.5px; margin-top: 2px;
+    }
+    .entry .detail {
       display: none;
-      margin-top: 4px; padding: 6px 8px;
-      background: rgba(0,0,0,0.25); border-radius: 4px;
-      font-family: Consolas, monospace; font-size: 10px;
-      color: var(--subtle);
+      margin-top: 6px; padding: 7px 9px;
+      background: var(--bg);
+      border: 1px solid var(--edge);
+      font-size: 10.5px; color: var(--fore-2);
     }
     .entry.active .detail { display: block; }
-    .detail .kv { display: grid; grid-template-columns: 60px 1fr; gap: 2px 8px; }
-    .detail .kv b { color: var(--fore); font-weight: normal; }
-    .detail input[type=range] {
-      width: 100%; margin-top: 6px; accent-color: var(--accent);
+    .detail .kv {
+      display: grid; grid-template-columns: 70px 1fr; gap: 2px 8px;
     }
-    .detail .slidewrap { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
-    .detail .slidewrap input[type=range] { flex: 1; margin-top: 0; }
+    .detail .kv b { color: var(--fore); font-weight: normal; }
+    .detail .slidewrap {
+      margin-top: 7px; display: flex; gap: 6px; align-items: center;
+    }
+    .detail .slidewrap input[type=range] {
+      flex: 1; accent-color: var(--accent);
+    }
     .detail .slidewrap .val {
       color: var(--accent); font-family: Consolas, monospace;
-      font-size: 10px; width: 56px; text-align: right;
+      font-size: 10.5px; width: 60px; text-align: right;
     }
-    #stage { position: relative; min-width: 0; }
+    .empty {
+      padding: 20px 14px; color: var(--muted);
+      font-size: 11.5px; text-align: center;
+    }
+
+    /* ── Viewport ────────────────────────────────────────────── */
+    #stage {
+      position: relative; min-width: 0;
+      background: radial-gradient(ellipse at center, #1a1f28 0%, #0c0e12 80%);
+      overflow: hidden;
+    }
     canvas { display: block; }
-    #status {
-      position: absolute; bottom: 10px; left: 14px;
-      font-size: 11px; color: var(--subtle);
-      background: rgba(0,0,0,0.45); padding: 4px 10px;
-      border-radius: 4px;
-      transition: opacity 0.4s;
+
+    /* HUD overlays */
+    .hud {
+      position: absolute;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid var(--edge);
+      padding: 6px 10px;
+      font-family: Consolas, monospace; font-size: 11px;
+      color: var(--fore-2);
+      pointer-events: none;
     }
+    .hud b { color: var(--accent); font-weight: normal; }
+    .hud-tl { top: 14px; left: 14px; max-width: 360px; }
+    .hud-tl .line { margin: 1px 0; }
+    .hud-tr {
+      top: 14px; right: 14px; color: var(--muted);
+    }
+    .hud-bl {
+      bottom: 14px; left: 14px;
+      display: flex; gap: 4px; padding: 4px 6px;
+      pointer-events: auto;
+    }
+    .hud-bl .tg {
+      background: transparent;
+      border: 1px solid var(--edge-2);
+      padding: 3px 7px; font-size: 10.5px;
+      color: var(--muted); cursor: pointer;
+      font-family: Consolas, monospace;
+      transition: color 0.1s, border-color 0.1s, background 0.1s;
+      user-select: none;
+    }
+    .hud-bl .tg:hover { color: var(--fore-2); }
+    .hud-bl .tg.on {
+      color: var(--accent); border-color: var(--accent);
+      background: rgba(90, 168, 224, 0.06);
+    }
+    .hud-br {
+      bottom: 14px; right: 14px; color: var(--muted); font-size: 10.5px;
+    }
+
+    /* Floating link-name labels */
     .link-label {
       position: absolute; transform: translate(-50%, -100%);
       pointer-events: none;
-      font: 11px/1 Consolas, monospace; color: var(--accent);
-      background: rgba(14,17,22,0.7); padding: 1px 4px; border-radius: 2px;
+      font: 10.5px/1 Consolas, monospace; color: var(--accent);
+      background: rgba(14, 17, 22, 0.7); padding: 1px 5px;
+      border: 1px solid var(--edge);
       white-space: nowrap;
     }
+
     .err {
-      color: var(--axis-x); font-size: 11px;
-      background: rgba(255,84,84,0.08);
-      border-left: 2px solid var(--axis-x);
-      padding: 6px 8px; margin-top: 8px;
-      font-family: Consolas, monospace;
-    }
-    #loadingOverlay {
-      position: absolute; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      color: var(--subtle); font-size: 14px;
-      background: rgba(14,17,22,0.4);
-      pointer-events: none;
+      position: fixed; top: 12px; right: 12px;
+      max-width: 520px; z-index: 9999;
+      background: #3a0e0e; border: 1px solid var(--bad);
+      color: #ffcfcf; padding: 8px 12px;
+      font: 11px/1.4 Consolas, monospace;
+      white-space: pre-wrap; word-break: break-word;
     }
   </style>
-  <!--
-    Offline-first importmap: every module resolves to a file under
-    ./vendor/ that ships with the addin installer. No network calls.
-    Pinned versions match scripts/FetchPreviewVendor.ps1 - bump there
-    AND here together. URDFLoader.js relative-imports ./URDFClasses.js
-    and ColladaLoader relative-imports ../loaders/TGALoader.js - both
-    resolve correctly from the vendor tree without explicit map entries.
-  -->
+
+  <!-- Offline-first importmap: every module resolves under ./vendor/.
+       No network calls at runtime. Pinned versions match
+       scripts/FetchPreviewVendor.ps1; bump both together. -->
   <script type="importmap">
   {
     "imports": {
@@ -156,62 +301,16 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
   </script>
 </head>
 <body>
-  <div id="app">
-    <aside id="side">
-      <h1>SW2GZ Preview</h1>
-      <div class="sub" id="pkginfo">loading…</div>
 
-      <div class="section">
-        <h2>Display</h2>
-        <label class="toggle"><input type="checkbox" id="showVisual" checked/> Visual meshes (DAE)</label>
-        <label class="toggle"><input type="checkbox" id="showCollision"/> Collision hulls (STL)</label>
-        <label class="toggle"><input type="checkbox" id="showLinkAxes" checked/> Link frames (TF triads)</label>
-        <label class="toggle"><input type="checkbox" id="showJointAxes" checked/> Joint axes</label>
-        <label class="toggle"><input type="checkbox" id="showInertial"/> Inertial COM markers</label>
-        <label class="toggle"><input type="checkbox" id="showLinkLabels" checked/> Link name labels</label>
-        <label class="toggle"><input type="checkbox" id="showGrid" checked/> Ground grid (XY)</label>
-        <label class="toggle"><input type="checkbox" id="livePoll" checked/> Live SW joint sync</label>
-        <div class="legend" style="margin-top:6px">
-          Axes — <span class="x">X</span> · <span class="y">Y</span> · <span class="z">Z</span>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>Links <span id="linkCount" class="legend"></span></h2>
-        <div id="linksList"></div>
-      </div>
-
-      <div class="section">
-        <h2>Joints <span id="jointCount" class="legend"></span></h2>
-        <div id="jointsList"></div>
-      </div>
-
-      <div class="section">
-        <h2>View</h2>
-        <div class="legend">Left-drag orbit · wheel zoom · right-drag pan</div>
-      </div>
-
-      <div id="errors"></div>
-    </aside>
-    <div id="stage">
-      <div id="status">Loading…</div>
-      <div id="loadingOverlay">Fetching URDF…</div>
-    </div>
-  </div>
-
-<!-- Surface ANY uncaught error (module import failure, syntax error, etc.)
-     directly on the page so the user doesn't need DevTools open to diagnose. -->
+<!-- Surface any uncaught error directly on the page so the user doesn't
+     need DevTools open to diagnose. -->
 <script>
   (function () {
     function pin(msg) {
       var box = document.createElement('div');
-      box.style.cssText =
-        'position:fixed;top:8px;right:8px;max-width:680px;z-index:9999;' +
-        'background:#3a0e0e;border:1px solid #ff5454;color:#ffcfcf;' +
-        'padding:10px 14px;border-radius:6px;font:11px/1.4 Consolas,monospace;' +
-        'white-space:pre-wrap;word-break:break-word;';
+      box.className = 'err';
       box.textContent = msg;
-      document.body && document.body.appendChild(box);
+      (document.body || document.documentElement).appendChild(box);
     }
     window.addEventListener('error', function (e) {
       var src = e.filename ? (e.filename + ':' + e.lineno + ':' + e.colno) : '';
@@ -223,39 +322,156 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
   })();
 </script>
 
+<div id="app">
+
+  <!-- Icon rail -->
+  <div id="rail">
+    <div class="logo">SW2</div>
+    <div class="rail-btn" id="btnLinks"  title="Links">
+      <span class="ico">⊟</span>
+      <span class="lbl">links</span>
+      <span class="count" id="cntLinks">–</span>
+    </div>
+    <div class="rail-btn" id="btnJoints" title="Joints">
+      <span class="ico">⤺</span>
+      <span class="lbl">joints</span>
+      <span class="count" id="cntJoints">–</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="rail-btn" id="btnFit"   title="Re-fit camera to model">
+      <span class="ico">⛶</span>
+      <span class="lbl">fit</span>
+    </div>
+  </div>
+
+  <!-- Drawer -->
+  <div id="drawer">
+    <div class="drawer-h">
+      <span class="title" id="drawerTitle">Links</span>
+      <span class="count" id="drawerCount"></span>
+      <span class="close" onclick="closeDrawer()">✕</span>
+    </div>
+    <div class="filter">
+      <input type="text" id="filterInput" placeholder="filter…" autocomplete="off"/>
+    </div>
+    <div class="drawer-body" id="linksList" data-pane="links"></div>
+    <div class="drawer-body" id="jointsList" data-pane="joints" style="display:none"></div>
+  </div>
+
+  <!-- Stage -->
+  <main id="stage">
+    <div class="hud hud-tl">
+      <div class="line" id="hudTitle">Loading…</div>
+      <div class="line" id="hudCounts" style="color: var(--muted)"></div>
+      <div class="line" id="hudSelected" style="color: var(--accent); display:none"></div>
+    </div>
+    <div class="hud hud-tr" id="hudCam">Z-up · REP-103</div>
+    <div class="hud hud-bl">
+      <span class="tg on"   id="tgVisual"    title="Show / hide DAE meshes">▣ visual</span>
+      <span class="tg"      id="tgCollision" title="Show / hide STL collision hulls">▢ collision</span>
+      <span class="tg on"   id="tgLinkAxes"  title="Show / hide per-link TF triads">⊕ frames</span>
+      <span class="tg on"   id="tgJointAxes" title="Show / hide per-joint axis arrows">⤺ axes</span>
+      <span class="tg"      id="tgInertial"  title="Show / hide inertial COM markers">● COM</span>
+      <span class="tg on"   id="tgLabels"    title="Show / hide floating link-name labels">labels</span>
+      <span class="tg on"   id="tgGrid"      title="Show / hide ground grid">grid</span>
+      <span class="tg on"   id="tgLive"      title="Pause / resume live SW joint poll">⟳ live</span>
+    </div>
+    <div class="hud hud-br" id="hudStatus">init</div>
+  </main>
+
+</div>
+
 <script type="module">
-  import * as THREE from 'three';
+  import * as THREE        from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js';
   import { STLLoader }     from 'three/addons/loaders/STLLoader.js';
   import URDFLoader        from 'urdf-loader';
 
-  // ── DOM refs ───────────────────────────────────────────────────
+  // ── DOM ─────────────────────────────────────────────────────
   const stage         = document.getElementById('stage');
-  const statusEl      = document.getElementById('status');
-  const loadingEl     = document.getElementById('loadingOverlay');
-  const pkginfoEl     = document.getElementById('pkginfo');
+  const drawerEl      = document.getElementById('drawer');
+  const drawerTitleEl = document.getElementById('drawerTitle');
+  const drawerCountEl = document.getElementById('drawerCount');
+  const filterInputEl = document.getElementById('filterInput');
   const linksListEl   = document.getElementById('linksList');
   const jointsListEl  = document.getElementById('jointsList');
-  const linkCountEl   = document.getElementById('linkCount');
-  const jointCountEl  = document.getElementById('jointCount');
-  const errorsEl      = document.getElementById('errors');
+  const btnLinks      = document.getElementById('btnLinks');
+  const btnJoints     = document.getElementById('btnJoints');
+  const btnFit        = document.getElementById('btnFit');
+  const cntLinksEl    = document.getElementById('cntLinks');
+  const cntJointsEl   = document.getElementById('cntJoints');
+  const hudTitleEl    = document.getElementById('hudTitle');
+  const hudCountsEl   = document.getElementById('hudCounts');
+  const hudSelectedEl = document.getElementById('hudSelected');
+  const hudCamEl      = document.getElementById('hudCam');
+  const hudStatusEl   = document.getElementById('hudStatus');
 
-  const setStatus = (txt, isErr) => {
-    statusEl.textContent = txt;
-    statusEl.style.color = isErr ? 'var(--axis-x)' : '';
-    statusEl.style.opacity = '1';
-  };
-  const showError = (msg) => {
+  // HUD toggle nodes
+  const tgVisual    = document.getElementById('tgVisual');
+  const tgCollision = document.getElementById('tgCollision');
+  const tgLinkAxes  = document.getElementById('tgLinkAxes');
+  const tgJointAxes = document.getElementById('tgJointAxes');
+  const tgInertial  = document.getElementById('tgInertial');
+  const tgLabels    = document.getElementById('tgLabels');
+  const tgGrid      = document.getElementById('tgGrid');
+  const tgLive      = document.getElementById('tgLive');
+
+  function setStatus(txt, isErr) {
+    hudStatusEl.textContent = txt;
+    hudStatusEl.style.color = isErr ? 'var(--bad)' : 'var(--muted)';
+  }
+  function showError(msg) {
     const div = document.createElement('div');
     div.className = 'err';
     div.textContent = msg;
-    errorsEl.appendChild(div);
+    document.body.appendChild(div);
     setStatus(msg, true);
     console.error('[sw2gz-preview]', msg);
-  };
+  }
 
-  // ── Scene + camera + lights ────────────────────────────────────
+  // ── Drawer open / close ─────────────────────────────────────
+  let activePane = null; // 'links' | 'joints' | null
+  function openDrawer(pane) {
+    activePane = pane;
+    drawerEl.classList.add('open');
+    btnLinks.classList.toggle('on',  pane === 'links');
+    btnJoints.classList.toggle('on', pane === 'joints');
+    linksListEl.style.display  = pane === 'links'  ? 'block' : 'none';
+    jointsListEl.style.display = pane === 'joints' ? 'block' : 'none';
+    drawerTitleEl.textContent  = pane === 'links' ? 'Links' : 'Joints';
+    const count = pane === 'links' ? cntLinksEl.textContent : cntJointsEl.textContent;
+    drawerCountEl.textContent = count !== '–' ? '(' + count + ')' : '';
+    filterInputEl.value = '';
+    applyFilter('');
+    filterInputEl.focus();
+  }
+  function closeDrawer() {
+    activePane = null;
+    drawerEl.classList.remove('open');
+    btnLinks.classList.remove('on');
+    btnJoints.classList.remove('on');
+  }
+  window.closeDrawer = closeDrawer;
+  btnLinks.addEventListener('click', () => {
+    activePane === 'links' ? closeDrawer() : openDrawer('links');
+  });
+  btnJoints.addEventListener('click', () => {
+    activePane === 'joints' ? closeDrawer() : openDrawer('joints');
+  });
+  btnFit.addEventListener('click', () => fitCamera());
+
+  filterInputEl.addEventListener('input', () => applyFilter(filterInputEl.value));
+  function applyFilter(q) {
+    const list = activePane === 'joints' ? jointsListEl : linksListEl;
+    const needle = (q || '').trim().toLowerCase();
+    list.querySelectorAll('.entry').forEach(el => {
+      const name = el.dataset.name || '';
+      el.style.display = (!needle || name.toLowerCase().includes(needle)) ? '' : 'none';
+    });
+  }
+
+  // ── Scene + camera + lights ─────────────────────────────────
   const scene = new THREE.Scene();
   scene.background = null;
 
@@ -273,49 +489,41 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
   controls.dampingFactor = 0.08;
   controls.target.set(0, 0, 0.15);
 
-  // Lighting: SOLIDWORKS DAE materials default to dim diffuse → bump
-  // ambient + key + fill + rim so the model is legible even with weak
-  // material colors. Slightly biased to neutral white to avoid tinting.
   scene.add(new THREE.AmbientLight(0xffffff, 0.65));
   scene.add(new THREE.HemisphereLight(0xb8c4d0, 0x2a3040, 0.55));
-  const key  = new THREE.DirectionalLight(0xffffff, 1.1);
-  key.position.set(2, 3, 2.5); scene.add(key);
-  const fill = new THREE.DirectionalLight(0xc8d8ff, 0.55);
-  fill.position.set(-2, -1, 1); scene.add(fill);
-  const rim  = new THREE.DirectionalLight(0xffffff, 0.45);
-  rim.position.set(0, -2, -1); scene.add(rim);
+  const keyL  = new THREE.DirectionalLight(0xffffff, 1.1);
+  keyL.position.set(2, 3, 2.5); scene.add(keyL);
+  const fillL = new THREE.DirectionalLight(0xc8d8ff, 0.55);
+  fillL.position.set(-2, -1, 1); scene.add(fillL);
+  const rimL  = new THREE.DirectionalLight(0xffffff, 0.45);
+  rimL.position.set(0, -2, -1); scene.add(rimL);
 
-  // Ground grid in XY (Z-up world).
   const grid = new THREE.GridHelper(4, 40, 0x444c5a, 0x232a36);
   grid.rotation.x = Math.PI / 2;
   grid.material.opacity = 0.45;
   grid.material.transparent = true;
   scene.add(grid);
 
-  // World-origin triad (large).
   const worldAxes = new THREE.AxesHelper(0.4);
   scene.add(worldAxes);
 
-  // ── Corner world-frame gizmo (overlay) ─────────────────────────
+  // Corner gizmo overlay
   const GIZMO_PX = 96;
   const gizmoScene = new THREE.Scene();
-  const gizmoCam = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, 0.1, 10);
+  const gizmoCam   = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, 0.1, 10);
   gizmoCam.position.set(0, 0, 3);
   gizmoCam.up.set(0, 0, 1);
   gizmoScene.add(new THREE.AxesHelper(1));
 
-  // ── Per-load state ─────────────────────────────────────────────
+  // ── Per-load state ──────────────────────────────────────────
   let robot = null;
   let linkLabels = [];
   let perLinkAxes = [];
   let perJointAxes = [];
   let inertialMarkers = [];
-  // Parsed metadata: linkMeta[name] = {mass, com[3], inertia{...}, hasInertial}
-  // jointMeta[name] = {type, parent, child, origin{xyz, rpy}, axis[3], limit{lower,upper,effort,velocity}}
   let linkMeta = {};
   let jointMeta = {};
 
-  // ── Resize ─────────────────────────────────────────────────────
   function resize() {
     const w = stage.clientWidth;
     const h = stage.clientHeight;
@@ -326,10 +534,7 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
   addEventListener('resize', resize);
   resize();
 
-  // ── URDF metadata parser ───────────────────────────────────────
-  // urdf-loader gives us joints/links but drops inertials and some
-  // joint metadata. Parse the XML ourselves so the sidebar has the
-  // raw exported values to display.
+  // ── URDF metadata parser ────────────────────────────────────
   function parseUrdfMeta(urdfText) {
     const doc = new DOMParser().parseFromString(urdfText, 'application/xml');
     const err = doc.querySelector('parsererror');
@@ -389,14 +594,12 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
     }
   }
 
-  // ── URDF load ──────────────────────────────────────────────────
+  // ── URDF load ────────────────────────────────────────────────
   const loader = new URDFLoader();
-  // packages map filled in after we read <robot name="...">.
   loader.packages = { '': '' };
-  // SOLIDWORKS-exported DAE files often ship with near-black diffuse
-  // materials → models render invisible regardless of scene lighting.
-  // Force a bright neutral material on every mesh under the loaded scene
-  // so geometry is legible without dependence on DAE material fidelity.
+
+  // Override SW-exported DAE materials with a neutral standard material so
+  // geometry stays legible regardless of original diffuse color.
   const overrideMat = new THREE.MeshStandardMaterial({
     color: 0xc8cdd5, roughness: 0.55, metalness: 0.05,
   });
@@ -408,6 +611,7 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
       }
     });
   }
+
   loader.loadMeshCb = (path, manager, onLoad) => {
     const lower = path.toLowerCase();
     if (lower.endsWith('.dae')) {
@@ -419,8 +623,6 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
       new STLLoader(manager).load(path,
         geom => {
           geom.computeVertexNormals();
-          // Collision hulls live alongside visual meshes; render as a
-          // semi-transparent overlay so the user can compare hull vs visual.
           const mat = new THREE.MeshStandardMaterial({
             color: 0x54ff7a, roughness: 0.6, metalness: 0.0,
             transparent: true, opacity: 0.32, depthWrite: false,
@@ -444,19 +646,14 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
       urdfText = await r.text();
     } catch (e) {
       showError('Could not load /robot.urdf: ' + e.message);
-      loadingEl.style.display = 'none';
       return;
     }
 
-    // Strip xacro:* tags — URDFLoader doesn't process them.
     urdfText = urdfText.replace(/<xacro:[^>]*\/>/g, '')
                        .replace(/<xacro:[^>]*>[\s\S]*?<\/xacro:[^>]*>/g, '');
 
     parseUrdfMeta(urdfText);
 
-    // Read <robot name=…> → use as packages map key. URDFLoader strips
-    // package://<name>/ and replaces with packages[name]. Empty string
-    // resolution yields '/meshes/x.dae' rooted at this origin.
     const m = urdfText.match(/<robot[^>]*\sname="([^"]+)"/);
     const pkg = m ? m[1] : '';
     loader.packages = { [pkg]: '' };
@@ -466,34 +663,34 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
       robot = loader.parse(urdfText);
     } catch (e) {
       showError('URDF parse failed: ' + e.message);
-      loadingEl.style.display = 'none';
       return;
     }
     scene.add(robot);
 
     decorateLinks();
     decorateJoints();
-    buildSidebar();
-    fitCamera();
+    buildLinksPane();
+    buildJointsPane();
     applyToggles();
+    fitCamera();
 
-    // Mesh loads are async — bounding box at this point may exclude DAE/STL
-    // payloads that finish later. Re-fit a few times while loading settles.
+    // Re-fit a few times while async mesh loads settle.
     setTimeout(fitCamera, 250);
     setTimeout(fitCamera, 800);
     setTimeout(fitCamera, 2000);
 
     const nL = Object.keys(robot.links || {}).length;
     const nJ = Object.keys(robot.joints || {}).length;
-    pkginfoEl.textContent = `${pkg} · ${nL} link(s) · ${nJ} joint(s)`;
-    linkCountEl.textContent = `(${nL})`;
-    jointCountEl.textContent = `(${nJ})`;
-    setStatus(`${nL} link(s) · ${nJ} joint(s) · ready`);
-    setTimeout(() => statusEl.style.opacity = '0.55', 1500);
-    loadingEl.style.display = 'none';
+    cntLinksEl.textContent  = String(nL);
+    cntJointsEl.textContent = String(nJ);
+    hudTitleEl.innerHTML    = '<b>' + (pkg || 'robot') + '</b>';
+    hudCountsEl.textContent = nL + ' link(s) · ' + nJ + ' joint(s)';
+    setStatus('ready');
+
+    // Default: links drawer open so the user sees the structure right away.
+    openDrawer('links');
   }
 
-  // ── Decorate links: TF triads + floating labels + inertial markers ──
   function decorateLinks() {
     for (const name of Object.keys(robot.links)) {
       const link = robot.links[name];
@@ -510,7 +707,6 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
 
       const meta = linkMeta[name];
       if (meta && meta.hasInertial && meta.com) {
-        // COM sphere in link frame, scaled to mass-ish (cap 0.05 m).
         const mass = meta.mass ?? 0.1;
         const r = Math.min(0.05, Math.max(0.01, Math.cbrt(mass) * 0.025));
         const mat = new THREE.MeshStandardMaterial({
@@ -524,14 +720,11 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
     }
   }
 
-  // ── Decorate joints: axis arrows at joint origin ───────────────
   function decorateJoints() {
     for (const [name, joint] of Object.entries(robot.joints)) {
       const meta = jointMeta[name];
       const type = meta?.type || joint.jointType;
-      // Skip fixed — no axis to draw.
       if (type === 'fixed') continue;
-
       const axis = meta?.axis ?? [
         joint.axis?.x ?? 1, joint.axis?.y ?? 0, joint.axis?.z ?? 0,
       ];
@@ -544,14 +737,12 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
         type === 'planar' || type === 'floating' ? 0xf0a352 :
         0xcccccc;
       const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0,0,0), 0.18, color, 0.06, 0.035);
-      // ArrowHelper line is thin; bump its width by replacing the line
-      // material's linewidth would help on WebGL2 (no-op on most platforms).
       joint.add(arrow);
       perJointAxes.push(arrow);
     }
   }
 
-  // ── Sidebar (Links + Joints) ───────────────────────────────────
+  // ── Drawer panes: Links + Joints ───────────────────────────
   const f = (v, d = 4) =>
     (typeof v === 'number' && isFinite(v)) ? v.toFixed(d) : '—';
   const fv = (a, d = 4) =>
@@ -559,16 +750,19 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
   const fdeg = (rad) =>
     isFinite(rad) ? (rad * 180 / Math.PI).toFixed(1) + '°' : '—';
 
-  function buildSidebar() {
+  function buildLinksPane() {
     linksListEl.innerHTML = '';
-    jointsListEl.innerHTML = '';
-
-    // Links
+    if (!robot) return;
     for (const name of Object.keys(robot.links)) {
       const meta = linkMeta[name] || {};
       const entry = document.createElement('div');
       entry.className = 'entry';
-      const detail = `
+      entry.dataset.name = name;
+      entry.innerHTML = `
+        <div class="row1">
+          <span class="name">${name}</span>
+        </div>
+        <div class="meta">${meta.hasInertial ? `${f(meta.mass, 3)} kg` : 'no inertial'}</div>
         <div class="detail">
           <div class="kv">
             <span>mass</span><b>${f(meta.mass, 6)} kg</b>
@@ -581,21 +775,18 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
             <span>iyz</span><b>${f(meta.inertia?.iyz, 6)}</b>
           </div>
         </div>`;
-      entry.innerHTML =
-        `<div class="name">${name}</div>` +
-        `<div class="meta">${meta.hasInertial ? `${f(meta.mass, 3)} kg` : 'no inertial'}</div>` +
-        detail;
-      entry.addEventListener('click', () => toggleEntry(entry, 'link', name));
+      entry.addEventListener('click', () => selectEntry(entry, 'link', name));
       linksListEl.appendChild(entry);
     }
+  }
 
-    // Joints
+  function buildJointsPane() {
+    jointsListEl.innerHTML = '';
+    if (!robot) return;
     const moveTypes = new Set(['revolute', 'continuous', 'prismatic']);
     for (const [name, joint] of Object.entries(robot.joints)) {
       const meta = jointMeta[name] || {};
       const type = meta.type || joint.jointType || 'fixed';
-      const entry = document.createElement('div');
-      entry.className = 'entry';
 
       let slider = '';
       if (moveTypes.has(type)) {
@@ -613,7 +804,15 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
       }
 
       const lim = meta.limit || {};
-      const detail = `
+      const entry = document.createElement('div');
+      entry.className = 'entry';
+      entry.dataset.name = name;
+      entry.innerHTML = `
+        <div class="row1">
+          <span class="name">${name}</span>
+          <span class="badge ${type}">${type}</span>
+        </div>
+        <div class="meta">${meta.parent || '?'} → ${meta.child || '?'}</div>
         <div class="detail">
           <div class="kv">
             <span>parent</span><b>${meta.parent || '—'}</b>
@@ -628,13 +827,9 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
           </div>
           ${slider}
         </div>`;
-      entry.innerHTML =
-        `<div class="name">${name} <span class="type ${type}">${type}</span></div>` +
-        `<div class="meta">${meta.parent || '?'} → ${meta.child || '?'}</div>` +
-        detail;
       entry.addEventListener('click', (ev) => {
-        if (ev.target.tagName === 'INPUT') return; // ignore slider clicks
-        toggleEntry(entry, 'joint', name);
+        if (ev.target.tagName === 'INPUT') return;
+        selectEntry(entry, 'joint', name);
       });
       jointsListEl.appendChild(entry);
 
@@ -643,31 +838,31 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
         const valEl = entry.querySelector('.val');
         const isAng = type !== 'prismatic';
         input.addEventListener('input', () => {
-          // User dragging takes priority over live SW poll until released.
           input.dataset.userTouched = '1';
           const v = parseFloat(input.value);
           robot.setJointValue(name, v);
           valEl.textContent = v.toFixed(3) + (isAng ? ' rad' : ' m');
         });
         input.addEventListener('change', () => {
-          // After release, allow live poll to overwrite again.
           setTimeout(() => { input.dataset.userTouched = ''; }, 800);
         });
       }
     }
   }
 
-  function toggleEntry(entry, kind, name) {
+  function selectEntry(entry, kind, name) {
     const wasActive = entry.classList.contains('active');
-    // Single-select per list section.
     entry.parentElement.querySelectorAll('.entry.active').forEach(e => e.classList.remove('active'));
     if (!wasActive) {
       entry.classList.add('active');
       flashFocus(kind, name);
+      hudSelectedEl.style.display = 'block';
+      hudSelectedEl.textContent = 'sel: ' + name;
+    } else {
+      hudSelectedEl.style.display = 'none';
     }
   }
 
-  // Flash a temporary highlight on the selected link/joint.
   function flashFocus(kind, name) {
     if (!robot) return;
     let obj = null;
@@ -681,7 +876,7 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
     obj.getWorldPosition(pos);
     const sphere = new THREE.Mesh(
       new THREE.SphereGeometry(0.04, 24, 16),
-      new THREE.MeshBasicMaterial({ color: 0x4c9ce0, transparent: true, opacity: 0.5 })
+      new THREE.MeshBasicMaterial({ color: 0x5aa8e0, transparent: true, opacity: 0.55 })
     );
     sphere.position.copy(pos);
     scene.add(sphere);
@@ -690,21 +885,21 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
       const t = (performance.now() - start) / 700;
       if (t >= 1) { scene.remove(sphere); sphere.geometry.dispose(); sphere.material.dispose(); return; }
       sphere.scale.setScalar(1 + t * 2.2);
-      sphere.material.opacity = 0.5 * (1 - t);
+      sphere.material.opacity = 0.55 * (1 - t);
       requestAnimationFrame(animate);
     };
     requestAnimationFrame(animate);
   }
 
-  // ── Display toggles ────────────────────────────────────────────
+  // ── HUD toggles ─────────────────────────────────────────────
   function applyToggles() {
-    const visualOn    = document.getElementById('showVisual').checked;
-    const collisionOn = document.getElementById('showCollision').checked;
-    const linkAxesOn  = document.getElementById('showLinkAxes').checked;
-    const jointAxesOn = document.getElementById('showJointAxes').checked;
-    const inertialOn  = document.getElementById('showInertial').checked;
-    const labelsOn    = document.getElementById('showLinkLabels').checked;
-    const gridOn      = document.getElementById('showGrid').checked;
+    const visualOn    = tgVisual.classList.contains('on');
+    const collisionOn = tgCollision.classList.contains('on');
+    const linkAxesOn  = tgLinkAxes.classList.contains('on');
+    const jointAxesOn = tgJointAxes.classList.contains('on');
+    const inertialOn  = tgInertial.classList.contains('on');
+    const labelsOn    = tgLabels.classList.contains('on');
+    const gridOn      = tgGrid.classList.contains('on');
 
     if (robot) {
       robot.traverse(o => {
@@ -718,14 +913,13 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
     linkLabels.forEach(({el}) => el.style.display = labelsOn ? '' : 'none');
     grid.visible = gridOn;
   }
-  document.querySelectorAll('#side label.toggle input').forEach(inp => {
-    inp.addEventListener('change', applyToggles);
+  [tgVisual, tgCollision, tgLinkAxes, tgJointAxes, tgInertial, tgLabels, tgGrid].forEach(tg => {
+    tg.addEventListener('click', () => { tg.classList.toggle('on'); applyToggles(); });
   });
+  tgLive.addEventListener('click', () => { tgLive.classList.toggle('on'); });
 
   function fitCamera() {
     if (!robot) return;
-    // Bound only the robot's meshes — TF triads / axis arrows / inertial
-    // markers we added can distort the box if a link sits far from origin.
     const box = new THREE.Box3();
     let any = false;
     robot.traverse(o => {
@@ -743,10 +937,9 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
     controls.update();
   }
 
-  // ── Live joint poll ────────────────────────────────────────────
-  const livePollChk = document.getElementById('livePoll');
+  // ── Live joint poll ────────────────────────────────────────
   async function pollJoints() {
-    if (!robot || !livePollChk.checked) return;
+    if (!robot || !tgLive.classList.contains('on')) return;
     try {
       const r = await fetch('/joint_states');
       if (!r.ok) return;
@@ -754,7 +947,6 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
       for (const [name, value] of Object.entries(states)) {
         if (!robot.joints[name]) continue;
         robot.setJointValue(name, value);
-        // Mirror to the slider if the user isn't actively dragging.
         const input = jointsListEl.querySelector(`input[data-joint="${CSS.escape(name)}"]`);
         if (input && !input.dataset.userTouched) {
           input.value = value;
@@ -763,18 +955,18 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
           if (valEl) valEl.textContent = value.toFixed(3) + (isAng ? ' rad' : ' m');
         }
       }
-    } catch (e) { /* swallow — addin may have closed */ }
+    } catch (e) { /* swallow */ }
   }
   setInterval(pollJoints, 100);
 
-  // ── Render loop ────────────────────────────────────────────────
+  // ── Render loop ────────────────────────────────────────────
   const tmp = new THREE.Vector3();
   function tick() {
     requestAnimationFrame(tick);
     controls.update();
     renderer.render(scene, camera);
 
-    // Corner gizmo overlay — Z-up world frame mirrors main camera.
+    // Corner gizmo overlay
     const cw = renderer.domElement.width;
     const ch = renderer.domElement.height;
     const dpr = renderer.getPixelRatio();
@@ -793,8 +985,8 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
     renderer.setViewport(0, 0, cw, ch);
     renderer.autoClear = prevAutoClear;
 
-    // Floating link labels.
-    if (document.getElementById('showLinkLabels').checked) {
+    // Floating link labels
+    if (tgLabels.classList.contains('on')) {
       for (const { link, el } of linkLabels) {
         link.getWorldPosition(tmp);
         tmp.project(camera);
