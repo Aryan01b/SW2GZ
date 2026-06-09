@@ -742,15 +742,18 @@ namespace SW2GZ.SW
 
                 // Pull the live config — until the backend plan migrates Sw2gzDoc
                 // into the persisted attribute, preview keeps using the legacy
-                // Sw2gzExportConfig loaded from the attribute.
+                // Sw2gzExportConfig loaded from the attribute. If no config has
+                // been saved yet, fall through to a synthesized one-link "quick
+                // preview" so the user can render the raw assembly as URDF
+                // before ever opening Create Robot.
                 Sw2gzExportConfig config = Sw2gzConfigSerialization.Load(modeldoc);
-                if (config.Links == null || config.Links.Count == 0)
+                bool isQuickPreview = (config.Links == null || config.Links.Count == 0);
+                if (isQuickPreview)
                 {
-                    SwApp.SendMsgToUser2(
-                        "No model saved yet — define links from the Robot cluster first.",
-                        (int)swMessageBoxIcon_e.swMbInformation,
-                        (int)swMessageBoxBtn_e.swMbOk);
-                    return;
+                    config = Sw2gzModelPreviewer.BuildQuickPreviewConfig(modeldoc);
+                    logger.Info("LaunchPreview: no saved config, using quick-preview synth — " +
+                                "pkg=" + config.PackageName + ", components=" +
+                                (config.Links[0].ComponentIds?.Count ?? 0));
                 }
 
                 var result = Sw2gzModelPreviewer.RunPreview(
