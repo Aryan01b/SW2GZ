@@ -104,6 +104,11 @@ namespace SW2GZ.UI.Pmp
         private System.Windows.Forms.Panel _navBar;
         private System.Windows.Forms.Button _backBtn;
         private System.Windows.Forms.Button _nextBtn;
+        // WinForms-side step indicator. _hdrLabel.Caption COM setter intermittently
+        // AVs inside mscorlib (CSE that bypasses managed catch) when invoked from
+        // a deferred button-click stack after a group-visibility flip. Routing the
+        // dynamic step text through a WinForms label avoids the COM call entirely.
+        private System.Windows.Forms.Label _stepIndicator;
 
         private PropertyManagerPageWindowFromHandle _treeHandle;
         private PropertyManagerPageWindowFromHandle _btnBarHandle;
@@ -212,7 +217,7 @@ namespace SW2GZ.UI.Pmp
                 NavBarHandleID,
                 (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
                 "", (short)leftEdge, visibleEnabled, "Step navigation");
-            _navHandle.Height = 34;
+            _navHandle.Height = 58;
             _navHandle.SetWindowHandlex64(_navBar.Handle.ToInt64());
 
             _stepGroups = new PropertyManagerPageGroup[StepCount];
@@ -453,11 +458,53 @@ namespace SW2GZ.UI.Pmp
 
         private void BuildNavBar()
         {
-            _navBar  = NewBar(260, 32);
+            _navBar  = NewBar(260, 56);
+            _stepIndicator = new System.Windows.Forms.Label
+            {
+                AutoSize = false,
+                Width = 240,
+                Height = 18,
+                Top = 2,
+                Left = 10,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                ForeColor = System.Drawing.Color.White,
+                BackColor = System.Drawing.Color.FromArgb(48, 48, 48),
+                Font = new System.Drawing.Font("Segoe UI", 8.25f, System.Drawing.FontStyle.Bold),
+                Text = ""
+            };
+            _navBar.Controls.Add(_stepIndicator);
             _backBtn = NewBarButton("◀", 50);
             _nextBtn = NewBarButton("▶", 50);
-            _backBtn.Click += (s, e) => GoBack();
-            _nextBtn.Click += (s, e) => GoNext();
+            _backBtn.Top = 24;
+            _nextBtn.Top = 24;
+            // Defer GoBack/GoNext to the next message-loop tick via BeginInvoke.
+            // The click handler runs INSIDE SW's PMP-handler reentrancy frame
+            // (WinForms button hosted in an embedded WindowFromHandle); mutating
+            // PMP COM controls (e.g. _hdrLabel.Caption) from that frame crashes
+            // SW's PMP renderer. BeginInvoke escapes the click-handler stack so
+            // the COM mutations run on a clean callstack on the WinForms loop.
+            _backBtn.Click += (s, e) =>
+            {
+                logger.Info("Sw2gzCreateRobotPmp NAV: BackBtn.Click step=" + _currentStep);
+                _navBar.BeginInvoke((Action)(() =>
+                {
+                    logger.Info("Sw2gzCreateRobotPmp NAV: BackBtn.BeginInvoke fire step=" + _currentStep);
+                    try { GoBack(); }
+                    catch (Exception ex) { logger.Error("GoBack threw", ex); }
+                }));
+            };
+            _nextBtn.Click += (s, e) =>
+            {
+                logger.Info("Sw2gzCreateRobotPmp NAV: NextBtn.Click step=" + _currentStep +
+                            " nextBtn.Enabled=" + _nextBtn.Enabled +
+                            " text=" + _nextBtn.Text);
+                _navBar.BeginInvoke((Action)(() =>
+                {
+                    logger.Info("Sw2gzCreateRobotPmp NAV: NextBtn.BeginInvoke fire step=" + _currentStep);
+                    try { GoNext(); }
+                    catch (Exception ex) { logger.Error("GoNext threw", ex); }
+                }));
+            };
             _navBar.Controls.Add(_backBtn);
             _navBar.Controls.Add(_nextBtn);
             _navBar.Resize += (s, e) => CenterRow(_navBar, _backBtn, _nextBtn);
@@ -669,6 +716,10 @@ namespace SW2GZ.UI.Pmp
 
         private void EnterJointsStep()
         {
+            logger.Info("Sw2gzCreateRobotPmp.EnterJointsStep ENTER" +
+                        " linksCount=" + (Robot?.Links?.Count ?? -1) +
+                        " preSyncJointsCount=" + (Robot?.Joints?.Count ?? -1) +
+                        " _activeJointIndex=" + _activeJointIndex);
             // Seed JointDef[] from the link-edge graph but DO NOT auto-detect
             // mates — the user picks each joint's mate explicitly via the
             // mates listbox + Apply-mate button below.
@@ -676,6 +727,10 @@ namespace SW2GZ.UI.Pmp
             if (_activeJointIndex < 0 && Robot.Joints.Count > 0) _activeJointIndex = 0;
             PopulateJointList();
             RepopulateMatesForActiveJoint();
+            logger.Info("Sw2gzCreateRobotPmp.EnterJointsStep EXIT" +
+                        " postSyncJointsCount=" + Robot.Joints.Count +
+                        " _activeJointIndex=" + _activeJointIndex +
+                        " _activeMateNames=" + (_activeMateNames?.Count ?? -1));
         }
 
         // Populate _matesListBox with the mates spanning the active joint's
@@ -964,8 +1019,12 @@ namespace SW2GZ.UI.Pmp
 
         private void ShowStep(int step)
         {
+            int requested = step;
             if (step < 0) step = 0;
             if (step > StepCount - 1) step = StepCount - 1;
+
+            logger.Info("Sw2gzCreateRobotPmp.ShowStep ENTER requested=" + requested +
+                        " clamped=" + step + " from _currentStep=" + _currentStep);
 
             if (_currentStep == StepLinks && step != StepLinks)
             {
@@ -984,19 +1043,51 @@ namespace SW2GZ.UI.Pmp
                 try { _stepGroups[i].Visible = (i == _currentStep); }
                 catch (Exception ex) { logger.Error("Set group[" + i + "].Visible failed", ex); }
             }
+            // Read-back group visibility so we see what SW actually accepted.
+            for (int i = 0; i < StepCount; i++)
+            {
+                try
+                {
+                    bool v = _stepGroups[i].Visible;
+                    logger.Info("Sw2gzCreateRobotPmp.ShowStep readback group[" + i + "].Visible=" + v +
+                                " (expected " + (i == _currentStep) + ")");
+                }
+                catch (Exception ex) { logger.Warn("Readback group[" + i + "].Visible threw", ex); }
+            }
 
-            _hdrLabel.Caption = "Step " + (_currentStep + 1) + " of " + StepCount +
-                                " — " + StepNames[_currentStep];
-
-            _backBtn.Enabled = _currentStep > 0;
-            _nextBtn.Enabled = true;
-            _nextBtn.Text = (_currentStep == StepCount - 1) ? "Finish" : "▶";
+            // Step indicator is a WinForms label inside _navBar — no COM marshal,
+            // no PMP RCW touched. The previous PMP-label Caption setter
+            // intermittently AV'd inside mscorlib (CSE) when invoked from a
+            // post-flip deferred callback; the WinForms label has no such issue.
+            logger.Info("Sw2gzCreateRobotPmp.ShowStep MICRO before _stepIndicator.Text");
+            try
+            {
+                _stepIndicator.Text = "Step " + (_currentStep + 1) + " of " + StepCount +
+                                      " — " + StepNames[_currentStep];
+            }
+            catch (Exception ex) { logger.Error("ShowStep MICRO _stepIndicator.Text threw", ex); }
+            logger.Info("Sw2gzCreateRobotPmp.ShowStep MICRO after _stepIndicator.Text");
+            logger.Info("Sw2gzCreateRobotPmp.ShowStep MICRO before _backBtn.Enabled");
+            try { _backBtn.Enabled = _currentStep > 0; }
+            catch (Exception ex) { logger.Error("ShowStep MICRO _backBtn.Enabled threw", ex); }
+            logger.Info("Sw2gzCreateRobotPmp.ShowStep MICRO before _nextBtn.Enabled");
+            try { _nextBtn.Enabled = true; }
+            catch (Exception ex) { logger.Error("ShowStep MICRO _nextBtn.Enabled threw", ex); }
+            logger.Info("Sw2gzCreateRobotPmp.ShowStep MICRO before _nextBtn.Text");
+            try { _nextBtn.Text = (_currentStep == StepCount - 1) ? "Finish" : "▶"; }
+            catch (Exception ex) { logger.Error("ShowStep MICRO _nextBtn.Text threw", ex); }
+            logger.Info("Sw2gzCreateRobotPmp.ShowStep MICRO after button block");
 
             logger.Info("Sw2gzCreateRobotPmp.ShowStep -> step=" + _currentStep +
-                        " (" + StepNames[_currentStep] + ")");
+                        " (" + StepNames[_currentStep] + ")" +
+                        " nextBtn.Enabled=" + _nextBtn.Enabled +
+                        " nextBtn.Text=" + _nextBtn.Text +
+                        " backBtn.Enabled=" + _backBtn.Enabled);
 
             if (_currentStep == StepJoints) EnterJointsStep();
             else if (_currentStep == StepReview) EnterReviewStep();
+
+            logger.Info("Sw2gzCreateRobotPmp.ShowStep EXIT step=" + _currentStep);
         }
 
         private void GoBack()
@@ -1006,31 +1097,41 @@ namespace SW2GZ.UI.Pmp
 
         private void GoNext()
         {
+            logger.Info("Sw2gzCreateRobotPmp.GoNext ENTER step=" + _currentStep +
+                        " linksCount=" + (Robot?.Links?.Count ?? -1) +
+                        " jointsCount=" + (Robot?.Joints?.Count ?? -1));
             if (_currentStep == StepLinks)
             {
                 List<string> issues = LinkDefValidator.Validate(Robot.Links, _allComponentIds);
+                logger.Info("Sw2gzCreateRobotPmp.GoNext Links-validate issues=" + issues.Count);
                 if (issues.Count > 0)
                 {
                     _swApp.SendMsgToUser("Resolve link issues before continuing:\n• " +
                         string.Join("\n• ", issues.ToArray()));
+                    logger.Info("Sw2gzCreateRobotPmp.GoNext BLOCKED by Links-validate");
                     return;
                 }
             }
             if (_currentStep < StepCount - 1)
             {
+                logger.Info("Sw2gzCreateRobotPmp.GoNext -> ShowStep(" + (_currentStep + 1) + ")");
                 ShowStep(_currentStep + 1);
             }
             else
             {
+                logger.Info("Sw2gzCreateRobotPmp.GoNext -> Finish (page.Close)");
                 _okay = true;
                 _page.Close(true);
             }
+            logger.Info("Sw2gzCreateRobotPmp.GoNext EXIT step=" + _currentStep);
         }
 
         void IPropertyManagerPage2Handler9.AfterActivation()
         {
+            logger.Info("Sw2gzCreateRobotPmp.AfterActivation ENTER step=" + _currentStep);
             ShowStep(_currentStep);
             if (_currentStep == StepLinks && _pickFunnel != null) _pickFunnel.SetSelectionFocus();
+            logger.Info("Sw2gzCreateRobotPmp.AfterActivation EXIT step=" + _currentStep);
         }
 
         void IPropertyManagerPage2Handler9.OnButtonPress(int Id)
