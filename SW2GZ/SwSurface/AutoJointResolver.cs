@@ -17,11 +17,19 @@ components fall one in parentIds and one in childIds, and classifies:
   swMateANGLE      → Revolute
   anything else    → Fixed (v1 default; no fabricated axis)
 
-Cylinder-axis geometry comes from the cylindrical face on the parent side
-(or the first cylindrical face we find — preferred over non-cylinder mates
-when multiple span the same pair) via ISurface.CylinderParams +
-Component2.Transform2 (math lives in pure CylinderTransform so it can be
-unit-tested off-COM).
+Axis + origin geometry is dispatched per mate type:
+  CONCENTRIC → cylindrical face axis via ISurface.CylinderParams (pure
+               math in CylinderTransform).
+  ANGLE      → hinge axis = cross product of the two planar face normals
+               (via ISurface.PlaneParams); origin = parent face root point.
+               Required for LimitAngle mates — they have no cylindrical
+               face, and the prior cylinder-only path silently demoted
+               them to Fixed.
+  DISTANCE   → prismatic slide direction = parent (or fallback child)
+               planar face normal; origin = that face's root point.
+  LOCK       → Fixed, no geometry needed.
+All transforms run through Component2.Transform2.ArrayData (row-major
+rotation 3x3 + translation), same convention as CylinderTransform.
 
 Selection priority when multiple mates span the same (parent, child) pair:
   1. cylinder-bearing AND limit-bearing  (→ Revolute / Prismatic)
@@ -337,12 +345,51 @@ namespace SW2GZ.SwSurface
                     default:                            kind = MateKind.Fixed; break;
                 }
 
-                // Cylinder geometry — prefer the parent-side entity (so the
-                // resulting origin lives at the parent's mate face, e.g. the
-                // hole the child pin is concentric with), fall back to either.
-                (Vector3 origin, Vector3 dir, bool ok) cyl =
-                    TryExtractCylinder(mate, parentEntIdx);
-                if (!cyl.ok) cyl = TryExtractCylinder(mate, childEntIdx);
+                // Axis + origin geometry — dispatched per mate type. CONCENTRIC
+                // takes the cylinder face. ANGLE (incl. LimitAngle) takes the
+                // cross product of the two planar face normals as the hinge
+                // axis (no cylindrical face exists for an angle mate, so the
+                // old cylinder-only path always demoted these to Fixed — the
+                // root cause behind LimitAngleN joints rendering as Fixed in
+                // the wizard's Joints + Review steps). DISTANCE takes the
+                // parent face normal as the prismatic slide direction.
+                (Vector3 origin, Vector3 dir, bool ok) extracted =
+                    (Vector3.Zero, Vector3.Zero, false);
+                switch ((swMateType_e)mate.Type)
+                {
+                    case swMateType_e.swMateCONCENTRIC:
+                        extracted = TryExtractCylinder(mate, parentEntIdx);
+                        if (!extracted.ok) extracted = TryExtractCylinder(mate, childEntIdx);
+                        break;
+                    case swMateType_e.swMateANGLE:
+                    {
+                        var pn = TryExtractPlane(mate, parentEntIdx);
+                        var cn = TryExtractPlane(mate, childEntIdx);
+                        if (pn.ok && cn.ok)
+                        {
+                            Vector3 axis = Vector3.Cross(pn.normal, cn.normal);
+                            if (axis.LengthSquared() > 1e-12f)
+                            {
+                                axis = Vector3.Normalize(axis);
+                                // Origin = parent face root point. Good enough
+                                // for the URDF: the actual hinge sits on the
+                                // shared edge between the two faces, which is
+                                // co-planar with both root points up to the
+                                // parent face's tangent extent.
+                                extracted = (pn.point, axis, true);
+                            }
+                        }
+                        break;
+                    }
+                    case swMateType_e.swMateDISTANCE:
+                    {
+                        var pp = TryExtractPlane(mate, parentEntIdx);
+                        if (!pp.ok) pp = TryExtractPlane(mate, childEntIdx);
+                        if (pp.ok) extracted = (pp.point, pp.normal, true);
+                        break;
+                    }
+                    // LOCK / unknown → stays Fixed, no geometry needed.
+                }
 
                 var res = new Resolved
                 {
@@ -352,23 +399,92 @@ namespace SW2GZ.SwSurface
                     LimitLower = lower,
                     LimitUpper = upper,
                 };
-                if (cyl.ok)
+                if (extracted.ok)
                 {
-                    res.AxisAssembly   = cyl.dir;
-                    res.OriginAssembly = cyl.origin;
+                    res.AxisAssembly   = extracted.dir;
+                    res.OriginAssembly = extracted.origin;
                 }
-                else
+                else if (kind != MateKind.Fixed)
                 {
-                    // No usable cylinder face (axis-axis concentric, non-face
-                    // entity, etc.). A Revolute/Continuous/Prismatic joint with
-                    // a zero axis vector trips the pre-write validator, so
-                    // demote to Fixed — the user can add a cleaner mate and
-                    // hit Re-detect.
+                    // Movable kind with no extractable geometry → would write a
+                    // zero-axis joint and trip the pre-write validator. Demote
+                    // to Fixed so the user can add a cleaner mate and Re-detect.
+                    // LOCK / unknown were already Fixed; don't double-demote.
                     res.Kind = MateKind.Fixed;
                 }
                 return res;
             }
             finally { Marshal.ReleaseComObject(mate); }
+        }
+
+        // Pull the plane normal + a root point from a planar MateEntity face,
+        // transformed into the assembly frame. Mirrors TryExtractCylinder's
+        // COM-hygiene + transform pattern; powers ANGLE + DISTANCE extraction.
+        //
+        // ISurface.PlaneParams layout (9 doubles, part-local):
+        //   [0..2] normal unit vector
+        //   [3..5] root point on plane
+        //   [6..8] X-axis vector parallel to plane (unused here)
+        //
+        // Normal is rotated only (no translation applied to a direction);
+        // root point is rotated AND translated. Component2.Transform2.ArrayData
+        // is row-major rotation in d[0..8] + translation in d[9..11], same as
+        // CylinderTransform.
+        private static (Vector3 normal, Vector3 point, bool ok) TryExtractPlane(Mate2 mate, int entityIdx)
+        {
+            if (entityIdx < 0) return (Vector3.Zero, Vector3.Zero, false);
+            MateEntity2 ent = mate.MateEntity(entityIdx);
+            if (ent == null) return (Vector3.Zero, Vector3.Zero, false);
+
+            object refObj = null, surfObj = null;
+            Component2 comp = null;
+            try
+            {
+                try { refObj = ent.Reference; } catch { refObj = null; }
+                if (!(refObj is IFace2 face)) return (Vector3.Zero, Vector3.Zero, false);
+
+                surfObj = face.GetSurface();
+                if (!(surfObj is ISurface surf) || !surf.IsPlane()) return (Vector3.Zero, Vector3.Zero, false);
+                if (!(surf.PlaneParams is double[] pp) || pp.Length < 6) return (Vector3.Zero, Vector3.Zero, false);
+
+                comp = ent.ReferenceComponent;
+                double[] xform = null;
+                if (comp != null)
+                {
+                    MathTransform mt = comp.Transform2;
+                    xform = mt?.ArrayData as double[];
+                }
+                if (xform == null || xform.Length < 12)
+                {
+                    var locN = new Vector3((float)pp[0], (float)pp[1], (float)pp[2]);
+                    var locP = new Vector3((float)pp[3], (float)pp[4], (float)pp[5]);
+                    if (locN.LengthSquared() > 1e-12f) locN = Vector3.Normalize(locN);
+                    return (locN, locP, true);
+                }
+                double[] d = xform;
+                // Normal: rotation only.
+                float nx = (float)(d[0] * pp[0] + d[1] * pp[1] + d[2] * pp[2]);
+                float ny = (float)(d[3] * pp[0] + d[4] * pp[1] + d[5] * pp[2]);
+                float nz = (float)(d[6] * pp[0] + d[7] * pp[1] + d[8] * pp[2]);
+                var normalAsm = new Vector3(nx, ny, nz);
+                if (normalAsm.LengthSquared() > 1e-12f) normalAsm = Vector3.Normalize(normalAsm);
+                // Point: rotation + translation.
+                float px = (float)(d[0] * pp[3] + d[1] * pp[4] + d[2] * pp[5] + d[9]);
+                float py = (float)(d[3] * pp[3] + d[4] * pp[4] + d[5] * pp[5] + d[10]);
+                float pz = (float)(d[6] * pp[3] + d[7] * pp[4] + d[8] * pp[5] + d[11]);
+                return (normalAsm, new Vector3(px, py, pz), true);
+            }
+            catch
+            {
+                return (Vector3.Zero, Vector3.Zero, false);
+            }
+            finally
+            {
+                if (surfObj != null) try { Marshal.ReleaseComObject(surfObj); } catch { }
+                if (refObj  != null) try { Marshal.ReleaseComObject(refObj);  } catch { }
+                if (comp    != null) try { Marshal.ReleaseComObject(comp);    } catch { }
+                try { Marshal.ReleaseComObject(ent); } catch { }
+            }
         }
 
         private static (Vector3 origin, Vector3 dir, bool ok) TryExtractCylinder(Mate2 mate, int entityIdx)
