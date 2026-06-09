@@ -838,13 +838,19 @@ Modules load from ./vendor/* — zero network calls at runtime.
         const valEl = entry.querySelector('.val');
         const isAng = type !== 'prismatic';
         input.addEventListener('input', () => {
-          input.dataset.userTouched = '1';
+          // User dragging a slider switches the preview into manual-pose
+          // mode: auto-disable the live SW poll so subsequent pollJoints()
+          // calls stop overwriting the slider. The poll otherwise samples
+          // SW every 100 ms and snaps the slider back to SW's current
+          // mate value. Re-enable Live to resume tracking SW.
+          if (tgLive.classList.contains('on')) {
+            tgLive.classList.remove('on');
+            hudStatusEl.textContent = 'manual pose — Live paused';
+            hudStatusEl.style.color = 'var(--warn)';
+          }
           const v = parseFloat(input.value);
           robot.setJointValue(name, v);
           valEl.textContent = v.toFixed(3) + (isAng ? ' rad' : ' m');
-        });
-        input.addEventListener('change', () => {
-          setTimeout(() => { input.dataset.userTouched = ''; }, 800);
         });
       }
     }
@@ -938,6 +944,12 @@ Modules load from ./vendor/* — zero network calls at runtime.
   }
 
   // ── Live joint poll ────────────────────────────────────────
+  // Live mode is binary: the Live toggle is the single source of truth.
+  // When on, every joint slider mirrors the latest SW mate value sampled
+  // by PreviewServer's /joint_states endpoint. When off (paused
+  // automatically on first manual slider touch, or toggled off by the
+  // user), sliders stay where the user left them and nothing overwrites.
+  // Re-enable Live to clear all manual poses and resume tracking SW.
   async function pollJoints() {
     if (!robot || !tgLive.classList.contains('on')) return;
     try {
@@ -948,7 +960,7 @@ Modules load from ./vendor/* — zero network calls at runtime.
         if (!robot.joints[name]) continue;
         robot.setJointValue(name, value);
         const input = jointsListEl.querySelector(`input[data-joint="${CSS.escape(name)}"]`);
-        if (input && !input.dataset.userTouched) {
+        if (input) {
           input.value = value;
           const valEl = input.parentElement.querySelector('.val');
           const isAng = jointMeta[name]?.type !== 'prismatic';
@@ -958,6 +970,22 @@ Modules load from ./vendor/* — zero network calls at runtime.
     } catch (e) { /* swallow */ }
   }
   setInterval(pollJoints, 100);
+
+  // When the user clicks Live to resume tracking, surface a quick
+  // status note so they know manual poses just got dropped and SW is
+  // back in control of the sliders.
+  tgLive.addEventListener('click', () => {
+    if (tgLive.classList.contains('on')) {
+      hudStatusEl.textContent = 'live sync from SW';
+      hudStatusEl.style.color = 'var(--good)';
+      setTimeout(() => {
+        if (tgLive.classList.contains('on')) {
+          hudStatusEl.textContent = 'ready';
+          hudStatusEl.style.color = 'var(--muted)';
+        }
+      }, 1500);
+    }
+  });
 
   // ── Render loop ────────────────────────────────────────────
   const tmp = new THREE.Vector3();
