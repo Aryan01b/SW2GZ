@@ -664,19 +664,20 @@ namespace SW2GZ.SW
         public int AssemblyEnable() => WizardEnable();   // reuse the existing asm-only gate
 
         // Preview-specific gate: enabled only when an assembly is active AND
-        // the Robot subtree has at least one link with components assigned and
-        // at least one auto-detected joint (HasOrigin). Greys Preview until the
-        // user has actually configured something worth previewing — clicking
-        // an empty Robot would otherwise spin up the browser preview against
-        // a header-only URDF.
+        // a "SW2GZ Doc (v1)" attribute has been saved (i.e. the user has run
+        // a Create wizard at least once). Mirrors ExportEnable exactly so the
+        // two ribbon buttons unlock together — once you have a saved doc v1,
+        // you can both preview AND export from it. Previously we required
+        // IsRobotReady (≥1 link with components AND ≥1 joint with HasOrigin),
+        // which kept Preview disabled for users with a saved one-link rigid
+        // body who legitimately wanted to inspect the rendered URDF.
         public int PreviewEnable()
         {
             try
             {
                 if (AssemblyEnable() == 0) return 0;
                 if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
-                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
-                return SW2GZ.UI.Ribbon.ClusterVisibility.IsRobotReady(doc?.Robot) ? 1 : 0;
+                return SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc) ? 1 : 0;
             }
             catch (Exception e) { logger.Warn("PreviewEnable failed", e); return 0; }
         }
@@ -740,21 +741,32 @@ namespace SW2GZ.SW
             {
                 if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
 
-                // Pull the live config — until the backend plan migrates Sw2gzDoc
-                // into the persisted attribute, preview keeps using the legacy
-                // Sw2gzExportConfig loaded from the attribute. If no config has
-                // been saved yet, fall through to a synthesized one-link "quick
-                // preview" so the user can render the raw assembly as URDF
-                // before ever opening Create Robot.
-                Sw2gzExportConfig config = Sw2gzConfigSerialization.Load(modeldoc);
-                bool isQuickPreview = (config.Links == null || config.Links.Count == 0);
-                if (isQuickPreview)
+                // Load the saved SW2GZ Doc (v1) and bridge it to the legacy
+                // Sw2gzExportConfig shape the pipeline still consumes. The
+                // ribbon enable callback (PreviewEnable) only lights up when
+                // HasSaved is true, so reaching this point means the doc
+                // exists on disk. Defense in depth: pop a soft warning if the
+                // attribute round-trip lost data instead of crashing the
+                // pipeline on null Links.
+                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                if (doc?.Robot == null || doc.Robot.Links == null || doc.Robot.Links.Count == 0)
                 {
-                    config = Sw2gzModelPreviewer.BuildQuickPreviewConfig(modeldoc);
-                    logger.Info("LaunchPreview: no saved config, using quick-preview synth — " +
-                                "pkg=" + config.PackageName + ", components=" +
-                                (config.Links[0].ComponentIds?.Count ?? 0));
+                    SwApp.SendMsgToUser2(
+                        "Saved SW2GZ doc has no links — open Create Robot and define at least one link.",
+                        (int)swMessageBoxIcon_e.swMbInformation,
+                        (int)swMessageBoxBtn_e.swMbOk);
+                    return;
                 }
+
+                var meta = new SW2GZ.URDFExport.ExportMetaInput
+                {
+                    PackageName = DerivePackageNameFromAssembly(modeldoc),
+                    OutputFolder = System.IO.Path.GetTempPath(),
+                };
+                Sw2gzExportConfig config = SW2GZ.URDFExport.Sw2gzDocToExportConfig.Bridge(doc, meta);
+                logger.Info("LaunchPreview: doc v1 loaded — pkg=" + config.PackageName +
+                            ", links=" + (config.Links?.Count ?? 0) +
+                            ", joints=" + (config.Joints?.Count ?? 0));
 
                 var result = Sw2gzModelPreviewer.RunPreview(
                     (SldWorks)SwApp, modeldoc, config);
@@ -768,6 +780,27 @@ namespace SW2GZ.SW
                 logger.Error("LaunchPreview failed", e);
                 MessageBox.Show("Preview failed: " + e.Message);
             }
+        }
+
+        // Derive a sensible ROS-package-name default from the open assembly
+        // when Sw2gzDoc doesn't carry one yet. Preview's pipeline call needs a
+        // valid sanitized name (used for the temp workspace + URDF filename);
+        // a real Export run would let the user override this via the Export
+        // wizard. Falls back to "robot_preview" if sanitization rejects the
+        // doc title (e.g. untitled doc, all-non-alphanumeric name).
+        private static string DerivePackageNameFromAssembly(ModelDoc2 modeldoc)
+        {
+            string raw = string.Empty;
+            try { raw = modeldoc?.GetTitle() ?? string.Empty; } catch { }
+            int dot = raw.LastIndexOf('.');
+            if (dot > 0) raw = raw.Substring(0, dot);
+            try
+            {
+                string sanitized = SW2GZ.Build.PackageNameSanitizer.Sanitize(raw).Value;
+                if (!string.IsNullOrEmpty(sanitized)) return sanitized;
+            }
+            catch { /* fall through to default */ }
+            return "robot_preview";
         }
 
         #endregion UI Callbacks
