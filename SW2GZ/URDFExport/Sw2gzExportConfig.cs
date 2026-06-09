@@ -90,5 +90,31 @@ namespace SW2GZ.URDFExport
             SwForwardAxis = SW2GZ.Build.Model.AxisDirection.PlusZ;
             EmitWorldLink = false;
         }
+
+        /// Returns a shallow clone of this config with `EmitWorldLink`
+        /// overridden. Used by `Sw2gzModelPreviewer` to bake the SW→ROS
+        /// rotation into the preview URDF without mutating the user's
+        /// saved config — real exports still honour the user's setting.
+        /// Lists are shared by reference; the pipeline never mutates
+        /// Links / Joints / Stacks so the shallow share is safe.
+        public Sw2gzExportConfig WithEmitWorldLink(bool emitWorldLink)
+        {
+            return new Sw2gzExportConfig
+            {
+                Mode          = this.Mode,
+                SwUpAxis      = this.SwUpAxis,
+                SwForwardAxis = this.SwForwardAxis,
+                EmitWorldLink = emitWorldLink,
+                OutputFolder  = this.OutputFolder,
+                PackageName   = this.PackageName,
+                Author        = this.Author,
+                Email         = this.Email,
+                License       = this.License,
+                LastStep      = this.LastStep,
+                Links         = this.Links,
+                Joints        = this.Joints,
+                Stacks        = this.Stacks,
+            };
+        }
     }
 }

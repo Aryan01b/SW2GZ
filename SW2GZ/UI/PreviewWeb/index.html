@@ -524,6 +524,17 @@ Modules load from ./vendor/* — zero network calls at runtime.
   let linkMeta = {};
   let jointMeta = {};
 
+  // The preview pipeline always emits a `<link name="world"/>` and a
+  // `world_to_<root>` fixed joint carrying the SW→ROS rotation (so the
+  // browser renders the robot in REP-103 Z-up regardless of the user's
+  // SW up/forward convention). These two URDF nodes are framework
+  // plumbing, not user-modelled links/joints — hide them from the
+  // sidebar and the HUD counts so a 4-link arm reads as "4 links · 3
+  // joints", not "5 links · 4 joints (one of which is a hidden world
+  // anchor)".
+  const isFrameAnchorLink  = (name) => name === 'world';
+  const isFrameAnchorJoint = (name) => name && name.startsWith('world_to_');
+
   function resize() {
     const w = stage.clientWidth;
     const h = stage.clientHeight;
@@ -679,8 +690,12 @@ Modules load from ./vendor/* — zero network calls at runtime.
     setTimeout(fitCamera, 800);
     setTimeout(fitCamera, 2000);
 
-    const nL = Object.keys(robot.links || {}).length;
-    const nJ = Object.keys(robot.joints || {}).length;
+    // Count user-modelled links + joints only; world anchor + world_to_*
+    // fixed joint are framework plumbing the user shouldn't see in the HUD.
+    const userLinks  = Object.keys(robot.links  || {}).filter(n => !isFrameAnchorLink(n));
+    const userJoints = Object.keys(robot.joints || {}).filter(n => !isFrameAnchorJoint(n));
+    const nL = userLinks.length;
+    const nJ = userJoints.length;
     cntLinksEl.textContent  = String(nL);
     cntJointsEl.textContent = String(nJ);
     hudTitleEl.innerHTML    = '<b>' + (pkg || 'robot') + '</b>';
@@ -693,6 +708,11 @@ Modules load from ./vendor/* — zero network calls at runtime.
 
   function decorateLinks() {
     for (const name of Object.keys(robot.links)) {
+      // Skip the synthetic world anchor — no mass, no mesh, just a
+      // mathematical frame for the SW→ROS rotation. Drawing a triad
+      // at it would clutter the viewport and confuse the user about
+      // what counts as a "link".
+      if (isFrameAnchorLink(name)) continue;
       const link = robot.links[name];
 
       const axes = new THREE.AxesHelper(0.10);
@@ -722,6 +742,9 @@ Modules load from ./vendor/* — zero network calls at runtime.
 
   function decorateJoints() {
     for (const [name, joint] of Object.entries(robot.joints)) {
+      // The world_to_<root> fixed joint carries the SW→ROS rotation but
+      // is otherwise invisible to the user — skip its arrow.
+      if (isFrameAnchorJoint(name)) continue;
       const meta = jointMeta[name];
       const type = meta?.type || joint.jointType;
       if (type === 'fixed') continue;
@@ -754,6 +777,7 @@ Modules load from ./vendor/* — zero network calls at runtime.
     linksListEl.innerHTML = '';
     if (!robot) return;
     for (const name of Object.keys(robot.links)) {
+      if (isFrameAnchorLink(name)) continue;
       const meta = linkMeta[name] || {};
       const entry = document.createElement('div');
       entry.className = 'entry';
@@ -785,6 +809,7 @@ Modules load from ./vendor/* — zero network calls at runtime.
     if (!robot) return;
     const moveTypes = new Set(['revolute', 'continuous', 'prismatic']);
     for (const [name, joint] of Object.entries(robot.joints)) {
+      if (isFrameAnchorJoint(name)) continue;
       const meta = jointMeta[name] || {};
       const type = meta.type || joint.jointType || 'fixed';
 
