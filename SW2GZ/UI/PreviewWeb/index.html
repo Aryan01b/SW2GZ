@@ -136,13 +136,21 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
       pointer-events: none;
     }
   </style>
+  <!--
+    Offline-first importmap: every module resolves to a file under
+    ./vendor/ that ships with the addin installer. No network calls.
+    Pinned versions match scripts/FetchPreviewVendor.ps1 - bump there
+    AND here together. URDFLoader.js relative-imports ./URDFClasses.js
+    and ColladaLoader relative-imports ../loaders/TGALoader.js - both
+    resolve correctly from the vendor tree without explicit map entries.
+  -->
   <script type="importmap">
   {
     "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-      "three/examples/jsm/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-      "urdf-loader": "https://unpkg.com/urdf-loader@0.12.7/src/URDFLoader.js"
+      "three": "./vendor/three/build/three.module.js",
+      "three/addons/": "./vendor/three/examples/jsm/",
+      "three/examples/jsm/": "./vendor/three/examples/jsm/",
+      "urdf-loader": "./vendor/urdf-loader/src/URDFLoader.js"
     }
   }
   </script>

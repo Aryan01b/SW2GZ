@@ -31,9 +31,15 @@ Current: **v2.1.0 UI-shell** shipped on `v2.1.0` branch. Backend wiring in next 
     loads → re-fit at 250/800/2000 ms and bound only `isMesh` children.
   - Installer ships `{app}\preview\*` so PreviewServer can find
     `index.html`. No additional setup beyond the addin install — uses
-    the default Windows browser (Edge) + .NET `HttpListener`; three.js
-    + urdf-loader load from unpkg.com via importmap on first open and
-    cache locally thereafter (internet required for that first load).
+    the default Windows browser (Edge) + .NET `HttpListener`.
+  - Fully offline: `scripts/FetchPreviewVendor.ps1` pins three.js
+    0.160 + urdf-loader 0.12.7 under `UI/PreviewWeb/vendor/` (~1.4 MB,
+    7 files). csproj `<Content Include="UI\PreviewWeb\vendor\**\*">`
+    mirrors the tree to `bin/<cfg>/preview/vendor/`; installer's
+    `recursesubdirs` ships it. Importmap resolves `three`,
+    `three/examples/jsm/`, `urdf-loader` to `./vendor/...` — zero
+    network calls at runtime. PreviewServer + standalone serve.ps1
+    grew a hardened `/vendor/*` route (path-traversal guarded).
 
 ## Done (v2.1.0 UI shell — this plan)
 

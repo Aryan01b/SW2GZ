@@ -110,6 +110,28 @@ namespace SW2GZ.URDFExport
                         Respond(ctx, 404, "Mesh not found: " + filename);
                     return;
                 }
+                if (path.StartsWith("vendor/", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Vendored three.js + urdf-loader shipped under
+                    // <assetsDir>\vendor\ so the preview runs fully offline.
+                    // Reject any segment containing ".." (path traversal) by
+                    // resolving the combined path and verifying it stays
+                    // inside the assets dir.
+                    string relUnix = path; // e.g. "vendor/three/build/three.module.js"
+                    string rel = relUnix.Replace('/', Path.DirectorySeparatorChar);
+                    string full = Path.GetFullPath(Path.Combine(_assetsDir, rel));
+                    string assetsFull = Path.GetFullPath(_assetsDir);
+                    if (!full.StartsWith(assetsFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Respond(ctx, 403, "Forbidden");
+                        return;
+                    }
+                    if (File.Exists(full))
+                        ServeFile(ctx, full, MimeFor(full));
+                    else
+                        Respond(ctx, 404, "Asset not found: " + path);
+                    return;
+                }
                 Respond(ctx, 404, "Not Found");
             }
             catch (Exception e)
@@ -162,9 +184,11 @@ namespace SW2GZ.URDFExport
                 case ".dae":  return "model/vnd.collada+xml";
                 case ".stl":  return "application/sla";
                 case ".html": return "text/html; charset=utf-8";
-                case ".js":   return "application/javascript; charset=utf-8";
+                case ".js":
+                case ".mjs":  return "text/javascript; charset=utf-8";
                 case ".css":  return "text/css; charset=utf-8";
                 case ".json": return "application/json; charset=utf-8";
+                case ".map":  return "application/json; charset=utf-8";
                 case ".png":  return "image/png";
                 case ".jpg":  return "image/jpeg";
                 case ".jpeg": return "image/jpeg";

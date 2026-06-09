@@ -351,5 +351,7 @@ patch_urdf.sh
 # Local agent tooling
 .superpowers/
 
-# Local export sandbox — re-generated from the add-in, not source of truth
-examples/
+# Local export sandbox — re-generated from the add-in, not source of truth.
+# Anchored to repo root so it doesn't accidentally swallow vendored
+# `*/examples/` trees (e.g. three.js examples/jsm modules).
+/examples/
