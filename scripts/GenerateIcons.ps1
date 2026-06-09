@@ -28,10 +28,11 @@ $ErrorActionPreference = 'Stop'
 $outDir = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\SW2GZ\UI\Resources\Icons'))
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
 
-# Line-art palette — bright enough to read on SW's dark-theme ribbon AND
-# dark enough to read on light theme. SW does NOT auto-invert icon colors.
-$cInk    = [System.Drawing.Color]::FromArgb(255,  61, 143, 245)   # 3D8FF5 SW-blue accent
-$cAccent = [System.Drawing.Color]::FromArgb(255, 245, 158,  11)   # F59E0B amber (Export — pops out)
+# Line-art palette — bright white for SW's dark-theme ribbon. SW does NOT
+# auto-invert icon colors. Export uses amber so the call-to-action stands
+# apart from the rest of the line-art icons.
+$cInk    = [System.Drawing.Color]::FromArgb(255, 240, 244, 250)   # F0F4FA off-white
+$cAccent = [System.Drawing.Color]::FromArgb(255, 245, 158,  11)   # F59E0B amber (Export)
 
 function New-Pen([System.Drawing.Color]$color, [double]$thickness) {
     $p = New-Object System.Drawing.Pen($color, [single]$thickness)
