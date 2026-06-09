@@ -742,13 +742,15 @@ namespace SW2GZ.SW
                 if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
 
                 // Load the saved SW2GZ Doc (v1) and bridge it to the legacy
-                // Sw2gzExportConfig shape the pipeline still consumes. The
-                // ribbon enable callback (PreviewEnable) only lights up when
-                // HasSaved is true, so reaching this point means the doc
-                // exists on disk. Defense in depth: pop a soft warning if the
-                // attribute round-trip lost data instead of crashing the
-                // pipeline on null Links.
-                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                // Sw2gzExportConfig shape the pipeline still consumes. Mirror
+                // LaunchExport's Load-first pattern: the persisted attribute
+                // is the source of truth, the in-memory store is a
+                // per-session cache that's blank on a fresh SW launch even
+                // when the attribute exists on disk. Reading store-only here
+                // would surface "empty doc" after every SW restart despite
+                // the user's saved tree being intact.
+                var doc = SW2GZ.URDFExport.Sw2gzDocSerialization.Load(modeldoc)
+                          ?? SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
                 if (doc?.Robot == null || doc.Robot.Links == null || doc.Robot.Links.Count == 0)
                 {
                     SwApp.SendMsgToUser2(
