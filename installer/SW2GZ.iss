@@ -36,6 +36,13 @@ Source: "..\SW2GZ\bin\x64\Release\SW2GZ.dll.config"; DestDir: "{app}"; Flags: ig
 ;   solidworkstools.dll  -> Dassault Systemes' property, already present on every machine that has SolidWorks.
 ;   xunit* / Moq / Castle.Core / *TestPlatform*  -> test-only deps, not needed at runtime.
 Source: "..\SW2GZ\bin\x64\Release\*.dll";            DestDir: "{app}"; Flags: ignoreversion; Excludes: "solidworkstools.dll,xunit*.dll,Moq.dll,Castle.Core.dll,Microsoft.VisualStudio.TestPlatform*.dll"
+; Browser preview assets (three.js + urdf-loader SPA). PreviewServer.cs
+; reads "{app}\preview\index.html" at runtime and hosts it on a random
+; 127.0.0.1 port. No node / npm install — three.js + urdf-loader load
+; from unpkg.com via the page's importmap on first browser open, then
+; cache locally. Only external requirement is internet access for that
+; first load on each machine.
+Source: "..\SW2GZ\bin\x64\Release\preview\*";        DestDir: "{app}\preview"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [InstallDelete]
 ; Wipe stale binaries from the install dir before laying down the new build.

@@ -2,6 +2,39 @@
 
 Current: **v2.1.0 UI-shell** shipped on `v2.1.0` branch. Backend wiring in next plan.
 
+## Done (post-shell session — preview + joint-type fixes)
+
+- `AutoJointResolver`: per-mate-type dispatch in `Resolve`. ANGLE mates
+  derive axis from cross-product of the two picked planar face normals;
+  DISTANCE uses the parent face normal; LOCK / unknown stays Fixed. Adds
+  `TryExtractPlane` planar-face math mirroring `TryExtractCylinder`. Was
+  silently demoting all non-cylindrical mates to Fixed → URDF showed
+  every joint as Fixed regardless of physical type.
+- `Sw2gzCreateRobotPmp` crash fix: PMP COM `_hdrLabel.Caption =` setter
+  was hard-crashing SW (mscorlib AccessViolation) when called from a
+  WinForms Next/Back-button click handler — PMP re-entrancy. Replaced
+  with an in-`_navBar` WinForms `Label` (`_stepIndicator`); button
+  clicks now `BeginInvoke` GoNext/GoBack onto the next message-loop
+  tick to escape click-handler reentrancy. Wizard walks all steps
+  through to Finish.
+- Preview panel (PreviewDialog → PreviewServer → preview/index.html):
+  - 320-px sidebar listing every link (mass + COM + inertia) and joint
+    (parent → child, type badge, xyz, rpy, axis, limits, effort, vel).
+  - Per-link TF triads, per-joint axis arrow, world corner gizmo,
+    inertial COM spheres, floating link-name labels.
+  - Slider per movable joint pulls/poses live; live SW /joint_states
+    poll mirrors the slider when the user isn't dragging.
+  - Three runtime fixes burned in: (a) `three/examples/jsm/` import-map
+    alias missing → URDFLoader 0.12.x silently failed to load STLLoader;
+    (b) SW Collada DAE materials are near-black → override with neutral
+    `MeshStandardMaterial` on load; (c) `fitCamera` raced async mesh
+    loads → re-fit at 250/800/2000 ms and bound only `isMesh` children.
+  - Installer ships `{app}\preview\*` so PreviewServer can find
+    `index.html`. No additional setup beyond the addin install — uses
+    the default Windows browser (Edge) + .NET `HttpListener`; three.js
+    + urdf-loader load from unpkg.com via importmap on first open and
+    cache locally thereafter (internet required for that first load).
+
 ## Done (v2.1.0 UI shell — this plan)
 
 - Sw2gzDoc in-memory tree (Robot/World/Asset subtrees).

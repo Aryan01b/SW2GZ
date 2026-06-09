@@ -2,9 +2,14 @@
 <!--
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
-Browser-side preview for SW2GZ. Loads the URDF served at /robot.urdf,
-fetches DAE/STL meshes from /meshes/, renders via three.js + urdf-loader,
-and live-syncs joint values from /joint_states (HTTP poll @ 10 Hz).
+In-addin browser preview for SW2GZ exports. Loads /robot.urdf, fetches
+DAE / STL meshes from /meshes/, parses the URDF for inertial / joint
+metadata, and renders via three.js + urdf-loader.
+
+Layout: 300 px sidebar (workspace, frames, links, joints, view) + 1 fr
+3D stage. World-frame gizmo pinned top-right, floating link labels in
+the scene. Live joint values stream from SW via /joint_states @ 10 Hz —
+the matching slider follows.
 
 Conventions:
   - Z-up world (REP-103). Camera up = +Z. Axes overlay X red / Y green / Z blue.
@@ -12,42 +17,203 @@ Conventions:
 
 Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
 -->
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>SW2GZ — 3D preview</title>
   <style>
-    html, body { margin:0; padding:0; height:100%; background:#1d1f24; color:#cfd3da;
-                 font-family: 'Segoe UI', sans-serif; overflow:hidden; }
-    #viewer { position:absolute; inset:0; }
-    #status { position:absolute; left:10px; bottom:8px; font-size:12px;
-              background:rgba(0,0,0,0.4); padding:4px 10px; border-radius:4px; }
-    #toggles { position:absolute; right:10px; top:10px; background:rgba(0,0,0,0.5);
-               padding:8px 10px; border-radius:6px; font-size:12px; min-width:140px; }
-    #toggles label { display:block; cursor:pointer; margin:2px 0; }
-    #toggles input { vertical-align:middle; margin-right:6px; }
-    .err { color:#ff8080; }
+    :root {
+      --bg-0:        #0e1116;
+      --bg-1:        #1a1f29;
+      --panel:       #161b24;
+      --panel-edge:  #232a36;
+      --fore:        #e6e8ec;
+      --subtle:      #8b94a3;
+      --accent:      #4c9ce0;
+      --warn:        #f0a352;
+      --axis-x:      #ff5454;
+      --axis-y:      #54ff7a;
+      --axis-z:      #54a4ff;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: radial-gradient(ellipse at center, var(--bg-1) 0%, var(--bg-0) 80%);
+      color: var(--fore);
+      font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
+      overflow: hidden;
+    }
+    #app { display: grid; grid-template-columns: 320px 1fr; height: 100%; }
+    #side {
+      background: var(--panel);
+      border-right: 1px solid var(--panel-edge);
+      overflow-y: auto;
+      padding: 14px 16px 24px;
+    }
+    #side h1 { margin: 0 0 4px 0; font-size: 14px; letter-spacing: 0.3px; }
+    #side .sub { color: var(--subtle); font-size: 11px; margin-bottom: 14px; }
+    .section {
+      margin: 14px 0 0; padding-top: 12px;
+      border-top: 1px solid var(--panel-edge);
+    }
+    .section h2 {
+      margin: 0 0 8px 0; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 1px; color: var(--subtle);
+    }
+    .legend { font-size: 11px; color: var(--subtle); }
+    .legend .x { color: var(--axis-x); }
+    .legend .y { color: var(--axis-y); }
+    .legend .z { color: var(--axis-z); }
+    label.toggle {
+      display: flex; align-items: center; gap: 6px;
+      cursor: pointer; user-select: none; font-size: 12px;
+      padding: 3px 0;
+    }
+    label.toggle input { accent-color: var(--accent); }
+    .entry {
+      border: 1px solid transparent; border-radius: 4px;
+      padding: 6px 8px; margin-bottom: 4px;
+      cursor: pointer; transition: background 0.1s;
+      font-family: Consolas, monospace; font-size: 11px;
+    }
+    .entry:hover { background: rgba(76,156,224,0.06); border-color: var(--panel-edge); }
+    .entry.active { background: rgba(76,156,224,0.12); border-color: var(--accent); }
+    .entry .name { color: var(--fore); }
+    .entry .meta { color: var(--subtle); font-size: 10px; margin-top: 2px; }
+    .entry .type { color: var(--accent); }
+    .entry .type.fixed { color: var(--subtle); }
+    .entry .type.revolute, .entry .type.continuous { color: var(--axis-y); }
+    .entry .type.prismatic { color: var(--axis-z); }
+    .entry .type.floating, .entry .type.planar { color: var(--warn); }
+    .detail {
+      display: none;
+      margin-top: 4px; padding: 6px 8px;
+      background: rgba(0,0,0,0.25); border-radius: 4px;
+      font-family: Consolas, monospace; font-size: 10px;
+      color: var(--subtle);
+    }
+    .entry.active .detail { display: block; }
+    .detail .kv { display: grid; grid-template-columns: 60px 1fr; gap: 2px 8px; }
+    .detail .kv b { color: var(--fore); font-weight: normal; }
+    .detail input[type=range] {
+      width: 100%; margin-top: 6px; accent-color: var(--accent);
+    }
+    .detail .slidewrap { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+    .detail .slidewrap input[type=range] { flex: 1; margin-top: 0; }
+    .detail .slidewrap .val {
+      color: var(--accent); font-family: Consolas, monospace;
+      font-size: 10px; width: 56px; text-align: right;
+    }
+    #stage { position: relative; min-width: 0; }
+    canvas { display: block; }
+    #status {
+      position: absolute; bottom: 10px; left: 14px;
+      font-size: 11px; color: var(--subtle);
+      background: rgba(0,0,0,0.45); padding: 4px 10px;
+      border-radius: 4px;
+      transition: opacity 0.4s;
+    }
+    .link-label {
+      position: absolute; transform: translate(-50%, -100%);
+      pointer-events: none;
+      font: 11px/1 Consolas, monospace; color: var(--accent);
+      background: rgba(14,17,22,0.7); padding: 1px 4px; border-radius: 2px;
+      white-space: nowrap;
+    }
+    .err {
+      color: var(--axis-x); font-size: 11px;
+      background: rgba(255,84,84,0.08);
+      border-left: 2px solid var(--axis-x);
+      padding: 6px 8px; margin-top: 8px;
+      font-family: Consolas, monospace;
+    }
+    #loadingOverlay {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--subtle); font-size: 14px;
+      background: rgba(14,17,22,0.4);
+      pointer-events: none;
+    }
   </style>
   <script type="importmap">
   {
     "imports": {
       "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
       "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "three/examples/jsm/": "https://unpkg.com/three@0.160.0/examples/jsm/",
       "urdf-loader": "https://unpkg.com/urdf-loader@0.12.7/src/URDFLoader.js"
     }
   }
   </script>
 </head>
 <body>
-  <div id="viewer"></div>
-  <div id="toggles">
-    <label><input type="checkbox" id="showVisual" checked/> Visual meshes (DAE)</label>
-    <label><input type="checkbox" id="showCollision"/> Collision hulls (STL)</label>
-    <label><input type="checkbox" id="showAxes" checked/> World axes</label>
-    <label><input type="checkbox" id="showGrid" checked/> Grid (XY)</label>
-    <label><input type="checkbox" id="livePoll" checked/> Live SW sync</label>
+  <div id="app">
+    <aside id="side">
+      <h1>SW2GZ Preview</h1>
+      <div class="sub" id="pkginfo">loading…</div>
+
+      <div class="section">
+        <h2>Display</h2>
+        <label class="toggle"><input type="checkbox" id="showVisual" checked/> Visual meshes (DAE)</label>
+        <label class="toggle"><input type="checkbox" id="showCollision"/> Collision hulls (STL)</label>
+        <label class="toggle"><input type="checkbox" id="showLinkAxes" checked/> Link frames (TF triads)</label>
+        <label class="toggle"><input type="checkbox" id="showJointAxes" checked/> Joint axes</label>
+        <label class="toggle"><input type="checkbox" id="showInertial"/> Inertial COM markers</label>
+        <label class="toggle"><input type="checkbox" id="showLinkLabels" checked/> Link name labels</label>
+        <label class="toggle"><input type="checkbox" id="showGrid" checked/> Ground grid (XY)</label>
+        <label class="toggle"><input type="checkbox" id="livePoll" checked/> Live SW joint sync</label>
+        <div class="legend" style="margin-top:6px">
+          Axes — <span class="x">X</span> · <span class="y">Y</span> · <span class="z">Z</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Links <span id="linkCount" class="legend"></span></h2>
+        <div id="linksList"></div>
+      </div>
+
+      <div class="section">
+        <h2>Joints <span id="jointCount" class="legend"></span></h2>
+        <div id="jointsList"></div>
+      </div>
+
+      <div class="section">
+        <h2>View</h2>
+        <div class="legend">Left-drag orbit · wheel zoom · right-drag pan</div>
+      </div>
+
+      <div id="errors"></div>
+    </aside>
+    <div id="stage">
+      <div id="status">Loading…</div>
+      <div id="loadingOverlay">Fetching URDF…</div>
+    </div>
   </div>
-  <div id="status">Loading…</div>
+
+<!-- Surface ANY uncaught error (module import failure, syntax error, etc.)
+     directly on the page so the user doesn't need DevTools open to diagnose. -->
+<script>
+  (function () {
+    function pin(msg) {
+      var box = document.createElement('div');
+      box.style.cssText =
+        'position:fixed;top:8px;right:8px;max-width:680px;z-index:9999;' +
+        'background:#3a0e0e;border:1px solid #ff5454;color:#ffcfcf;' +
+        'padding:10px 14px;border-radius:6px;font:11px/1.4 Consolas,monospace;' +
+        'white-space:pre-wrap;word-break:break-word;';
+      box.textContent = msg;
+      document.body && document.body.appendChild(box);
+    }
+    window.addEventListener('error', function (e) {
+      var src = e.filename ? (e.filename + ':' + e.lineno + ':' + e.colno) : '';
+      pin('JS error: ' + (e.message || e.error) + (src ? '\n' + src : ''));
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      pin('Promise rejection: ' + (e.reason && e.reason.stack ? e.reason.stack : e.reason));
+    });
+  })();
+</script>
 
 <script type="module">
   import * as THREE from 'three';
@@ -56,68 +222,205 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
   import { STLLoader }     from 'three/addons/loaders/STLLoader.js';
   import URDFLoader        from 'urdf-loader';
 
-  const statusEl = document.getElementById('status');
+  // ── DOM refs ───────────────────────────────────────────────────
+  const stage         = document.getElementById('stage');
+  const statusEl      = document.getElementById('status');
+  const loadingEl     = document.getElementById('loadingOverlay');
+  const pkginfoEl     = document.getElementById('pkginfo');
+  const linksListEl   = document.getElementById('linksList');
+  const jointsListEl  = document.getElementById('jointsList');
+  const linkCountEl   = document.getElementById('linkCount');
+  const jointCountEl  = document.getElementById('jointCount');
+  const errorsEl      = document.getElementById('errors');
+
   const setStatus = (txt, isErr) => {
     statusEl.textContent = txt;
-    statusEl.className = isErr ? 'err' : '';
+    statusEl.style.color = isErr ? 'var(--axis-x)' : '';
+    statusEl.style.opacity = '1';
+  };
+  const showError = (msg) => {
+    const div = document.createElement('div');
+    div.className = 'err';
+    div.textContent = msg;
+    errorsEl.appendChild(div);
+    setStatus(msg, true);
+    console.error('[sw2gz-preview]', msg);
   };
 
-  // ── Scene + camera + lights ──────────────────────────────────────────────
+  // ── Scene + camera + lights ────────────────────────────────────
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1d1f24);
+  scene.background = null;
 
-  const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.001, 100);
-  camera.up.set(0, 0, 1);   // Z-up
-  camera.position.set(0.5, -0.5, 0.5);
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.001, 100);
+  camera.up.set(0, 0, 1);
+  camera.position.set(0.6, -0.6, 0.5);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(devicePixelRatio);
-  renderer.setSize(innerWidth, innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  document.getElementById('viewer').appendChild(renderer.domElement);
+  stage.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 0, 0);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.target.set(0, 0, 0.15);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.1);
-  sun.position.set(2, 2, 3);
-  scene.add(sun);
-  const fill = new THREE.DirectionalLight(0xa0b8ff, 0.4);
-  fill.position.set(-2, -1, 1);
-  scene.add(fill);
+  // Lighting: SOLIDWORKS DAE materials default to dim diffuse → bump
+  // ambient + key + fill + rim so the model is legible even with weak
+  // material colors. Slightly biased to neutral white to avoid tinting.
+  scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+  scene.add(new THREE.HemisphereLight(0xb8c4d0, 0x2a3040, 0.55));
+  const key  = new THREE.DirectionalLight(0xffffff, 1.1);
+  key.position.set(2, 3, 2.5); scene.add(key);
+  const fill = new THREE.DirectionalLight(0xc8d8ff, 0.55);
+  fill.position.set(-2, -1, 1); scene.add(fill);
+  const rim  = new THREE.DirectionalLight(0xffffff, 0.45);
+  rim.position.set(0, -2, -1); scene.add(rim);
 
-  // World axes + ground grid (Z-up world → grid lives in XY plane).
-  const axes = new THREE.AxesHelper(0.5);
-  scene.add(axes);
-  const grid = new THREE.GridHelper(2, 20, 0x4a4a4a, 0x2c2c2c);
-  grid.rotation.x = Math.PI / 2;   // XZ → XY
+  // Ground grid in XY (Z-up world).
+  const grid = new THREE.GridHelper(4, 40, 0x444c5a, 0x232a36);
+  grid.rotation.x = Math.PI / 2;
+  grid.material.opacity = 0.45;
+  grid.material.transparent = true;
   scene.add(grid);
 
-  // Toggle wiring
-  document.getElementById('showAxes').onchange = e => axes.visible = e.target.checked;
-  document.getElementById('showGrid').onchange = e => grid.visible = e.target.checked;
+  // World-origin triad (large).
+  const worldAxes = new THREE.AxesHelper(0.4);
+  scene.add(worldAxes);
 
-  // ── URDF load ────────────────────────────────────────────────────────────
+  // ── Corner world-frame gizmo (overlay) ─────────────────────────
+  const GIZMO_PX = 96;
+  const gizmoScene = new THREE.Scene();
+  const gizmoCam = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, 0.1, 10);
+  gizmoCam.position.set(0, 0, 3);
+  gizmoCam.up.set(0, 0, 1);
+  gizmoScene.add(new THREE.AxesHelper(1));
+
+  // ── Per-load state ─────────────────────────────────────────────
   let robot = null;
-  let visualGroup = null, collisionGroup = null;
+  let linkLabels = [];
+  let perLinkAxes = [];
+  let perJointAxes = [];
+  let inertialMarkers = [];
+  // Parsed metadata: linkMeta[name] = {mass, com[3], inertia{...}, hasInertial}
+  // jointMeta[name] = {type, parent, child, origin{xyz, rpy}, axis[3], limit{lower,upper,effort,velocity}}
+  let linkMeta = {};
+  let jointMeta = {};
 
+  // ── Resize ─────────────────────────────────────────────────────
+  function resize() {
+    const w = stage.clientWidth;
+    const h = stage.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  // ── URDF metadata parser ───────────────────────────────────────
+  // urdf-loader gives us joints/links but drops inertials and some
+  // joint metadata. Parse the XML ourselves so the sidebar has the
+  // raw exported values to display.
+  function parseUrdfMeta(urdfText) {
+    const doc = new DOMParser().parseFromString(urdfText, 'application/xml');
+    const err = doc.querySelector('parsererror');
+    if (err) { showError('URDF XML parse error: ' + err.textContent.slice(0, 200)); return; }
+
+    const vec = (s) => (s || '').trim().split(/\s+/).map(Number);
+
+    for (const link of doc.getElementsByTagName('link')) {
+      const name = link.getAttribute('name'); if (!name) continue;
+      const inertial = link.getElementsByTagName('inertial')[0];
+      const meta = { mass: null, com: null, inertia: null, hasInertial: false };
+      if (inertial) {
+        meta.hasInertial = true;
+        const mass = inertial.getElementsByTagName('mass')[0];
+        if (mass) meta.mass = parseFloat(mass.getAttribute('value'));
+        const origin = inertial.getElementsByTagName('origin')[0];
+        if (origin) meta.com = vec(origin.getAttribute('xyz'));
+        const inertia = inertial.getElementsByTagName('inertia')[0];
+        if (inertia) {
+          meta.inertia = {
+            ixx: parseFloat(inertia.getAttribute('ixx') || 0),
+            iyy: parseFloat(inertia.getAttribute('iyy') || 0),
+            izz: parseFloat(inertia.getAttribute('izz') || 0),
+            ixy: parseFloat(inertia.getAttribute('ixy') || 0),
+            ixz: parseFloat(inertia.getAttribute('ixz') || 0),
+            iyz: parseFloat(inertia.getAttribute('iyz') || 0),
+          };
+        }
+      }
+      linkMeta[name] = meta;
+    }
+
+    for (const joint of doc.getElementsByTagName('joint')) {
+      const name = joint.getAttribute('name'); if (!name) continue;
+      const type = joint.getAttribute('type') || 'fixed';
+      const parent = joint.getElementsByTagName('parent')[0];
+      const child  = joint.getElementsByTagName('child')[0];
+      const origin = joint.getElementsByTagName('origin')[0];
+      const axis   = joint.getElementsByTagName('axis')[0];
+      const limit  = joint.getElementsByTagName('limit')[0];
+      jointMeta[name] = {
+        type,
+        parent: parent?.getAttribute('link') || null,
+        child:  child?.getAttribute('link')  || null,
+        origin: {
+          xyz: origin ? vec(origin.getAttribute('xyz') || '0 0 0') : [0,0,0],
+          rpy: origin ? vec(origin.getAttribute('rpy') || '0 0 0') : [0,0,0],
+        },
+        axis: axis ? vec(axis.getAttribute('xyz') || '1 0 0') : [1,0,0],
+        limit: limit ? {
+          lower:    parseFloat(limit.getAttribute('lower') || 'NaN'),
+          upper:    parseFloat(limit.getAttribute('upper') || 'NaN'),
+          effort:   parseFloat(limit.getAttribute('effort') || 'NaN'),
+          velocity: parseFloat(limit.getAttribute('velocity') || 'NaN'),
+        } : null,
+      };
+    }
+  }
+
+  // ── URDF load ──────────────────────────────────────────────────
   const loader = new URDFLoader();
-  // package:// resolution: package name → URL prefix. Filled in after we read
-  // <robot name="..."> from the served URDF. Default '/' so meshes/* paths
-  // resolve at the same origin the page is served from.
-  loader.packages = { '': '/' };
+  // packages map filled in after we read <robot name="...">.
+  loader.packages = { '': '' };
+  // SOLIDWORKS-exported DAE files often ship with near-black diffuse
+  // materials → models render invisible regardless of scene lighting.
+  // Force a bright neutral material on every mesh under the loaded scene
+  // so geometry is legible without dependence on DAE material fidelity.
+  const overrideMat = new THREE.MeshStandardMaterial({
+    color: 0xc8cdd5, roughness: 0.55, metalness: 0.05,
+  });
+  function paintMeshes(obj) {
+    obj.traverse(o => {
+      if (o.isMesh) {
+        o.material = overrideMat;
+        if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+      }
+    });
+  }
   loader.loadMeshCb = (path, manager, onLoad) => {
     const lower = path.toLowerCase();
     if (lower.endsWith('.dae')) {
-      new ColladaLoader(manager).load(path, dae => onLoad(dae.scene));
+      new ColladaLoader(manager).load(path,
+        dae => { paintMeshes(dae.scene); onLoad(dae.scene); },
+        undefined,
+        err => { console.warn('DAE load fail', path, err); onLoad(new THREE.Object3D()); });
     } else if (lower.endsWith('.stl')) {
-      new STLLoader(manager).load(path, geom => {
-        const mat = new THREE.MeshStandardMaterial({
-          color: 0xb8c0d0, roughness: 0.6, metalness: 0.1,
-        });
-        onLoad(new THREE.Mesh(geom, mat));
-      });
+      new STLLoader(manager).load(path,
+        geom => {
+          geom.computeVertexNormals();
+          // Collision hulls live alongside visual meshes; render as a
+          // semi-transparent overlay so the user can compare hull vs visual.
+          const mat = new THREE.MeshStandardMaterial({
+            color: 0x54ff7a, roughness: 0.6, metalness: 0.0,
+            transparent: true, opacity: 0.32, depthWrite: false,
+          });
+          onLoad(new THREE.Mesh(geom, mat));
+        },
+        undefined,
+        err => { console.warn('STL load fail', path, err); onLoad(new THREE.Object3D()); });
     } else {
       console.warn('Unknown mesh format:', path);
       onLoad(new THREE.Object3D());
@@ -132,72 +435,307 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
       if (!r.ok) throw new Error('HTTP ' + r.status);
       urdfText = await r.text();
     } catch (e) {
-      setStatus('Could not load /robot.urdf: ' + e.message, true);
+      showError('Could not load /robot.urdf: ' + e.message);
+      loadingEl.style.display = 'none';
       return;
     }
 
-    // Strip xacro:include / xacro:* etc. — URDFLoader doesn't process xacro.
-    // The visible mesh + joint topology is pure URDF and parses fine.
+    // Strip xacro:* tags — URDFLoader doesn't process them.
     urdfText = urdfText.replace(/<xacro:[^>]*\/>/g, '')
                        .replace(/<xacro:[^>]*>[\s\S]*?<\/xacro:[^>]*>/g, '');
 
-    // Read package name → use as packages map key. Loader strips
-    // `package://<name>/` and replaces with packages[name].
+    parseUrdfMeta(urdfText);
+
+    // Read <robot name=…> → use as packages map key. URDFLoader strips
+    // package://<name>/ and replaces with packages[name]. Empty string
+    // resolution yields '/meshes/x.dae' rooted at this origin.
     const m = urdfText.match(/<robot[^>]*\sname="([^"]+)"/);
     const pkg = m ? m[1] : '';
-    loader.packages = { [pkg]: '/' };
+    loader.packages = { [pkg]: '' };
 
     setStatus('Building scene…');
     try {
       robot = loader.parse(urdfText);
     } catch (e) {
-      setStatus('URDF parse failed: ' + e.message, true);
+      showError('URDF parse failed: ' + e.message);
+      loadingEl.style.display = 'none';
       return;
     }
     scene.add(robot);
-    splitVisualCollision();
+
+    decorateLinks();
+    decorateJoints();
+    buildSidebar();
     fitCamera();
+    applyToggles();
+
+    // Mesh loads are async — bounding box at this point may exclude DAE/STL
+    // payloads that finish later. Re-fit a few times while loading settles.
+    setTimeout(fitCamera, 250);
+    setTimeout(fitCamera, 800);
+    setTimeout(fitCamera, 2000);
+
     const nL = Object.keys(robot.links || {}).length;
     const nJ = Object.keys(robot.joints || {}).length;
-    setStatus(`${nL} link(s) · ${nJ} joint(s) · drag orbit, wheel zoom`);
+    pkginfoEl.textContent = `${pkg} · ${nL} link(s) · ${nJ} joint(s)`;
+    linkCountEl.textContent = `(${nL})`;
+    jointCountEl.textContent = `(${nJ})`;
+    setStatus(`${nL} link(s) · ${nJ} joint(s) · ready`);
+    setTimeout(() => statusEl.style.opacity = '0.55', 1500);
+    loadingEl.style.display = 'none';
   }
 
-  // urdf-loader builds both visual + collision under each link. We collect
-  // them into two groups so the toggle hides/shows each cleanly.
-  function splitVisualCollision() {
-    if (!robot) return;
-    visualGroup = new THREE.Group();
-    collisionGroup = new THREE.Group();
-    robot.traverse(o => {
-      if (o.isURDFVisual) {
-        visualGroup.add(o);
-      } else if (o.isURDFCollider) {
-        o.visible = false;
-        collisionGroup.add(o);
+  // ── Decorate links: TF triads + floating labels + inertial markers ──
+  function decorateLinks() {
+    for (const name of Object.keys(robot.links)) {
+      const link = robot.links[name];
+
+      const axes = new THREE.AxesHelper(0.10);
+      link.add(axes);
+      perLinkAxes.push(axes);
+
+      const el = document.createElement('div');
+      el.className = 'link-label';
+      el.textContent = name;
+      stage.appendChild(el);
+      linkLabels.push({ link, el });
+
+      const meta = linkMeta[name];
+      if (meta && meta.hasInertial && meta.com) {
+        // COM sphere in link frame, scaled to mass-ish (cap 0.05 m).
+        const mass = meta.mass ?? 0.1;
+        const r = Math.min(0.05, Math.max(0.01, Math.cbrt(mass) * 0.025));
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0xf0a352, emissive: 0x3a1f00, roughness: 0.4, metalness: 0.0,
+        });
+        const sphere = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), mat);
+        sphere.position.set(meta.com[0], meta.com[1], meta.com[2]);
+        link.add(sphere);
+        inertialMarkers.push(sphere);
       }
-    });
-    document.getElementById('showVisual').onchange = e =>
-      robot.traverse(o => { if (o.isURDFVisual) o.visible = e.target.checked; });
-    document.getElementById('showCollision').onchange = e =>
-      robot.traverse(o => { if (o.isURDFCollider) o.visible = e.target.checked; });
+    }
   }
+
+  // ── Decorate joints: axis arrows at joint origin ───────────────
+  function decorateJoints() {
+    for (const [name, joint] of Object.entries(robot.joints)) {
+      const meta = jointMeta[name];
+      const type = meta?.type || joint.jointType;
+      // Skip fixed — no axis to draw.
+      if (type === 'fixed') continue;
+
+      const axis = meta?.axis ?? [
+        joint.axis?.x ?? 1, joint.axis?.y ?? 0, joint.axis?.z ?? 0,
+      ];
+      const dir = new THREE.Vector3(axis[0], axis[1], axis[2]);
+      if (dir.lengthSq() < 1e-9) continue;
+      dir.normalize();
+      const color =
+        type === 'revolute' || type === 'continuous' ? 0x54ff7a :
+        type === 'prismatic' ? 0x54a4ff :
+        type === 'planar' || type === 'floating' ? 0xf0a352 :
+        0xcccccc;
+      const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0,0,0), 0.18, color, 0.06, 0.035);
+      // ArrowHelper line is thin; bump its width by replacing the line
+      // material's linewidth would help on WebGL2 (no-op on most platforms).
+      joint.add(arrow);
+      perJointAxes.push(arrow);
+    }
+  }
+
+  // ── Sidebar (Links + Joints) ───────────────────────────────────
+  const f = (v, d = 4) =>
+    (typeof v === 'number' && isFinite(v)) ? v.toFixed(d) : '—';
+  const fv = (a, d = 4) =>
+    Array.isArray(a) ? a.map(x => f(x, d)).join(', ') : '—';
+  const fdeg = (rad) =>
+    isFinite(rad) ? (rad * 180 / Math.PI).toFixed(1) + '°' : '—';
+
+  function buildSidebar() {
+    linksListEl.innerHTML = '';
+    jointsListEl.innerHTML = '';
+
+    // Links
+    for (const name of Object.keys(robot.links)) {
+      const meta = linkMeta[name] || {};
+      const entry = document.createElement('div');
+      entry.className = 'entry';
+      const detail = `
+        <div class="detail">
+          <div class="kv">
+            <span>mass</span><b>${f(meta.mass, 6)} kg</b>
+            <span>com</span><b>${fv(meta.com)}</b>
+            <span>ixx</span><b>${f(meta.inertia?.ixx, 6)}</b>
+            <span>iyy</span><b>${f(meta.inertia?.iyy, 6)}</b>
+            <span>izz</span><b>${f(meta.inertia?.izz, 6)}</b>
+            <span>ixy</span><b>${f(meta.inertia?.ixy, 6)}</b>
+            <span>ixz</span><b>${f(meta.inertia?.ixz, 6)}</b>
+            <span>iyz</span><b>${f(meta.inertia?.iyz, 6)}</b>
+          </div>
+        </div>`;
+      entry.innerHTML =
+        `<div class="name">${name}</div>` +
+        `<div class="meta">${meta.hasInertial ? `${f(meta.mass, 3)} kg` : 'no inertial'}</div>` +
+        detail;
+      entry.addEventListener('click', () => toggleEntry(entry, 'link', name));
+      linksListEl.appendChild(entry);
+    }
+
+    // Joints
+    const moveTypes = new Set(['revolute', 'continuous', 'prismatic']);
+    for (const [name, joint] of Object.entries(robot.joints)) {
+      const meta = jointMeta[name] || {};
+      const type = meta.type || joint.jointType || 'fixed';
+      const entry = document.createElement('div');
+      entry.className = 'entry';
+
+      let slider = '';
+      if (moveTypes.has(type)) {
+        const isCont = type === 'continuous';
+        const lo = meta.limit?.lower, up = meta.limit?.upper;
+        const zeroRange = lo === 0 && up === 0;
+        const lower = (isCont || zeroRange || !isFinite(lo)) ? -Math.PI : lo;
+        const upper = (isCont || zeroRange || !isFinite(up)) ?  Math.PI : up;
+        const isAng = type !== 'prismatic';
+        slider = `
+          <div class="slidewrap">
+            <input type="range" min="${lower}" max="${upper}" step="0.001" value="0" data-joint="${name}"/>
+            <span class="val">0.000 ${isAng ? 'rad' : 'm'}</span>
+          </div>`;
+      }
+
+      const lim = meta.limit || {};
+      const detail = `
+        <div class="detail">
+          <div class="kv">
+            <span>parent</span><b>${meta.parent || '—'}</b>
+            <span>child</span><b>${meta.child || '—'}</b>
+            <span>xyz</span><b>${fv(meta.origin?.xyz)}</b>
+            <span>rpy</span><b>${fv(meta.origin?.rpy)}</b>
+            <span>axis</span><b>${fv(meta.axis, 4)}</b>
+            <span>lower</span><b>${f(lim.lower)} (${fdeg(lim.lower)})</b>
+            <span>upper</span><b>${f(lim.upper)} (${fdeg(lim.upper)})</b>
+            <span>effort</span><b>${f(lim.effort, 2)}</b>
+            <span>vel</span><b>${f(lim.velocity, 2)}</b>
+          </div>
+          ${slider}
+        </div>`;
+      entry.innerHTML =
+        `<div class="name">${name} <span class="type ${type}">${type}</span></div>` +
+        `<div class="meta">${meta.parent || '?'} → ${meta.child || '?'}</div>` +
+        detail;
+      entry.addEventListener('click', (ev) => {
+        if (ev.target.tagName === 'INPUT') return; // ignore slider clicks
+        toggleEntry(entry, 'joint', name);
+      });
+      jointsListEl.appendChild(entry);
+
+      const input = entry.querySelector('input[type=range]');
+      if (input) {
+        const valEl = entry.querySelector('.val');
+        const isAng = type !== 'prismatic';
+        input.addEventListener('input', () => {
+          // User dragging takes priority over live SW poll until released.
+          input.dataset.userTouched = '1';
+          const v = parseFloat(input.value);
+          robot.setJointValue(name, v);
+          valEl.textContent = v.toFixed(3) + (isAng ? ' rad' : ' m');
+        });
+        input.addEventListener('change', () => {
+          // After release, allow live poll to overwrite again.
+          setTimeout(() => { input.dataset.userTouched = ''; }, 800);
+        });
+      }
+    }
+  }
+
+  function toggleEntry(entry, kind, name) {
+    const wasActive = entry.classList.contains('active');
+    // Single-select per list section.
+    entry.parentElement.querySelectorAll('.entry.active').forEach(e => e.classList.remove('active'));
+    if (!wasActive) {
+      entry.classList.add('active');
+      flashFocus(kind, name);
+    }
+  }
+
+  // Flash a temporary highlight on the selected link/joint.
+  function flashFocus(kind, name) {
+    if (!robot) return;
+    let obj = null;
+    if (kind === 'link') obj = robot.links[name];
+    else if (kind === 'joint') {
+      const j = robot.joints[name];
+      obj = j?.child ? robot.links[j.child] : j;
+    }
+    if (!obj) return;
+    const pos = new THREE.Vector3();
+    obj.getWorldPosition(pos);
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(0.04, 24, 16),
+      new THREE.MeshBasicMaterial({ color: 0x4c9ce0, transparent: true, opacity: 0.5 })
+    );
+    sphere.position.copy(pos);
+    scene.add(sphere);
+    const start = performance.now();
+    const animate = () => {
+      const t = (performance.now() - start) / 700;
+      if (t >= 1) { scene.remove(sphere); sphere.geometry.dispose(); sphere.material.dispose(); return; }
+      sphere.scale.setScalar(1 + t * 2.2);
+      sphere.material.opacity = 0.5 * (1 - t);
+      requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }
+
+  // ── Display toggles ────────────────────────────────────────────
+  function applyToggles() {
+    const visualOn    = document.getElementById('showVisual').checked;
+    const collisionOn = document.getElementById('showCollision').checked;
+    const linkAxesOn  = document.getElementById('showLinkAxes').checked;
+    const jointAxesOn = document.getElementById('showJointAxes').checked;
+    const inertialOn  = document.getElementById('showInertial').checked;
+    const labelsOn    = document.getElementById('showLinkLabels').checked;
+    const gridOn      = document.getElementById('showGrid').checked;
+
+    if (robot) {
+      robot.traverse(o => {
+        if (o.isURDFVisual)   o.visible = visualOn;
+        if (o.isURDFCollider) o.visible = collisionOn;
+      });
+    }
+    perLinkAxes.forEach(a => a.visible = linkAxesOn);
+    perJointAxes.forEach(a => a.visible = jointAxesOn);
+    inertialMarkers.forEach(m => m.visible = inertialOn);
+    linkLabels.forEach(({el}) => el.style.display = labelsOn ? '' : 'none');
+    grid.visible = gridOn;
+  }
+  document.querySelectorAll('#side label.toggle input').forEach(inp => {
+    inp.addEventListener('change', applyToggles);
+  });
 
   function fitCamera() {
-    const box = new THREE.Box3().setFromObject(robot);
-    if (!isFinite(box.min.x)) return;   // empty / not yet meshed
+    if (!robot) return;
+    // Bound only the robot's meshes — TF triads / axis arrows / inertial
+    // markers we added can distort the box if a link sits far from origin.
+    const box = new THREE.Box3();
+    let any = false;
+    robot.traverse(o => {
+      if (o.isMesh && o.geometry) { box.expandByObject(o); any = true; }
+    });
+    if (!any || !isFinite(box.min.x)) return;
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    const r = Math.max(size.length() * 0.6, 0.3);
+    const r = Math.max(size.length() * 0.9, 0.4);
     controls.target.copy(center);
-    camera.position.set(center.x + r, center.y - r, center.z + r * 0.6);
-    camera.near = r * 0.001;
-    camera.far  = r * 1000;
+    camera.position.set(center.x + r, center.y - r * 1.1, center.z + r * 0.55);
+    camera.near = Math.max(r * 0.0005, 0.001);
+    camera.far  = Math.max(r * 1000, 50);
     camera.updateProjectionMatrix();
     controls.update();
   }
 
-  // ── Live joint poll ──────────────────────────────────────────────────────
-  let pollTimer = null;
+  // ── Live joint poll ────────────────────────────────────────────
   const livePollChk = document.getElementById('livePoll');
   async function pollJoints() {
     if (!robot || !livePollChk.checked) return;
@@ -205,23 +743,60 @@ Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
       const r = await fetch('/joint_states');
       if (!r.ok) return;
       const states = await r.json();
-      for (const [name, value] of Object.entries(states))
-        if (robot.joints[name]) robot.setJointValue(name, value);
+      for (const [name, value] of Object.entries(states)) {
+        if (!robot.joints[name]) continue;
+        robot.setJointValue(name, value);
+        // Mirror to the slider if the user isn't actively dragging.
+        const input = jointsListEl.querySelector(`input[data-joint="${CSS.escape(name)}"]`);
+        if (input && !input.dataset.userTouched) {
+          input.value = value;
+          const valEl = input.parentElement.querySelector('.val');
+          const isAng = jointMeta[name]?.type !== 'prismatic';
+          if (valEl) valEl.textContent = value.toFixed(3) + (isAng ? ' rad' : ' m');
+        }
+      }
     } catch (e) { /* swallow — addin may have closed */ }
   }
-  pollTimer = setInterval(pollJoints, 100);
+  setInterval(pollJoints, 100);
 
-  // ── Render loop + resize ─────────────────────────────────────────────────
-  addEventListener('resize', () => {
-    camera.aspect = innerWidth / innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
-  });
-
+  // ── Render loop ────────────────────────────────────────────────
+  const tmp = new THREE.Vector3();
   function tick() {
     requestAnimationFrame(tick);
     controls.update();
     renderer.render(scene, camera);
+
+    // Corner gizmo overlay — Z-up world frame mirrors main camera.
+    const cw = renderer.domElement.width;
+    const ch = renderer.domElement.height;
+    const dpr = renderer.getPixelRatio();
+    const px = GIZMO_PX * dpr;
+    gizmoCam.position.copy(camera.position).sub(controls.target).normalize().multiplyScalar(3);
+    gizmoCam.up.copy(camera.up);
+    gizmoCam.lookAt(0, 0, 0);
+    const prevAutoClear = renderer.autoClear;
+    renderer.autoClear = false;
+    renderer.clearDepth();
+    renderer.setScissorTest(true);
+    renderer.setScissor(cw - px - 6 * dpr, ch - px - 6 * dpr, px, px);
+    renderer.setViewport(cw - px - 6 * dpr, ch - px - 6 * dpr, px, px);
+    renderer.render(gizmoScene, gizmoCam);
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, cw, ch);
+    renderer.autoClear = prevAutoClear;
+
+    // Floating link labels.
+    if (document.getElementById('showLinkLabels').checked) {
+      for (const { link, el } of linkLabels) {
+        link.getWorldPosition(tmp);
+        tmp.project(camera);
+        const x = (tmp.x * 0.5 + 0.5) * stage.clientWidth;
+        const y = (1 - (tmp.y * 0.5 + 0.5)) * stage.clientHeight;
+        const inFront = tmp.z < 1;
+        el.style.transform = `translate(${x}px, ${y - 12}px) translate(-50%, -100%)`;
+        el.style.opacity = inFront ? '0.9' : '0';
+      }
+    }
   }
   tick();
   loadUrdf();
