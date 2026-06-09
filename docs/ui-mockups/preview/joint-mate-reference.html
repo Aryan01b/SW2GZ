@@ -1,0 +1,531 @@
+<!doctype html>
+<!--
+  SW Mate → URDF / SDF (gz) / ros2_control reference.
+
+  What each SOLIDWORKS mate type maps to in URDF + SDF + ros2_control, what
+  geometry input is required, current SW2GZ coverage status, and the SW
+  feature path the AutoJointResolver uses to extract the joint frame.
+
+  Audience: the Joints step of Create Robot (needs the table to label and
+  validate user mate picks), the preview's mate-→-joint panel (Option C),
+  and anyone debugging "why is my mate showing up as fixed".
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>SW2GZ — SW Mate → URDF / SDF reference</title>
+<style>
+  :root {
+    --bg:      #14171c;
+    --panel:   #1a1e25;
+    --panel-2: #20252e;
+    --edge:    #2a313c;
+    --edge-2:  #353d4a;
+    --fore:    #d6dae1;
+    --fore-2:  #a8aeb8;
+    --muted:   #6c7280;
+    --accent:  #5aa8e0;
+    --good:    #6ed084;
+    --warn:    #e6a25a;
+    --bad:     #d86060;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0;
+               background: var(--bg); color: var(--fore);
+               font: 13px/1.5 "Segoe UI", system-ui, sans-serif; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 32px 28px 80px; }
+
+  .crumb { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  .crumb a { color: var(--accent); text-decoration: none; }
+  .crumb a:hover { text-decoration: underline; }
+  h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: 0.2px; }
+  .lede { color: var(--muted); margin: 0 0 24px; font-size: 13px; max-width: 820px; }
+
+  /* Sections */
+  h2 {
+    font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--fore-2); margin: 32px 0 10px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--edge);
+  }
+
+  /* Tables */
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: 12px; background: var(--panel);
+    border: 1px solid var(--edge);
+  }
+  thead th {
+    background: var(--panel-2); color: var(--fore-2);
+    font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase;
+    text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--edge);
+    font-weight: 600; vertical-align: top;
+  }
+  tbody td {
+    padding: 8px 10px; border-bottom: 1px solid var(--edge);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.012); }
+  td.mono, th.mono { font-family: Consolas, monospace; font-size: 11.5px; }
+  td.tight { white-space: nowrap; }
+
+  .b-good   { color: var(--good); }
+  .b-warn   { color: var(--warn); }
+  .b-bad    { color: var(--bad); }
+  .b-muted  { color: var(--muted); }
+  .b-accent { color: var(--accent); }
+
+  .pill {
+    display: inline-block; font-size: 9.5px; letter-spacing: 0.6px;
+    padding: 1px 6px; border-radius: 2px;
+    text-transform: uppercase; font-family: Consolas, monospace;
+  }
+  .pill.ok    { background: rgba(110,208,132,0.13); color: var(--good);
+                border: 1px solid rgba(110,208,132,0.3); }
+  .pill.part  { background: rgba(230,162,90,0.13); color: var(--warn);
+                border: 1px solid rgba(230,162,90,0.3); }
+  .pill.no    { background: rgba(216,96,96,0.10); color: var(--bad);
+                border: 1px solid rgba(216,96,96,0.3); }
+  .pill.fix   { background: rgba(108,114,128,0.13); color: var(--muted);
+                border: 1px solid var(--edge-2); }
+
+  code {
+    font-family: Consolas, monospace; background: var(--panel-2);
+    padding: 1px 5px; color: var(--accent); font-size: 11.5px;
+  }
+  .note {
+    background: var(--panel); border: 1px solid var(--edge);
+    border-left: 3px solid var(--accent);
+    padding: 10px 14px; margin: 16px 0;
+    font-size: 12.5px; color: var(--fore-2);
+  }
+  .note b { color: var(--fore); }
+  .small { font-size: 11.5px; color: var(--muted); }
+  ul.tight { margin: 4px 0 0 0; padding-left: 18px; }
+  ul.tight li { margin: 2px 0; color: var(--fore-2); font-size: 12px; }
+
+  /* Joint-type diagram strip */
+  .strip {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
+    margin-bottom: 18px;
+  }
+  .strip .cell {
+    background: var(--panel); border: 1px solid var(--edge);
+    padding: 10px 12px;
+  }
+  .strip .cell h3 {
+    margin: 0 0 4px; font-size: 12px; color: var(--accent);
+    font-family: Consolas, monospace;
+  }
+  .strip .cell .desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
+  .strip .cell.fix h3 { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="crumb"><a href="index.html">SW2GZ Preview</a> &nbsp;›&nbsp; Joint-type reference</div>
+  <h1>SW Mate → URDF / SDF / ros2_control</h1>
+  <p class="lede">
+    Comprehensive mapping of every SOLIDWORKS mate type the exporter cares about.
+    Drives <code>AutoJointResolver.Resolve</code>, the Create-Robot Joints step,
+    and the preview's Mates → Joints panel. Status column shows v2.1.0 coverage.
+  </p>
+
+  <!-- ──  URDF joint types primer ─────────────────────────────── -->
+  <h2>URDF joint types (target schema)</h2>
+  <div class="strip">
+    <div class="cell">
+      <h3>revolute</h3>
+      <div class="desc">1-DOF rotation about <code>axis</code> with <code>lower</code>/<code>upper</code> limits. Most common arm joint.</div>
+    </div>
+    <div class="cell">
+      <h3>continuous</h3>
+      <div class="desc">1-DOF rotation, no limits. Wheels, spindles, anything that rolls freely.</div>
+    </div>
+    <div class="cell">
+      <h3>prismatic</h3>
+      <div class="desc">1-DOF translation along <code>axis</code> with limits. Linear actuators, sliders.</div>
+    </div>
+    <div class="cell fix">
+      <h3>fixed</h3>
+      <div class="desc">0-DOF rigid weld. Default fallback when the mate carries no motion.</div>
+    </div>
+    <div class="cell">
+      <h3>floating</h3>
+      <div class="desc">6-DOF unconstrained (3 trans + 3 rot). Rarely useful; usually a modelling smell.</div>
+    </div>
+    <div class="cell">
+      <h3>planar</h3>
+      <div class="desc">3-DOF in-plane motion (2 trans + 1 rot). Some packages don't honour it.</div>
+    </div>
+  </div>
+  <div class="note">
+    <b>SDF/Gz adds:</b> <code>revolute2</code> (universal joint, 2-axis),
+    <code>ball</code> (3-DOF spherical, no limits), <code>screw</code> (helical,
+    rot+lin coupled by pitch), <code>universal</code> (2-axis perpendicular),
+    <code>gearbox</code> (mimic with reduction). The pipeline picks the URDF
+    subset for <code>RobotPackage</code> mode and the SDF superset for
+    <code>SdfModel</code> / <code>SdfWorld</code> mode.
+  </div>
+
+  <!-- ──  SW Mate primary map  ────────────────────────────────── -->
+  <h2>SOLIDWORKS standard mates</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>SW Mate</th>
+        <th>Geometry input</th>
+        <th>URDF joint</th>
+        <th>SDF (Gz) joint</th>
+        <th>Axis from</th>
+        <th>Limits from</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono">Concentric</td>
+        <td>2 cylindrical faces</td>
+        <td class="mono b-good">continuous</td>
+        <td class="mono b-good">revolute (no limit)</td>
+        <td class="mono">cylinder axis</td>
+        <td>none</td>
+        <td><span class="pill ok">v2.1.0</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Concentric + Distance limit</td>
+        <td>2 cyl + dist range</td>
+        <td class="mono b-good">prismatic</td>
+        <td class="mono b-good">prismatic</td>
+        <td class="mono">cylinder axis</td>
+        <td>SW distance limits</td>
+        <td><span class="pill ok">v2.1.0</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Concentric + Angle limit</td>
+        <td>2 cyl + angle range</td>
+        <td class="mono b-good">revolute</td>
+        <td class="mono b-good">revolute</td>
+        <td class="mono">cylinder axis</td>
+        <td>SW angle limits</td>
+        <td><span class="pill ok">v2.1.0</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Coincident</td>
+        <td>2 planar / point features</td>
+        <td class="mono b-muted">fixed</td>
+        <td class="mono b-muted">fixed</td>
+        <td>–</td>
+        <td>–</td>
+        <td><span class="pill fix">fixed-only</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Distance</td>
+        <td>2 features</td>
+        <td class="mono b-muted">fixed (with offset)</td>
+        <td class="mono b-muted">fixed (with offset)</td>
+        <td>–</td>
+        <td>–</td>
+        <td><span class="pill fix">offset only</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Angle</td>
+        <td>2 features</td>
+        <td class="mono b-muted">fixed (with rpy)</td>
+        <td class="mono b-muted">fixed</td>
+        <td>–</td>
+        <td>–</td>
+        <td><span class="pill fix">offset only</span></td>
+      </tr>
+      <tr>
+        <td class="mono">LimitAngle</td>
+        <td>2 planar faces + angle range</td>
+        <td class="mono b-good">revolute</td>
+        <td class="mono b-good">revolute</td>
+        <td class="mono">cross(n_parent, n_child)</td>
+        <td>SW angle limits</td>
+        <td><span class="pill ok">v2.1.0 (fixed)</span></td>
+      </tr>
+      <tr>
+        <td class="mono">LimitDistance</td>
+        <td>2 planar faces + dist range</td>
+        <td class="mono b-good">prismatic</td>
+        <td class="mono b-good">prismatic</td>
+        <td class="mono">parent normal</td>
+        <td>SW distance limits</td>
+        <td><span class="pill ok">v2.1.0 (fixed)</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Parallel</td>
+        <td>2 line / plane features</td>
+        <td class="mono b-muted">fixed</td>
+        <td class="mono b-muted">fixed</td>
+        <td>–</td>
+        <td>–</td>
+        <td><span class="pill fix">constraint helper</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Perpendicular</td>
+        <td>2 features</td>
+        <td class="mono b-muted">fixed</td>
+        <td class="mono b-muted">fixed</td>
+        <td>–</td>
+        <td>–</td>
+        <td><span class="pill fix">constraint helper</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Tangent</td>
+        <td>curved face + plane/line/cyl</td>
+        <td class="mono b-muted">fixed</td>
+        <td class="mono b-muted">fixed</td>
+        <td>–</td>
+        <td>–</td>
+        <td><span class="pill fix">constraint helper</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Lock</td>
+        <td>full 6-DOF lockdown</td>
+        <td class="mono b-muted">fixed</td>
+        <td class="mono b-muted">fixed</td>
+        <td>–</td>
+        <td>–</td>
+        <td><span class="pill ok">v2.1.0</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ──  Advanced + mechanical mates ─────────────────────────── -->
+  <h2>Advanced + mechanical mates</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>SW Mate</th>
+        <th>Geometry input</th>
+        <th>URDF joint</th>
+        <th>SDF (Gz) joint</th>
+        <th>Axis from</th>
+        <th>Notes</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono">Slot</td>
+        <td>cyl in slot feature</td>
+        <td class="mono b-good">prismatic</td>
+        <td class="mono b-good">prismatic</td>
+        <td class="mono">slot direction</td>
+        <td>extracts slot length as limits</td>
+        <td><span class="pill part">planned</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Symmetric</td>
+        <td>2 features + plane</td>
+        <td class="mono b-muted">fixed</td>
+        <td class="mono b-muted">fixed</td>
+        <td>–</td>
+        <td>SW-only constraint; no kinematic meaning at runtime</td>
+        <td><span class="pill fix">constraint helper</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Width</td>
+        <td>2 faces between 2 parallel</td>
+        <td class="mono b-muted">fixed</td>
+        <td class="mono b-muted">fixed</td>
+        <td>–</td>
+        <td>SW positioning aid; no runtime DOF</td>
+        <td><span class="pill fix">constraint helper</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Path</td>
+        <td>vertex + curve</td>
+        <td class="mono b-bad">unsupported</td>
+        <td class="mono b-bad">unsupported</td>
+        <td>–</td>
+        <td>curve-following is not a URDF joint; approximate with prismatic + closed-loop control</td>
+        <td><span class="pill no">unsupported</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Linear-coupler</td>
+        <td>2 trans + ratio</td>
+        <td class="mono b-warn">prismatic + mimic</td>
+        <td class="mono b-good">screw or coupled</td>
+        <td class="mono">primary axis</td>
+        <td>URDF needs <code>&lt;mimic&gt;</code> on the dependent joint</td>
+        <td><span class="pill part">planned</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Gear</td>
+        <td>2 cylinders + ratio</td>
+        <td class="mono b-warn">revolute + mimic</td>
+        <td class="mono b-good">gearbox</td>
+        <td class="mono">gear cylinder axis</td>
+        <td>URDF: independent rev + mimic. SDF/Gz: native gearbox.</td>
+        <td><span class="pill part">planned</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Rack-and-pinion</td>
+        <td>1 cyl + 1 line + pitch</td>
+        <td class="mono b-warn">prismatic + mimic (revolute)</td>
+        <td class="mono b-good">screw (degenerate)</td>
+        <td class="mono">rack direction</td>
+        <td>relates rotary input to linear output</td>
+        <td><span class="pill part">planned</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Screw</td>
+        <td>2 cyl + pitch</td>
+        <td class="mono b-warn">prismatic + revolute + mimic</td>
+        <td class="mono b-good">screw</td>
+        <td class="mono">cylinder axis</td>
+        <td>helical coupling — native in SDF, decomposed in URDF</td>
+        <td><span class="pill part">planned</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Universal</td>
+        <td>2 axes + cross</td>
+        <td class="mono b-bad">2× revolute (decomposed)</td>
+        <td class="mono b-good">universal</td>
+        <td class="mono">both rotation axes</td>
+        <td>URDF lacks native universal; emit as parent-child revolute pair</td>
+        <td><span class="pill no">v2.2 target</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Hinge</td>
+        <td>combo: concentric + coincident</td>
+        <td class="mono b-good">revolute</td>
+        <td class="mono b-good">revolute</td>
+        <td class="mono">hinge axis</td>
+        <td>SW "Hinge" is a composite; AutoResolver treats it as Concentric</td>
+        <td><span class="pill ok">v2.1.0</span></td>
+      </tr>
+      <tr>
+        <td class="mono">CamFollower</td>
+        <td>follower face + cam profile</td>
+        <td class="mono b-bad">unsupported</td>
+        <td class="mono b-bad">unsupported</td>
+        <td>–</td>
+        <td>profile-driven motion → outside URDF/SDF runtime semantics</td>
+        <td><span class="pill no">unsupported</span></td>
+      </tr>
+      <tr>
+        <td class="mono">Ball</td>
+        <td>2 spherical faces</td>
+        <td class="mono b-bad">not in URDF</td>
+        <td class="mono b-good">ball</td>
+        <td>–</td>
+        <td>3-DOF spherical. SDF native; URDF mode emits a warning + falls back to fixed.</td>
+        <td><span class="pill part">SDF only</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ──  ros2_control integration ────────────────────────────── -->
+  <h2>ros2_control integration per joint type</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>URDF joint type</th>
+        <th>Recommended <code>command_interface</code></th>
+        <th>State interfaces</th>
+        <th>Hardware</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono">revolute / continuous</td>
+        <td class="mono">position OR velocity OR effort</td>
+        <td class="mono">position, velocity, (effort)</td>
+        <td><code>gz_ros2_control/GazeboSimSystem</code></td>
+        <td>controllers: <code>joint_trajectory_controller</code>, <code>velocity_controllers</code></td>
+      </tr>
+      <tr>
+        <td class="mono">prismatic</td>
+        <td class="mono">position OR velocity OR effort</td>
+        <td class="mono">position, velocity, (effort)</td>
+        <td><code>gz_ros2_control/GazeboSimSystem</code></td>
+        <td>linear actuators — same controllers as revolute</td>
+      </tr>
+      <tr>
+        <td class="mono">fixed</td>
+        <td>–</td>
+        <td>–</td>
+        <td>–</td>
+        <td>not actuated; no interfaces emitted</td>
+      </tr>
+      <tr>
+        <td class="mono">floating</td>
+        <td>–</td>
+        <td>–</td>
+        <td>–</td>
+        <td>typically a free-flier base; controlled via plugin, not joint</td>
+      </tr>
+      <tr>
+        <td class="mono">planar</td>
+        <td>–</td>
+        <td>–</td>
+        <td>–</td>
+        <td>not supported by ros2_control's standard hardware interfaces</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ──  Decision tree ───────────────────────────────────────── -->
+  <h2>AutoJointResolver decision flow (v2.1.0)</h2>
+  <div class="note">
+    Resolve() per mate, in this order:
+    <ul class="tight">
+      <li><b>Pre-check</b> — both picked entities present and non-null. If not → mark <code>AMBIGUOUS</code> and skip.</li>
+      <li><b>Switch on mate.Type:</b>
+        <ul class="tight">
+          <li><code>swMateCONCENTRIC</code> → <code>TryExtractCylinder</code>; if ok and has angle/distance limit, classify as <code>revolute</code>/<code>prismatic</code>; else <code>continuous</code>.</li>
+          <li><code>swMateANGLE</code> / <code>LimitAngle</code> → <code>TryExtractPlane</code> ×2 → <code>axis = cross(parent.n, child.n)</code> → <code>revolute</code>.</li>
+          <li><code>swMateDISTANCE</code> / <code>LimitDistance</code> → <code>TryExtractPlane</code> → <code>axis = parent.n</code> → <code>prismatic</code>.</li>
+          <li><code>swMateLOCK</code> → no geometry, <code>fixed</code>.</li>
+          <li>default → no extraction, <code>fixed</code> (safety net).</li>
+        </ul>
+      </li>
+      <li><b>Post</b> — limits, effort/velocity defaults (100 N·m, 1 rad/s when SW didn't specify), axis re-expression into child link frame.</li>
+    </ul>
+  </div>
+
+  <h2>Open gaps</h2>
+  <table>
+    <thead>
+      <tr><th>Gap</th><th>Today</th><th>Target</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Mechanical mates (Gear, Screw, Rack-and-pinion, Universal)</td>
+        <td>fall through to <code>fixed</code></td>
+        <td>v2.2 — emit URDF <code>&lt;mimic&gt;</code> for the dependent joint and a Gz <code>gearbox</code>/<code>screw</code> directly</td>
+      </tr>
+      <tr>
+        <td>Slot mate</td>
+        <td>treated as Concentric, slot length not extracted as limits</td>
+        <td>v2.2 — read slot feature endpoints → prismatic lower/upper</td>
+      </tr>
+      <tr>
+        <td>Ball / spherical</td>
+        <td>fixed in URDF mode; SDF mode untested</td>
+        <td>v2.2 — SDF native, URDF mode emits warning</td>
+      </tr>
+      <tr>
+        <td>SW configurations</td>
+        <td>uses the active configuration's mate state</td>
+        <td>v2.2 — let the user pick which config drives the export</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note" style="margin-top: 32px;">
+    <b>Source of truth.</b> This table is meant to evolve. Whenever
+    <code>SW2GZ/SwSurface/AutoJointResolver.cs</code> grows a new switch arm,
+    update the matching row here so the wizard's "what mate do I add?" hint can
+    pull the same data.
+  </div>
+
+</div>
+</body>
+</html>

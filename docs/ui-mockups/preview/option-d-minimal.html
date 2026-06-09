@@ -1,0 +1,321 @@
+<!doctype html>
+<!--
+  Option D — Minimal (icon rail + slide-out drawers).
+
+  60 px icon strip on the left. Click an icon → drawer slides out with that
+  panel. Click the active icon (or the same one) to dismiss. 3D viewport
+  gets the maximum real estate. HUD overlays surface the must-see facts
+  without opening a drawer.
+
+  RViz / Houdini / Maya floating-panel paradigm. Best when the user wants
+  the 3D view to dominate and the data to be a click away rather than
+  always on screen.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>SW2GZ Preview — Option D (Minimal)</title>
+<style>
+  :root {
+    --bg:        #14171c;
+    --panel:     #1a1e25;
+    --panel-2:   #20252e;
+    --edge:      #2a313c;
+    --edge-2:    #353d4a;
+    --fore:      #d6dae1;
+    --fore-2:    #a8aeb8;
+    --muted:     #6c7280;
+    --accent:    #5aa8e0;
+    --good:      #6ed084;
+    --warn:      #e6a25a;
+    --bad:       #d86060;
+    --x: #e26c6c; --y: #6ed084; --z: #5aa8e0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%;
+               background: var(--bg); color: var(--fore);
+               font: 12.5px/1.5 "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  #app { display: grid; grid-template-columns: 60px 1fr; height: 100vh; }
+
+  /* Icon rail */
+  #rail {
+    background: var(--panel); border-right: 1px solid var(--edge);
+    display: flex; flex-direction: column;
+  }
+  #rail .logo {
+    height: 50px; display: flex; align-items: center; justify-content: center;
+    border-bottom: 1px solid var(--edge); color: var(--accent);
+    font-weight: 700; font-size: 13px; letter-spacing: 1px;
+  }
+  .rail-btn {
+    height: 56px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px;
+    cursor: pointer; color: var(--muted); user-select: none;
+    border-left: 2px solid transparent;
+    position: relative;
+  }
+  .rail-btn:hover { color: var(--fore-2); background: var(--panel-2); }
+  .rail-btn.on {
+    color: var(--accent); background: var(--panel-2);
+    border-left-color: var(--accent);
+  }
+  .rail-btn .ico {
+    font-size: 16px; line-height: 1; font-family: Consolas, monospace;
+  }
+  .rail-btn .lbl { font-size: 9.5px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .rail-btn .dot {
+    position: absolute; top: 8px; right: 12px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--warn);
+  }
+  #rail .spacer { flex: 1; }
+
+  /* Drawer */
+  #drawer {
+    position: absolute; left: 60px; top: 0; height: 100%;
+    width: 300px; background: var(--panel-2);
+    border-right: 1px solid var(--edge); z-index: 5;
+    overflow-y: auto;
+    transform: translateX(-100%); transition: transform 0.18s ease;
+    box-shadow: 4px 0 16px rgba(0,0,0,0.3);
+  }
+  #drawer.open { transform: translateX(0); }
+  .drawer-h {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px; border-bottom: 1px solid var(--edge);
+    font-size: 11.5px; letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--fore-2);
+  }
+  .drawer-h .close { margin-left: auto; cursor: pointer; color: var(--muted); }
+  .drawer-h .close:hover { color: var(--fore); }
+  .drawer-pane { display: none; padding: 12px 14px; font-size: 12px; }
+  .drawer-pane.active { display: block; }
+
+  /* Stage */
+  #stage {
+    position: relative;
+    background: radial-gradient(ellipse at center, #1a1f28 0%, #0c0e12 80%);
+    overflow: hidden;
+  }
+  #stage .mock {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-family: Consolas, monospace; font-size: 12px;
+  }
+
+  /* HUDs */
+  .hud {
+    position: absolute; background: rgba(0,0,0,0.55);
+    border: 1px solid var(--edge); padding: 6px 10px;
+    font-family: Consolas, monospace; font-size: 11px; color: var(--fore-2);
+  }
+  .hud b { color: var(--accent); font-weight: normal; }
+  .hud-tl { top: 14px; left: 14px; }
+  .hud-tl .row { margin: 2px 0; }
+  .hud-tr { top: 14px; right: 14px; }
+  .hud-bl { bottom: 14px; left: 14px;
+            display: flex; gap: 6px; padding: 5px 8px; }
+  .hud-bl .b {
+    background: var(--panel-2); border: 1px solid var(--edge);
+    padding: 3px 8px; font-size: 10.5px; cursor: pointer; color: var(--muted);
+  }
+  .hud-bl .b.on { color: var(--accent); border-color: var(--accent); }
+  .hud-br { bottom: 14px; right: 14px; color: var(--muted); font-size: 10.5px; }
+
+  /* Drawer content styles */
+  .row {
+    display: flex; padding: 5px 7px; align-items: center; gap: 8px;
+    font-family: Consolas, monospace; font-size: 11px; cursor: pointer;
+  }
+  .row:hover { background: var(--panel); }
+  .row.sel { background: rgba(90, 168, 224, 0.13);
+             border-left: 2px solid var(--accent); }
+  .row .n { color: var(--fore); }
+  .row .m { margin-left: auto; color: var(--muted); font-size: 10.5px; }
+
+  .kv {
+    display: grid; grid-template-columns: 70px 1fr; gap: 3px 8px;
+    font-family: Consolas, monospace; font-size: 11px;
+  }
+  .kv .k { color: var(--muted); }
+  .kv .v { color: var(--fore); }
+  .kv .v.acc { color: var(--accent); }
+
+  .tog {
+    display: flex; align-items: center; gap: 7px; cursor: pointer;
+    padding: 4px 0; font-size: 11.5px;
+  }
+  .tog input { accent-color: var(--accent); }
+
+  .v-row {
+    padding: 7px 8px; border-left: 2px solid var(--warn);
+    background: rgba(230, 162, 90, 0.06);
+    margin-bottom: 6px; font-size: 11.5px;
+  }
+  .v-row .l { font-size: 10px; color: var(--warn); text-transform: uppercase;
+              letter-spacing: 0.5px; margin-bottom: 2px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="rail">
+    <div class="logo">SW2</div>
+    <div class="rail-btn on" onclick="drw('tree', this)" title="Hierarchy">
+      <span class="ico">⊟</span><span class="lbl">tree</span>
+    </div>
+    <div class="rail-btn" onclick="drw('prop', this)" title="Properties">
+      <span class="ico">≡</span><span class="lbl">props</span>
+    </div>
+    <div class="rail-btn" onclick="drw('joints', this)" title="Joints">
+      <span class="ico">⤺</span><span class="lbl">joints</span>
+    </div>
+    <div class="rail-btn" onclick="drw('display', this)" title="Display">
+      <span class="ico">▣</span><span class="lbl">display</span>
+    </div>
+    <div class="rail-btn" onclick="drw('valid', this)" title="Validation">
+      <span class="ico">!</span><span class="lbl">check</span>
+      <span class="dot"></span>
+    </div>
+    <div class="rail-btn" onclick="drw('src', this)" title="Source">
+      <span class="ico">{}</span><span class="lbl">src</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="rail-btn" title="Camera presets">
+      <span class="ico">▦</span><span class="lbl">cam</span>
+    </div>
+    <div class="rail-btn" title="Settings">
+      <span class="ico">⚙</span><span class="lbl">cfg</span>
+    </div>
+  </div>
+
+  <div id="drawer" class="open">
+    <div class="drawer-h">
+      <span id="drawerTitle">Hierarchy</span>
+      <span class="close" onclick="closeDrw()">✕</span>
+    </div>
+
+    <div class="drawer-pane active" data-pane="tree">
+      <input type="text" placeholder="filter…"
+             style="width:100%; background:var(--bg); color:var(--fore); border:1px solid var(--edge); padding:4px 7px; font:11px Consolas, monospace; outline:none; margin-bottom:8px;"/>
+      <div class="row sel"><span class="n">base_link</span><span class="m">0.49</span></div>
+      <div class="row" style="padding-left: 18px;"><span class="n" style="color: var(--y);">↳ base→link_2</span><span class="m">rev</span></div>
+      <div class="row" style="padding-left: 28px;"><span class="n">link_2</span><span class="m">0.43</span></div>
+      <div class="row" style="padding-left: 38px;"><span class="n" style="color: var(--y);">↳ link_2→link_3</span><span class="m">rev</span></div>
+      <div class="row" style="padding-left: 48px;"><span class="n">link_3</span><span class="m">0.43</span></div>
+      <div class="row" style="padding-left: 58px;"><span class="n" style="color: var(--y);">↳ link_3→link_4</span><span class="m">rev</span></div>
+      <div class="row" style="padding-left: 68px;"><span class="n">link_4</span><span class="m">0.43</span></div>
+    </div>
+
+    <div class="drawer-pane" data-pane="prop">
+      <div style="font-size:10.5px; letter-spacing:1.2px; text-transform:uppercase; color:var(--muted); margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid var(--edge);">base_link</div>
+      <div class="kv">
+        <span class="k">mass</span>    <span class="v">0.492036 kg</span>
+        <span class="k">com</span>     <span class="v">0.000 0.029 0.000</span>
+        <span class="k">ixx</span>     <span class="v">8.04e-4</span>
+        <span class="k">iyy</span>     <span class="v">8.04e-4</span>
+        <span class="k">izz</span>     <span class="v">8.26e-4</span>
+        <span class="k">visual</span>  <span class="v">base_link.dae</span>
+        <span class="k">collision</span><span class="v">..._collision.stl</span>
+      </div>
+    </div>
+
+    <div class="drawer-pane" data-pane="joints">
+      <div class="row"><span class="n">base→link_2</span><span class="m">rev</span></div>
+      <div class="row"><span class="n">link_2→link_3</span><span class="m">rev</span></div>
+      <div class="row"><span class="n">link_3→link_4</span><span class="m">rev</span></div>
+      <div style="margin-top:10px; padding:8px; background:var(--bg); border:1px solid var(--edge);">
+        <div style="font-size:10.5px; color:var(--muted); margin-bottom:4px;">base→link_2 · revolute · ±1.5 rad</div>
+        <input type="range" min="-1.465" max="1.677" step="0.001" value="0" style="width:100%; accent-color:var(--accent);"/>
+        <div style="text-align:right; font-family:Consolas, monospace; color:var(--accent); font-size:11px;">0.000 rad</div>
+      </div>
+    </div>
+
+    <div class="drawer-pane" data-pane="display">
+      <label class="tog"><input type="checkbox" checked/> Visual meshes</label>
+      <label class="tog"><input type="checkbox"/> Collision hulls</label>
+      <label class="tog"><input type="checkbox" checked/> Link frames</label>
+      <label class="tog"><input type="checkbox" checked/> Joint axes</label>
+      <label class="tog"><input type="checkbox"/> Inertial COM</label>
+      <label class="tog"><input type="checkbox" checked/> Link labels</label>
+      <label class="tog"><input type="checkbox" checked/> Ground grid</label>
+      <label class="tog"><input type="checkbox" checked/> Live SW sync</label>
+    </div>
+
+    <div class="drawer-pane" data-pane="valid">
+      <div class="v-row">
+        <div class="l">warn · joint limit</div>
+        link_3_link_4_joint upper = 4.35 rad (249°). Verify SW LimitAngle.
+      </div>
+      <div class="v-row">
+        <div class="l">warn · inertia</div>
+        link_2 ixy ≈ 1.6e-20 — float rounding, safe to ignore.
+      </div>
+      <div style="margin-top:10px; color:var(--muted); font-family:Consolas, monospace; font-size:10.5px;">0 errors · 2 warnings</div>
+    </div>
+
+    <div class="drawer-pane" data-pane="src">
+      <div style="display:flex; gap:4px; margin-bottom:6px;">
+        <button style="flex:1; background:var(--panel); border:1px solid var(--edge); color:var(--accent); padding:4px 8px; font-size:10.5px; cursor:pointer;">URDF</button>
+        <button style="flex:1; background:var(--bg); border:1px solid var(--edge); color:var(--muted); padding:4px 8px; font-size:10.5px; cursor:pointer;">launch</button>
+        <button style="flex:1; background:var(--bg); border:1px solid var(--edge); color:var(--muted); padding:4px 8px; font-size:10.5px; cursor:pointer;">TF</button>
+      </div>
+      <pre style="background:var(--bg); border:1px solid var(--edge); padding:8px 10px; font:10.5px/1.4 Consolas, monospace; color:var(--fore-2); overflow:auto; max-height:340px;">&lt;robot name="full_arm"&gt;
+  &lt;link name="base_link"&gt;
+    &lt;inertial&gt;
+      &lt;mass value="0.492"/&gt;
+      &lt;inertia ixx="8.0e-4" .../&gt;
+    &lt;/inertial&gt;
+    &lt;visual&gt;...&lt;/visual&gt;
+  &lt;/link&gt;
+  &lt;joint name="..." type="revolute"&gt;
+    &lt;parent link="base_link"/&gt;
+    &lt;child link="link_2"/&gt;
+    &lt;axis xyz="1 0 0"/&gt;
+    &lt;limit lower="-1.465" upper="1.677"/&gt;
+  &lt;/joint&gt;
+&lt;/robot&gt;</pre>
+    </div>
+  </div>
+
+  <main id="stage">
+    <div class="mock">[ three.js viewport ]</div>
+    <div class="hud hud-tl">
+      <div class="row"><b>full_arm</b> · 4 links · 3 joints</div>
+      <div class="row">mass 1.785 kg · bbox 0.60 × 0.30 × 0.93 m</div>
+      <div class="row">sel: <b>base_link</b></div>
+    </div>
+    <div class="hud hud-tr">
+      cam 0.78 m · Z-up · REP-103
+    </div>
+    <div class="hud hud-bl">
+      <span class="b on">▣ vis</span>
+      <span class="b">▢ col</span>
+      <span class="b on">⊕ frm</span>
+      <span class="b on">⤺ axes</span>
+      <span class="b">● com</span>
+      <span class="b on">labels</span>
+      <span class="b on">grid</span>
+    </div>
+    <div class="hud hud-br">2 warnings · view source</div>
+  </main>
+</div>
+
+<script>
+  let openKey = 'tree';
+  function drw(key, el) {
+    if (openKey === key) { closeDrw(); openKey = null; return; }
+    openKey = key;
+    document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('on'));
+    el.classList.add('on');
+    document.querySelectorAll('.drawer-pane').forEach(p => p.classList.remove('active'));
+    document.querySelector('.drawer-pane[data-pane="' + key + '"]').classList.add('active');
+    document.getElementById('drawer').classList.add('open');
+    document.getElementById('drawerTitle').textContent = el.querySelector('.lbl').textContent;
+  }
+  function closeDrw() {
+    document.getElementById('drawer').classList.remove('open');
+    document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('on'));
+    openKey = null;
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,357 @@
+<!doctype html>
+<!--
+  Option B — Tabbed.
+
+  Top tabs split the sidebar into focused panes: Scene / Properties /
+  Validation / Source. Each tab shows ONE thing at appropriate density.
+  Clicking a link in Scene auto-switches to Properties for that item.
+  Filter input stays pinned above the tab strip so search works from any
+  pane. VS Code's outline / problems / source split is the prior art.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>SW2GZ Preview — Option B (Tabbed)</title>
+<style>
+  :root {
+    --bg:        #14171c;
+    --panel:     #1a1e25;
+    --panel-2:   #20252e;
+    --edge:      #2a313c;
+    --edge-2:    #353d4a;
+    --fore:      #d6dae1;
+    --fore-2:    #a8aeb8;
+    --muted:     #6c7280;
+    --accent:    #5aa8e0;
+    --good:      #6ed084;
+    --warn:      #e6a25a;
+    --bad:       #d86060;
+    --x: #e26c6c; --y: #6ed084; --z: #5aa8e0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%;
+               background: var(--bg); color: var(--fore);
+               font: 12.5px/1.5 "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  #app { display: grid; grid-template-columns: 320px 1fr; height: 100vh; }
+  #side {
+    background: var(--panel); border-right: 1px solid var(--edge);
+    display: flex; flex-direction: column;
+  }
+  #side .hdr { padding: 11px 14px 9px; border-bottom: 1px solid var(--edge); }
+  #side .hdr .t { font-weight: 600; font-size: 12.5px; }
+  #side .hdr .s {
+    color: var(--muted); font-size: 11px; margin-top: 3px;
+    font-family: Consolas, monospace;
+  }
+  #side .filter { padding: 8px 12px; border-bottom: 1px solid var(--edge); }
+  #side .filter input {
+    width: 100%; background: var(--bg); color: var(--fore);
+    border: 1px solid var(--edge-2); padding: 5px 8px;
+    font: 11.5px Consolas, monospace; outline: none;
+  }
+  #side .filter input:focus { border-color: var(--accent); }
+
+  /* Tab bar */
+  .tabs {
+    display: flex; border-bottom: 1px solid var(--edge);
+    background: var(--bg);
+  }
+  .tab {
+    flex: 1; padding: 8px 0; text-align: center;
+    font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--muted); cursor: pointer; border-right: 1px solid var(--edge);
+    user-select: none;
+  }
+  .tab:last-child { border-right: none; }
+  .tab:hover { background: var(--panel-2); color: var(--fore-2); }
+  .tab.active {
+    color: var(--accent); background: var(--panel);
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+  .tab .badge {
+    display: inline-block; margin-left: 5px; font-size: 9.5px;
+    background: var(--edge-2); color: var(--fore-2);
+    padding: 0 5px; border-radius: 7px; vertical-align: middle;
+  }
+  .tab.active .badge { background: var(--accent); color: #001020; }
+
+  .pane { flex: 1; overflow-y: auto; padding: 10px 14px; display: none; }
+  .pane.active { display: block; }
+
+  /* Scene tab content */
+  .grp-h {
+    font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--muted); margin: 12px 0 4px;
+    display: flex; align-items: center;
+  }
+  .grp-h:first-child { margin-top: 0; }
+  .grp-h .c { margin-left: auto; font-size: 10.5px; color: var(--muted);
+              font-family: Consolas, monospace; text-transform: none; letter-spacing: 0; }
+
+  .row {
+    display: flex; padding: 5px 7px; align-items: center; gap: 8px;
+    font-family: Consolas, monospace; font-size: 11.5px;
+    cursor: pointer; border-left: 2px solid transparent;
+  }
+  .row:hover { background: var(--panel-2); }
+  .row.selected { background: rgba(90, 168, 224, 0.13); border-left-color: var(--accent); }
+  .row .n { color: var(--fore); }
+  .row .m { margin-left: auto; color: var(--muted); font-size: 10.5px; }
+  .row .t { font-size: 10px; padding: 0 5px; border-radius: 2px; }
+  .row .t.rev { color: var(--y); background: rgba(110,208,132,0.1); border: 1px solid rgba(110,208,132,0.25); }
+  .row .t.fix { color: var(--muted); background: rgba(108,114,128,0.1); border: 1px solid var(--edge-2); }
+
+  /* Properties tab */
+  .prop-block { margin-bottom: 18px; }
+  .prop-block .h {
+    font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 5px;
+    padding-bottom: 4px; border-bottom: 1px solid var(--edge);
+  }
+  .kv {
+    display: grid; grid-template-columns: 80px 1fr; gap: 3px 10px;
+    font-family: Consolas, monospace; font-size: 11px;
+  }
+  .kv .k { color: var(--muted); }
+  .kv .v { color: var(--fore); }
+  .kv .v.accent { color: var(--accent); }
+  .kv .v.warn { color: var(--warn); }
+  .slider {
+    margin-top: 10px; display: flex; align-items: center; gap: 8px;
+    background: var(--panel-2); padding: 6px 8px; border: 1px solid var(--edge);
+  }
+  .slider input[type=range] { flex: 1; accent-color: var(--accent); }
+  .slider .val {
+    color: var(--accent); font-family: Consolas, monospace;
+    font-size: 11px; width: 60px; text-align: right;
+  }
+
+  /* Validation tab */
+  .v-row {
+    padding: 7px 8px; border-left: 2px solid var(--warn);
+    background: rgba(230, 162, 90, 0.06);
+    margin-bottom: 6px; font-size: 11.5px;
+  }
+  .v-row.bad { border-left-color: var(--bad); background: rgba(216, 96, 96, 0.06); }
+  .v-row .l {
+    font-size: 10px; color: var(--warn); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 2px;
+  }
+  .v-row.bad .l { color: var(--bad); }
+  .v-row .b { color: var(--fore); }
+  .v-row .b code { color: var(--accent); background: var(--panel-2); padding: 0 4px; }
+
+  /* Source tab */
+  pre.code {
+    background: var(--bg); border: 1px solid var(--edge);
+    padding: 10px 12px; margin: 8px 0;
+    font: 11px/1.45 Consolas, monospace; color: var(--fore-2);
+    overflow: auto; max-height: 320px;
+  }
+  pre.code .tag { color: #88b8e0; }
+  pre.code .attr { color: var(--y); }
+  pre.code .val { color: var(--warn); }
+  pre.code .cmt { color: var(--muted); font-style: italic; }
+
+  .src-tabs { display: flex; gap: 4px; margin-bottom: 6px; }
+  .src-tabs button {
+    background: var(--panel-2); border: 1px solid var(--edge);
+    color: var(--fore-2); padding: 4px 10px; font-size: 11px;
+    cursor: pointer; font-family: Consolas, monospace;
+  }
+  .src-tabs button.on { background: var(--accent); color: #001020; border-color: var(--accent); }
+
+  .display-row {
+    display: flex; align-items: center; gap: 6px; padding: 4px 0;
+    font-size: 11.5px;
+  }
+  .display-row input { accent-color: var(--accent); }
+
+  /* Viewport */
+  #stage {
+    position: relative;
+    background:
+      radial-gradient(ellipse at center, #1a1f28 0%, #0c0e12 80%);
+    overflow: hidden;
+  }
+  #stage .mock {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-family: Consolas, monospace; font-size: 12px;
+  }
+  #stage .hud-tl {
+    position: absolute; top: 14px; left: 14px;
+    font-family: Consolas, monospace; font-size: 11px; color: var(--fore-2);
+    background: rgba(0,0,0,0.42); padding: 5px 9px; border: 1px solid var(--edge);
+  }
+  #stage .hud-tl b { color: var(--accent); font-weight: normal; }
+  #stage .hud-br {
+    position: absolute; bottom: 12px; right: 12px;
+    font-family: Consolas, monospace; font-size: 10.5px;
+    color: var(--muted); background: rgba(0,0,0,0.4);
+    padding: 4px 8px; border: 1px solid var(--edge);
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="hdr">
+      <div class="t">SW2GZ Preview</div>
+      <div class="s">full_arm · 4 links · 3 joints</div>
+    </div>
+
+    <div class="filter">
+      <input type="text" placeholder="filter…"/>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="tab(this,'scene')">Scene</div>
+      <div class="tab" onclick="tab(this,'props')">Properties</div>
+      <div class="tab" onclick="tab(this,'valid')">Validation <span class="badge">2</span></div>
+      <div class="tab" onclick="tab(this,'src')">Source</div>
+    </div>
+
+    <!-- ────  Scene tab ─────────────────────────────────────────── -->
+    <div class="pane active" data-pane="scene">
+      <div class="grp-h">Display <span class="c">8</span></div>
+      <div class="display-row"><input type="checkbox" checked id="d1"/> <label for="d1">Visual meshes (DAE)</label></div>
+      <div class="display-row"><input type="checkbox"/> <label>Collision hulls (STL)</label></div>
+      <div class="display-row"><input type="checkbox" checked/> <label>Link frames</label></div>
+      <div class="display-row"><input type="checkbox" checked/> <label>Joint axes</label></div>
+      <div class="display-row"><input type="checkbox"/> <label>Inertial COM markers</label></div>
+      <div class="display-row"><input type="checkbox" checked/> <label>Link name labels</label></div>
+      <div class="display-row"><input type="checkbox" checked/> <label>Ground grid (XY)</label></div>
+      <div class="display-row"><input type="checkbox" checked/> <label>Live SW joint sync</label></div>
+
+      <div class="grp-h">Links <span class="c">4</span></div>
+      <div class="row selected">
+        <span class="n">base_link</span>
+        <span class="m">0.49 kg</span>
+      </div>
+      <div class="row"><span class="n">link_2</span><span class="m">0.43 kg</span></div>
+      <div class="row"><span class="n">link_3</span><span class="m">0.43 kg</span></div>
+      <div class="row"><span class="n">link_4</span><span class="m">0.43 kg</span></div>
+
+      <div class="grp-h">Joints <span class="c">3</span></div>
+      <div class="row">
+        <span class="n">base_link_link_2_joint</span>
+        <span class="t rev">REV</span>
+      </div>
+      <div class="row">
+        <span class="n">link_2_link_3_joint</span>
+        <span class="t rev">REV</span>
+      </div>
+      <div class="row">
+        <span class="n">link_3_link_4_joint</span>
+        <span class="t rev">REV</span>
+      </div>
+    </div>
+
+    <!-- ────  Properties tab ────────────────────────────────────── -->
+    <div class="pane" data-pane="props">
+      <div class="prop-block">
+        <div class="h">Selected — base_link_link_2_joint</div>
+        <div class="kv">
+          <span class="k">type</span>     <span class="v accent">revolute</span>
+          <span class="k">parent</span>   <span class="v">base_link</span>
+          <span class="k">child</span>    <span class="v">link_2</span>
+          <span class="k">origin xyz</span><span class="v">0.000 0.040 0.000</span>
+          <span class="k">origin rpy</span><span class="v">-1.464 0.000 0.000</span>
+          <span class="k">axis</span>     <span class="v">1.000 0.000 0.000</span>
+          <span class="k">lower</span>    <span class="v">-1.465 rad (-83.9°)</span>
+          <span class="k">upper</span>    <span class="v">+1.677 rad (+96.1°)</span>
+          <span class="k">effort</span>   <span class="v">100.0 N·m</span>
+          <span class="k">velocity</span> <span class="v">1.0 rad/s</span>
+          <span class="k">mate</span>     <span class="v accent">LimitAngle1 (concentric+angle)</span>
+        </div>
+        <div class="slider">
+          <input type="range" min="-1.465" max="1.677" step="0.001" value="0"/>
+          <span class="val">0.000 rad</span>
+        </div>
+      </div>
+
+      <div class="prop-block">
+        <div class="h">Parent link — base_link</div>
+        <div class="kv">
+          <span class="k">mass</span>     <span class="v">0.492036 kg</span>
+          <span class="k">com</span>      <span class="v">0.000 0.029 0.000</span>
+          <span class="k">ixx</span>      <span class="v">0.000804</span>
+          <span class="k">iyy</span>      <span class="v">0.000804</span>
+          <span class="k">izz</span>      <span class="v">0.000826</span>
+          <span class="k">visual</span>   <span class="v">base_link.dae</span>
+          <span class="k">collision</span><span class="v">base_link_collision.stl</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ────  Validation tab ────────────────────────────────────── -->
+    <div class="pane" data-pane="valid">
+      <div class="v-row">
+        <div class="l">warn · joint limit</div>
+        <div class="b"><code>link_3_link_4_joint</code> upper = 4.35 rad (≈ 249°). Verify the SW LimitAngle isn't a reflex angle — typical revolute joints stay under ±π.</div>
+      </div>
+      <div class="v-row">
+        <div class="l">warn · inertia rounding</div>
+        <div class="b"><code>link_2</code> ixy = 1.6×10⁻²⁰ — within SW's float-rounding noise floor. Safe to ignore; flagged so you know it's not an extracted real off-diagonal term.</div>
+      </div>
+      <div class="v-row" style="border-left-color: var(--good); background: rgba(110,208,132,0.06);">
+        <div class="l" style="color: var(--good)">ok · mate coverage</div>
+        <div class="b">3 of 5 SW mates produced joints. 2 Coincident mates dropped (internal to a single link group).</div>
+      </div>
+      <div style="margin-top: 14px; color: var(--muted); font-family: Consolas, monospace; font-size: 11px;">
+        0 errors · 2 warnings · 0 unmapped mates · pipeline OK
+      </div>
+    </div>
+
+    <!-- ────  Source tab ────────────────────────────────────────── -->
+    <div class="pane" data-pane="src">
+      <div class="src-tabs">
+        <button class="on">full_arm.urdf.xacro</button>
+        <button>gz_sim.launch.py</button>
+        <button>TF tree</button>
+      </div>
+<pre class="code"><span class="cmt">&lt;!-- 3.9 KB · 4 links · 3 joints --&gt;</span>
+<span class="tag">&lt;robot</span> <span class="attr">name=</span><span class="val">"full_arm"</span><span class="tag">&gt;</span>
+  <span class="tag">&lt;link</span> <span class="attr">name=</span><span class="val">"base_link"</span><span class="tag">&gt;</span>
+    <span class="tag">&lt;inertial&gt;</span>
+      <span class="tag">&lt;mass</span> <span class="attr">value=</span><span class="val">"0.492"</span><span class="tag">/&gt;</span>
+      <span class="tag">&lt;inertia</span> <span class="attr">ixx=</span><span class="val">"8.0e-4"</span> .../<span class="tag">&gt;</span>
+    <span class="tag">&lt;/inertial&gt;</span>
+    <span class="tag">&lt;visual&gt;&lt;geometry&gt;&lt;mesh</span>
+      <span class="attr">filename=</span><span class="val">"package://full_arm/meshes/base_link.dae"</span>
+    <span class="tag">/&gt;&lt;/geometry&gt;&lt;/visual&gt;</span>
+  <span class="tag">&lt;/link&gt;</span>
+  <span class="cmt">&lt;!-- 3 more links elided --&gt;</span>
+  <span class="tag">&lt;joint</span> <span class="attr">name=</span><span class="val">"base_link_link_2_joint"</span>
+         <span class="attr">type=</span><span class="val">"revolute"</span><span class="tag">&gt;</span>
+    <span class="tag">&lt;parent</span> <span class="attr">link=</span><span class="val">"base_link"</span><span class="tag">/&gt;</span>
+    <span class="tag">&lt;child</span>  <span class="attr">link=</span><span class="val">"link_2"</span><span class="tag">/&gt;</span>
+    <span class="tag">&lt;axis</span>   <span class="attr">xyz=</span><span class="val">"1 0 0"</span><span class="tag">/&gt;</span>
+    <span class="tag">&lt;limit</span>  <span class="attr">lower=</span><span class="val">"-1.465"</span>
+            <span class="attr">upper=</span><span class="val">"1.677"</span> .../<span class="tag">&gt;</span>
+  <span class="tag">&lt;/joint&gt;</span>
+<span class="tag">&lt;/robot&gt;</span></pre>
+    </div>
+  </aside>
+
+  <main id="stage">
+    <div class="mock">[ three.js viewport ]</div>
+    <div class="hud-tl">
+      sel: <b>base_link_link_2_joint</b><br/>
+      type revolute · ±1.5 rad · axis +X
+    </div>
+    <div class="hud-br">XYZ · Z-up · grid 0.1 m</div>
+  </main>
+</div>
+
+<script>
+  function tab(el, key) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+    document.querySelector('.pane[data-pane="' + key + '"]').classList.add('active');
+  }
+</script>
+</body>
+</html>

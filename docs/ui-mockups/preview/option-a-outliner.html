@@ -1,0 +1,377 @@
+<!doctype html>
+<!--
+  Option A — Outliner.
+
+  Single column, every section collapses with a chevron. Parent→child link
+  tree replaces the flat list (matches the URDF graph). Tight monospace
+  rows for technical data. Filter input at the top kills the "where IS
+  base_link in 80 items" problem on big assemblies. Blender outliner is
+  the prior art.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>SW2GZ Preview — Option A (Outliner)</title>
+<style>
+  :root {
+    --bg:        #14171c;
+    --panel:     #1a1e25;
+    --panel-2:   #20252e;
+    --edge:      #2a313c;
+    --edge-2:    #353d4a;
+    --fore:      #d6dae1;
+    --fore-2:    #a8aeb8;
+    --muted:     #6c7280;
+    --accent:    #5aa8e0;
+    --good:      #6ed084;
+    --warn:      #e6a25a;
+    --bad:       #d86060;
+    --x: #e26c6c; --y: #6ed084; --z: #5aa8e0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%;
+               background: var(--bg); color: var(--fore);
+               font: 12.5px/1.5 "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  #app { display: grid; grid-template-columns: 280px 1fr; height: 100vh; }
+
+  /* ── Sidebar ─────────────────────────────────────────────────── */
+  #side {
+    background: var(--panel); border-right: 1px solid var(--edge);
+    overflow-y: auto; font-size: 12px;
+  }
+  #side::-webkit-scrollbar { width: 10px; }
+  #side::-webkit-scrollbar-thumb { background: var(--edge-2); }
+
+  .hdr { padding: 12px 14px 10px; border-bottom: 1px solid var(--edge); }
+  .hdr .title { font-weight: 600; font-size: 12.5px; letter-spacing: 0.3px; }
+  .hdr .sub {
+    color: var(--muted); font-size: 11px; margin-top: 3px;
+    font-family: Consolas, monospace;
+  }
+
+  .filter { padding: 8px 12px 6px; border-bottom: 1px solid var(--edge); }
+  .filter input {
+    width: 100%; background: var(--bg); color: var(--fore);
+    border: 1px solid var(--edge-2); padding: 5px 8px;
+    font: 11.5px Consolas, monospace; outline: none;
+  }
+  .filter input:focus { border-color: var(--accent); }
+
+  details.sec { border-bottom: 1px solid var(--edge); }
+  details.sec > summary {
+    list-style: none; cursor: pointer; user-select: none;
+    padding: 8px 14px; font-size: 10.5px; letter-spacing: 1.2px;
+    text-transform: uppercase; color: var(--fore-2);
+    display: flex; align-items: center; gap: 8px;
+    background: transparent;
+  }
+  details.sec > summary::-webkit-details-marker { display: none; }
+  details.sec > summary::before {
+    content: "›"; color: var(--muted); font-size: 14px;
+    transition: transform 0.1s; display: inline-block;
+  }
+  details[open].sec > summary::before { transform: rotate(90deg); }
+  details.sec > summary:hover { background: var(--panel-2); color: var(--fore); }
+  details.sec > summary .count {
+    margin-left: auto; color: var(--muted); font-family: Consolas, monospace;
+    font-size: 10.5px; text-transform: none; letter-spacing: 0;
+  }
+  .sec-body { padding: 4px 14px 12px 32px; }
+
+  /* Display toggles */
+  label.tog {
+    display: flex; align-items: center; gap: 7px; cursor: pointer;
+    padding: 3px 0; font-size: 11.5px; color: var(--fore);
+  }
+  label.tog input { accent-color: var(--accent); }
+  .legend {
+    margin-top: 8px; font-size: 10.5px; color: var(--muted);
+    font-family: Consolas, monospace;
+  }
+  .legend .x { color: var(--x); } .legend .y { color: var(--y); } .legend .z { color: var(--z); }
+
+  /* Tree */
+  .tree { margin: 2px 0 0; padding: 0; }
+  .tree > .node { padding-left: 0; }
+  .node { font-family: Consolas, monospace; font-size: 11.5px; }
+  .node > .row {
+    display: flex; align-items: center; padding: 3px 4px;
+    cursor: pointer; gap: 6px;
+  }
+  .node > .row:hover { background: var(--panel-2); }
+  .node.selected > .row { background: rgba(90, 168, 224, 0.13); }
+  .node > .row > .twirl {
+    color: var(--muted); width: 10px; text-align: center; font-family: sans-serif;
+    user-select: none;
+  }
+  .node > .row > .label { color: var(--fore); }
+  .node > .row > .meta { margin-left: auto; color: var(--muted); font-size: 10.5px; }
+  .node.joint > .row > .label { color: var(--y); }
+  .node.joint.prismatic > .row > .label { color: var(--z); }
+  .node.joint.fixed    > .row > .label { color: var(--muted); }
+  .node .children { padding-left: 14px; border-left: 1px solid var(--edge); margin-left: 5px; }
+
+  .detail {
+    padding: 5px 8px 5px 20px; margin: 2px 0 6px 14px;
+    background: var(--panel-2); border-left: 2px solid var(--accent);
+    font-family: Consolas, monospace; font-size: 10.5px; color: var(--fore-2);
+  }
+  .detail .kv { display: grid; grid-template-columns: 70px 1fr; gap: 1px 8px; }
+  .detail .kv b { color: var(--fore); font-weight: normal; }
+  .detail .slider { margin-top: 6px; display: flex; gap: 6px; align-items: center; }
+  .detail .slider input[type=range] { flex: 1; accent-color: var(--accent); }
+  .detail .slider .val {
+    color: var(--accent); font-family: Consolas, monospace;
+    font-size: 10.5px; width: 60px; text-align: right;
+  }
+
+  /* Validation pill */
+  .pill {
+    display: inline-block; font-size: 9.5px; letter-spacing: 0.4px;
+    padding: 1px 5px; border-radius: 2px; margin-left: 4px;
+    text-transform: uppercase;
+  }
+  .pill.warn { background: rgba(230, 162, 90, 0.15); color: var(--warn);
+               border: 1px solid rgba(230, 162, 90, 0.3); }
+  .pill.bad  { background: rgba(216, 96, 96, 0.13);   color: var(--bad);
+               border: 1px solid rgba(216, 96, 96, 0.3); }
+
+  .stat-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px;
+    font-family: Consolas, monospace; font-size: 11px;
+  }
+  .stat-grid .k { color: var(--muted); }
+  .stat-grid .v { color: var(--fore); text-align: right; }
+
+  /* ── Viewport ────────────────────────────────────────────────── */
+  #stage {
+    position: relative;
+    background:
+      radial-gradient(ellipse at center, #1a1f28 0%, #0c0e12 80%),
+      linear-gradient(45deg, transparent 49.5%, rgba(255,255,255,0.02) 50%, transparent 50.5%) 0 0 / 24px 24px,
+      linear-gradient(-45deg, transparent 49.5%, rgba(255,255,255,0.02) 50%, transparent 50.5%) 0 0 / 24px 24px;
+    overflow: hidden;
+  }
+  #stage .mock {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-family: Consolas, monospace; font-size: 12px;
+    pointer-events: none;
+  }
+  #stage .hud-tl {
+    position: absolute; top: 14px; left: 14px;
+    font-family: Consolas, monospace; font-size: 11px; color: var(--fore-2);
+    background: rgba(0,0,0,0.42); padding: 5px 9px; border: 1px solid var(--edge);
+  }
+  #stage .hud-tl b { color: var(--accent); font-weight: normal; }
+  #stage .hud-br {
+    position: absolute; bottom: 12px; right: 12px;
+    font-family: Consolas, monospace; font-size: 10.5px;
+    color: var(--muted); background: rgba(0,0,0,0.4);
+    padding: 4px 8px; border: 1px solid var(--edge);
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ────────────────────────  SIDEBAR  ───────────────────────── -->
+  <aside id="side">
+    <div class="hdr">
+      <div class="title">SW2GZ Preview</div>
+      <div class="sub">full_arm · 4 links · 3 joints · 0.492 + 1.293 kg</div>
+    </div>
+
+    <div class="filter">
+      <input type="text" placeholder="filter links / joints / mates…"/>
+    </div>
+
+    <details class="sec" open>
+      <summary>Hierarchy <span class="count">4 / 3</span></summary>
+      <div class="sec-body" style="padding-left: 6px; padding-right: 6px;">
+        <ul class="tree" style="list-style:none; padding:0; margin:0;">
+          <li class="node selected">
+            <div class="row">
+              <span class="twirl">▾</span>
+              <span class="label">base_link</span>
+              <span class="meta">0.49 kg</span>
+            </div>
+            <div class="detail">
+              <div class="kv">
+                <span>mass</span><b>0.492036</b>
+                <span>com xyz</span><b>0.000 0.029 0.000</b>
+                <span>ixx iyy</span><b>0.000804 0.000804</b>
+                <span>izz</span><b>0.000826</b>
+                <span>meshes</span><b>1 dae · 1 stl</b>
+              </div>
+            </div>
+            <ul class="children" style="list-style:none; padding-left:14px; margin:0; border-left:1px solid var(--edge);">
+              <li class="node joint">
+                <div class="row">
+                  <span class="twirl">▾</span>
+                  <span class="label">↳ base_link_link_2_joint</span>
+                  <span class="meta">revolute</span>
+                </div>
+                <div class="detail">
+                  <div class="kv">
+                    <span>type</span><b style="color:var(--y)">revolute</b>
+                    <span>axis</span><b>1.000 0.000 0.000</b>
+                    <span>xyz</span><b>0.000 0.040 0.000</b>
+                    <span>rpy</span><b>-1.464 0.000 0.000</b>
+                    <span>lower</span><b>-1.465 rad (-83.9°)</b>
+                    <span>upper</span><b>+1.677 rad (+96.1°)</b>
+                    <span>mate</span><b style="color:var(--accent)">LimitAngle1</b>
+                  </div>
+                  <div class="slider">
+                    <input type="range" min="-1.465" max="1.677" step="0.001" value="0"/>
+                    <span class="val">0.000 rad</span>
+                  </div>
+                </div>
+                <ul class="children" style="list-style:none; padding-left:14px; margin:0; border-left:1px solid var(--edge);">
+                  <li class="node">
+                    <div class="row">
+                      <span class="twirl">▸</span>
+                      <span class="label">link_2</span>
+                      <span class="meta">0.43 kg</span>
+                    </div>
+                    <ul class="children" style="list-style:none; padding-left:14px; margin:0; border-left:1px solid var(--edge);">
+                      <li class="node joint">
+                        <div class="row">
+                          <span class="twirl">▸</span>
+                          <span class="label">↳ link_2_link_3_joint</span>
+                          <span class="meta">revolute</span>
+                        </div>
+                        <ul class="children" style="list-style:none; padding-left:14px; margin:0; border-left:1px solid var(--edge);">
+                          <li class="node">
+                            <div class="row">
+                              <span class="twirl">▸</span>
+                              <span class="label">link_3</span>
+                              <span class="meta">0.43 kg</span>
+                            </div>
+                            <ul class="children" style="list-style:none; padding-left:14px; margin:0; border-left:1px solid var(--edge);">
+                              <li class="node joint">
+                                <div class="row">
+                                  <span class="twirl">▸</span>
+                                  <span class="label">↳ link_3_link_4_joint</span>
+                                  <span class="meta">revolute <span class="pill warn">limit 249°</span></span>
+                                </div>
+                                <ul class="children" style="list-style:none; padding-left:14px; margin:0; border-left:1px solid var(--edge);">
+                                  <li class="node">
+                                    <div class="row">
+                                      <span class="twirl">▸</span>
+                                      <span class="label">link_4</span>
+                                      <span class="meta">0.43 kg</span>
+                                    </div>
+                                  </li>
+                                </ul>
+                              </li>
+                            </ul>
+                          </li>
+                        </ul>
+                      </li>
+                    </ul>
+                  </li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="sec" open>
+      <summary>Display <span class="count">8 toggles</span></summary>
+      <div class="sec-body">
+        <label class="tog"><input type="checkbox" checked/> Visual meshes (DAE)</label>
+        <label class="tog"><input type="checkbox"/> Collision hulls (STL)</label>
+        <label class="tog"><input type="checkbox" checked/> Link frames</label>
+        <label class="tog"><input type="checkbox" checked/> Joint axes</label>
+        <label class="tog"><input type="checkbox"/> Inertial COM markers</label>
+        <label class="tog"><input type="checkbox"/> Inertia ellipsoids</label>
+        <label class="tog"><input type="checkbox" checked/> Link name labels</label>
+        <label class="tog"><input type="checkbox" checked/> Joint limit arcs</label>
+        <label class="tog"><input type="checkbox" checked/> Ground grid (XY)</label>
+        <label class="tog"><input type="checkbox" checked/> Live SW sync</label>
+        <div class="legend">Axes <span class="x">X</span> · <span class="y">Y</span> · <span class="z">Z</span> &nbsp; world up = +Z (REP-103)</div>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary>Statistics <span class="count">summary</span></summary>
+      <div class="sec-body">
+        <div class="stat-grid">
+          <span class="k">total mass</span><span class="v">1.785 kg</span>
+          <span class="k">bbox extent</span><span class="v">0.60 × 0.30 × 0.93 m</span>
+          <span class="k">DOF</span><span class="v">3 (3 revolute)</span>
+          <span class="k">tree depth</span><span class="v">4 links</span>
+          <span class="k">mesh tris</span><span class="v">≈ 12.4k</span>
+          <span class="k">collision tris</span><span class="v">≈ 480 (hulled)</span>
+          <span class="k">URDF size</span><span class="v">3.9 KB</span>
+          <span class="k">mesh files</span><span class="v">4 dae · 4 stl</span>
+        </div>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary>Validation <span class="count">2 warn</span></summary>
+      <div class="sec-body" style="font-size:11.5px;">
+        <div style="color: var(--warn); margin-bottom:6px;">
+          ⚠ <b>link_3_link_4_joint</b> upper limit 4.35 rad (≈ 249°) — verify SW LimitAngle.
+        </div>
+        <div style="color: var(--warn); margin-bottom:6px;">
+          ⚠ <b>link_2</b> inertia ixy = 1.6e-20 (near-zero) — likely SW rounding, not a bug.
+        </div>
+        <div style="color: var(--muted); font-family: Consolas, monospace;">0 errors · 2 warnings · 0 unmapped mates</div>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary>Mates → Joints <span class="count">3 mapped</span></summary>
+      <div class="sec-body">
+        <div style="font-family: Consolas, monospace; font-size:11px; color:var(--fore-2);">
+          <div style="margin-bottom:5px;"><b style="color:var(--accent)">LimitAngle1</b> &nbsp;→&nbsp; base_link_link_2_joint</div>
+          <div style="margin-bottom:5px;"><b style="color:var(--accent)">LimitAngle2</b> &nbsp;→&nbsp; link_2_link_3_joint</div>
+          <div style="margin-bottom:5px;"><b style="color:var(--accent)">LimitAngle3</b> &nbsp;→&nbsp; link_3_link_4_joint</div>
+          <div style="color: var(--muted); margin-top:8px;">2 mates skipped (Coincident as Fixed within link group)</div>
+        </div>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary>Coord convention</summary>
+      <div class="sec-body" style="font-family: Consolas, monospace; font-size:11px;">
+        <div><span style="color:var(--muted);">SW up axis     </span> +Y</div>
+        <div><span style="color:var(--muted);">SW forward axis</span> +Z</div>
+        <div><span style="color:var(--muted);">URDF convention</span> REP-103 (X fwd, Z up)</div>
+        <div><span style="color:var(--muted);">root rotation  </span> applied at world_to_base_link</div>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary>Source</summary>
+      <div class="sec-body">
+        <div style="display:flex; gap:6px; margin-bottom:6px;">
+          <button style="flex:1; background:var(--panel-2); border:1px solid var(--edge-2); color:var(--fore); padding:5px 8px; font-size:11px; cursor:pointer;">View URDF</button>
+          <button style="flex:1; background:var(--panel-2); border:1px solid var(--edge-2); color:var(--fore); padding:5px 8px; font-size:11px; cursor:pointer;">View launch.py</button>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button style="flex:1; background:var(--panel-2); border:1px solid var(--edge-2); color:var(--fore); padding:5px 8px; font-size:11px; cursor:pointer;">Open temp folder</button>
+          <button style="flex:1; background:var(--panel-2); border:1px solid var(--edge-2); color:var(--fore); padding:5px 8px; font-size:11px; cursor:pointer;">TF tree (txt)</button>
+        </div>
+      </div>
+    </details>
+  </aside>
+
+  <!-- ────────────────────────  VIEWPORT  ──────────────────────── -->
+  <main id="stage">
+    <div class="mock">[ three.js viewport — robot + grid + axes ]</div>
+    <div class="hud-tl">
+      sel: <b>base_link</b> &middot; mass 0.49 kg<br/>
+      cam: 0.78 m &middot; tgt 0.00, 0.04, 0.45
+    </div>
+    <div class="hud-br">XYZ · Z-up · grid 0.1 m</div>
+  </main>
+
+</div>
+</body>
+</html>
