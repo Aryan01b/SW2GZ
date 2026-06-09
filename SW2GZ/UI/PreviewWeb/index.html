@@ -372,6 +372,7 @@ Modules load from ./vendor/* — zero network calls at runtime.
       <span class="tg on"   id="tgLinkAxes"  title="Show / hide per-link TF triads">⊕ frames</span>
       <span class="tg on"   id="tgJointAxes" title="Show / hide per-joint axis arrows">⤺ axes</span>
       <span class="tg"      id="tgInertial"  title="Show / hide inertial COM markers">● COM</span>
+      <span class="tg on"   id="tgCentroid"  title="Show / hide mesh centroid + line from link frame (proves frame is at hinge, not mesh body)">◯ mesh</span>
       <span class="tg on"   id="tgLabels"    title="Show / hide floating link-name labels">labels</span>
       <span class="tg on"   id="tgGrid"      title="Show / hide ground grid">grid</span>
       <span class="tg on"   id="tgLive"      title="Pause / resume live SW joint poll">⟳ live</span>
@@ -413,6 +414,7 @@ Modules load from ./vendor/* — zero network calls at runtime.
   const tgLinkAxes  = document.getElementById('tgLinkAxes');
   const tgJointAxes = document.getElementById('tgJointAxes');
   const tgInertial  = document.getElementById('tgInertial');
+  const tgCentroid  = document.getElementById('tgCentroid');
   const tgLabels    = document.getElementById('tgLabels');
   const tgGrid      = document.getElementById('tgGrid');
   const tgLive      = document.getElementById('tgLive');
@@ -521,6 +523,11 @@ Modules load from ./vendor/* — zero network calls at runtime.
   let perLinkAxes = [];
   let perJointAxes = [];
   let inertialMarkers = [];
+  // Mesh-centroid markers: small sphere at each link's mesh AABB center +
+  // thin line from the link frame origin to that centroid. Makes the URDF
+  // "frame at joint pivot" convention obvious — the line shows exactly
+  // how far the visible body is from the kinematic frame.
+  let centroidMarkers = [];     // { link, sphere, line, computed: bool }
   let linkMeta = {};
   let jointMeta = {};
 
@@ -680,15 +687,18 @@ Modules load from ./vendor/* — zero network calls at runtime.
 
     decorateLinks();
     decorateJoints();
+    seedCentroidMarkers();
     buildLinksPane();
     buildJointsPane();
     applyToggles();
     fitCamera();
 
-    // Re-fit a few times while async mesh loads settle.
-    setTimeout(fitCamera, 250);
-    setTimeout(fitCamera, 800);
-    setTimeout(fitCamera, 2000);
+    // Re-fit a few times while async mesh loads settle, and recompute
+    // centroid markers — their position depends on loaded mesh geometry,
+    // not available at first call.
+    setTimeout(() => { fitCamera(); recomputeCentroids(); }, 250);
+    setTimeout(() => { fitCamera(); recomputeCentroids(); }, 800);
+    setTimeout(() => { fitCamera(); recomputeCentroids(); }, 2000);
 
     // Count user-modelled links + joints only; world anchor + world_to_*
     // fixed joint are framework plumbing the user shouldn't see in the HUD.
@@ -737,6 +747,71 @@ Modules load from ./vendor/* — zero network calls at runtime.
         link.add(sphere);
         inertialMarkers.push(sphere);
       }
+    }
+  }
+
+  // Seed a centroid sphere + frame-to-centroid line per user link. Their
+  // *position* is computed later (`recomputeCentroids`) once async DAE/STL
+  // loads finish — at this stage we just attach empty placeholders to the
+  // link Object3D so they inherit the link's pose under joint articulation.
+  function seedCentroidMarkers() {
+    if (!robot) return;
+    for (const name of Object.keys(robot.links)) {
+      if (isFrameAnchorLink(name)) continue;
+      const link = robot.links[name];
+
+      const sphereMat = new THREE.MeshBasicMaterial({
+        color: 0x9aa4b0, transparent: true, opacity: 0.75, depthTest: true,
+      });
+      const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.012, 14, 10), sphereMat);
+      sphere.visible = false; // shown once we have real positions
+      link.add(sphere);
+
+      // Line: two-vertex BufferGeometry from (0,0,0) — the link frame — to
+      // the centroid in link-local coords. Positions get updated by
+      // recomputeCentroids().
+      const lineMat = new THREE.LineBasicMaterial({
+        color: 0x9aa4b0, transparent: true, opacity: 0.55,
+      });
+      const lineGeom = new THREE.BufferGeometry();
+      lineGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      const line = new THREE.Line(lineGeom, lineMat);
+      line.visible = false;
+      link.add(line);
+
+      centroidMarkers.push({ link, sphere, line, computed: false });
+    }
+  }
+
+  // Compute each link's mesh-AABB center in *link-local* coordinates and
+  // place the sphere there + redraw the line from origin → centroid.
+  // Idempotent: safe to call repeatedly as meshes load in over time.
+  const tmpBox = new THREE.Box3();
+  const tmpCenter = new THREE.Vector3();
+  function recomputeCentroids() {
+    if (!robot) return;
+    for (const m of centroidMarkers) {
+      tmpBox.makeEmpty();
+      let any = false;
+      m.link.traverse(o => {
+        // expandByObject reads geometry.boundingBox AND applies the world
+        // matrix — by the time we run, mesh world matrices are correct.
+        if (o.isMesh && o.geometry) { tmpBox.expandByObject(o); any = true; }
+      });
+      if (!any || !isFinite(tmpBox.min.x)) continue;
+      tmpBox.getCenter(tmpCenter);              // world-frame center
+      m.link.worldToLocal(tmpCenter);           // → link-local
+      m.sphere.position.copy(tmpCenter);
+      // Line endpoint at centroid; start always at link frame origin.
+      const pos = m.line.geometry.attributes.position;
+      pos.array[0] = 0; pos.array[1] = 0; pos.array[2] = 0;
+      pos.array[3] = tmpCenter.x; pos.array[4] = tmpCenter.y; pos.array[5] = tmpCenter.z;
+      pos.needsUpdate = true;
+      m.computed = true;
+      // Apply current toggle visibility now that positions are real.
+      const on = tgCentroid.classList.contains('on');
+      m.sphere.visible = on;
+      m.line.visible = on;
     }
   }
 
@@ -929,6 +1004,7 @@ Modules load from ./vendor/* — zero network calls at runtime.
     const linkAxesOn  = tgLinkAxes.classList.contains('on');
     const jointAxesOn = tgJointAxes.classList.contains('on');
     const inertialOn  = tgInertial.classList.contains('on');
+    const centroidOn  = tgCentroid.classList.contains('on');
     const labelsOn    = tgLabels.classList.contains('on');
     const gridOn      = tgGrid.classList.contains('on');
 
@@ -941,10 +1017,16 @@ Modules load from ./vendor/* — zero network calls at runtime.
     perLinkAxes.forEach(a => a.visible = linkAxesOn);
     perJointAxes.forEach(a => a.visible = jointAxesOn);
     inertialMarkers.forEach(m => m.visible = inertialOn);
+    centroidMarkers.forEach(m => {
+      // Don't render placeholders with bogus (0,0,0) positions before
+      // recomputeCentroids() has had a chance to fill them in.
+      m.sphere.visible = centroidOn && m.computed;
+      m.line.visible   = centroidOn && m.computed;
+    });
     linkLabels.forEach(({el}) => el.style.display = labelsOn ? '' : 'none');
     grid.visible = gridOn;
   }
-  [tgVisual, tgCollision, tgLinkAxes, tgJointAxes, tgInertial, tgLabels, tgGrid].forEach(tg => {
+  [tgVisual, tgCollision, tgLinkAxes, tgJointAxes, tgInertial, tgCentroid, tgLabels, tgGrid].forEach(tg => {
     tg.addEventListener('click', () => { tg.classList.toggle('on'); applyToggles(); });
   });
   tgLive.addEventListener('click', () => { tgLive.classList.toggle('on'); });
