@@ -19,6 +19,7 @@ Closing the dialog stops the server and deletes the temp workspace.
 #if SW_INTEROP
 using System;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Reflection;
 using System.Windows.Forms;
@@ -36,10 +37,15 @@ namespace SW2GZ.UI
             _result = result ?? throw new ArgumentNullException(nameof(result));
 
             Text = "SW2GZ — 3D preview (browser)";
-            Width = 520; Height = 280;
+            // ClientSize over Width/Height so the title bar + borders don't
+            // eat into our content area. The old 520x280 fixed both *outer*
+            // dimensions, leaving the 4-line status string clipped behind
+            // the button row.
+            ClientSize = new Size(600, 290);
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false; MinimizeBox = false;
+            BackColor = SystemColors.Window;
 
             int warnings = 0;
             if (result.Report != null) foreach (var _ in result.Report.Warnings) warnings++;
@@ -50,58 +56,174 @@ namespace SW2GZ.UI
                 Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "preview");
             string urdfForBrowser = StripXacroIncludes(result.UrdfOrSdfText);
 
-            string statusText;
+            string serverUrl = null;
+            string serverErr = null;
             try
             {
                 _server = new PreviewServer(assetsDir, result.MeshesDir, urdfForBrowser, result.JointSampler);
                 _server.Start();
-                statusText = "Preview server: " + _server.Url + Environment.NewLine +
-                             "Move mates in SolidWorks → browser updates live (~100 ms).";
-                OpenBrowser(_server.Url);
+                serverUrl = _server.Url;
+                OpenBrowser(serverUrl);
             }
             catch (Exception ex)
             {
-                statusText = "Preview server failed to start: " + ex.Message;
+                serverErr = ex.Message;
             }
 
-            var header = new Label
+            // Root grid: info section grows / button bar pinned to bottom.
+            // Replaces the prior Dock=Top + Dock=Bottom + fixed-height Panel
+            // layout, which couldn't tell the header label to grow with
+            // content and ended up clipping the live-sync hint.
+            var root = new TableLayoutPanel
             {
-                Dock = DockStyle.Top,
-                Height = 60,
-                Padding = new Padding(12, 10, 12, 0),
-                Text = result.Mode + "  ·  " + Path.GetFileName(result.WorkspaceDir) +
-                       (warnings > 0 ? "  ·  " + warnings + " warning(s)" : "") +
-                       Environment.NewLine + Environment.NewLine + statusText,
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(18, 16, 18, 14),
             };
-            Controls.Add(header);
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            var buttons = new Panel { Dock = DockStyle.Bottom, Height = 80, Padding = new Padding(12, 8, 12, 8) };
-            Controls.Add(buttons);
+            // ───── Info block: title · workspace · server URL · live-sync hint
+            var info = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 10),
+            };
 
-            var openFolder = new Button { Text = "Open temp folder", Left = 12, Top = 8, Width = 140 };
-            openFolder.Click += (s, e) => OpenTempFolder();
-            buttons.Controls.Add(openFolder);
+            var titleLabel = new Label
+            {
+                AutoSize = true,
+                Font = new Font(Font.FontFamily, 10.5f, FontStyle.Bold),
+                Margin = new Padding(0, 0, 0, 8),
+                Text = result.Mode + "   ·   " + Path.GetFileName(result.WorkspaceDir),
+            };
+            info.Controls.Add(titleLabel, 0, 0);
 
-            var reopen = new Button { Text = "Reopen browser tab", Left = 160, Top = 8, Width = 150 };
+            if (warnings > 0)
+            {
+                var warnLabel = new Label
+                {
+                    AutoSize = true,
+                    ForeColor = Color.DarkOrange,
+                    Margin = new Padding(0, 0, 0, 6),
+                    Text = "⚠  " + warnings + " warning" + (warnings == 1 ? "" : "s") +
+                           " — see export log for details",
+                };
+                info.Controls.Add(warnLabel, 0, 1);
+            }
+
+            // Server URL gets its own row + selectable TextBox so the user
+            // can copy/paste the port if the auto-opened browser tab
+            // closed. A plain Label is non-selectable.
+            var serverRow = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0, 6, 0, 0),
+            };
+            serverRow.Controls.Add(new Label
+            {
+                AutoSize = true,
+                Margin = new Padding(0, 4, 6, 0),
+                Text = serverUrl != null ? "Preview URL:" : "Server status:",
+            });
+            if (serverUrl != null)
+            {
+                serverRow.Controls.Add(new TextBox
+                {
+                    Text = serverUrl,
+                    ReadOnly = true,
+                    BorderStyle = BorderStyle.None,
+                    BackColor = SystemColors.Window,
+                    ForeColor = SystemColors.HotTrack,
+                    Width = 220,
+                    Margin = new Padding(0, 4, 0, 0),
+                    Font = new Font(FontFamily.GenericMonospace, 9f),
+                });
+            }
+            else
+            {
+                serverRow.Controls.Add(new Label
+                {
+                    AutoSize = true,
+                    ForeColor = Color.Firebrick,
+                    Margin = new Padding(0, 4, 0, 0),
+                    Text = "failed to start — " + serverErr,
+                });
+            }
+            info.Controls.Add(serverRow, 0, 2);
+
+            if (serverUrl != null)
+            {
+                var hintLabel = new Label
+                {
+                    AutoSize = true,
+                    ForeColor = SystemColors.GrayText,
+                    Margin = new Padding(0, 8, 0, 0),
+                    Text = "Move mates in SOLIDWORKS → the browser updates live (~100 ms).",
+                };
+                info.Controls.Add(hintLabel, 0, 3);
+            }
+            root.Controls.Add(info, 0, 0);
+
+            // ───── Button bar: right-aligned, two visible groups
+            // FlowDirection.RightToLeft → controls added first land
+            // right-most. Order: Export | Back | Reopen | Open folder.
+            var buttons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.RightToLeft,
+                AutoSize = true,
+                WrapContents = false,
+                Padding = new Padding(0),
+                Margin = new Padding(0),
+            };
+
+            Button MakeButton(string text, bool primary = false)
+            {
+                var b = new Button
+                {
+                    Text = text,
+                    AutoSize = true,
+                    AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                    Padding = new Padding(10, 4, 10, 4),
+                    Margin = new Padding(6, 0, 0, 0),
+                    MinimumSize = new Size(0, 30),
+                    UseVisualStyleBackColor = true,
+                };
+                if (primary)
+                {
+                    b.BackColor = Color.FromArgb(245, 158, 11); // amber, matches Export ribbon accent
+                    b.ForeColor = Color.Black;
+                    b.FlatStyle = FlatStyle.Flat;
+                    b.FlatAppearance.BorderColor = Color.FromArgb(180, 110, 0);
+                }
+                return b;
+            }
+
+            var confirm = MakeButton("Looks good — Export", primary: true);
+            confirm.DialogResult = DialogResult.OK;
+            var back = MakeButton("Back to edit");
+            back.DialogResult = DialogResult.Cancel;
+            var reopen = MakeButton("Reopen browser");
             reopen.Click += (s, e) => { if (_server != null) OpenBrowser(_server.Url); };
-            buttons.Controls.Add(reopen);
+            reopen.Enabled = serverUrl != null;
+            var openFolder = MakeButton("Open temp folder");
+            openFolder.Click += (s, e) => OpenTempFolder();
 
-            var back = new Button
-            {
-                Text = "Back to edit",
-                Left = 12, Top = 42, Width = 150,
-                DialogResult = DialogResult.Cancel,
-            };
-            var confirm = new Button
-            {
-                Text = "Looks good — Export",
-                Left = 168, Top = 42, Width = 150,
-                DialogResult = DialogResult.OK,
-            };
-            buttons.Controls.Add(back);
             buttons.Controls.Add(confirm);
+            buttons.Controls.Add(back);
+            buttons.Controls.Add(reopen);
+            buttons.Controls.Add(openFolder);
             AcceptButton = confirm;
             CancelButton = back;
+            root.Controls.Add(buttons, 0, 1);
+
+            Controls.Add(root);
 
             FormClosed += (s, e) =>
             {
