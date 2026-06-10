@@ -1,6 +1,64 @@
 # Progress
 
 Current: **v2.1.0 UI-shell** shipped on `v2.1.0` branch. Backend wiring in next plan.
+Branch: `v2.1.0`. Tests: **751 green**. Addin built + installed last session
+(SW must be closed for MSBuild → `bin\x64\Release` and for the installer).
+
+## Done (preview frame-migration + UX — latest session)
+
+Goal: "as I see the model in SW (Y-up frame), in preview I see it in ROS2
+Z-up frame; joint pose + axis correct." All committed + pushed to
+`origin/v2.1.0`, addin reinstalled.
+
+- **SW→ROS rotation now baked into preview URDF** (`137bfb7`). Root cause:
+  preview served the on-disk URDF, where the SW→ROS rotation rides on the
+  `gz_sim.launch.py` spawn args (REP-105 default, `EmitWorldLink=false`).
+  Browser can't run the launch file → a default Y-up assembly rendered
+  tilted 90° in the Z-up viewport (joints/axes/positions all looked
+  rotated though the model was correct). Fix: `Sw2gzExportConfig.WithEmitWorldLink(bool)`
+  shallow-clone helper; `Sw2gzModelPreviewer.RunPreview` forces
+  `EmitWorldLink=true` for the **preview temp workspace only** — real
+  exports still honour the user's saved setting. Rotation now emits as a
+  `world` link + `world_to_<root>` fixed joint the browser renders.
+  (`SwToRosRotation.Build` for default Y-up/Z-fwd → rpy=(π/2, 0, π/2),
+  verified by hand.)
+- **Joint-limit baseline shift** (`c743aac`). Bug: URDF joint origin baked
+  the SW *current* pose but limits stayed raw-SW → sliding drove the child
+  past its real range, links wouldn't sustain position. Fix: `PoseMath.TwistAngle`
+  (swing-twist decomp, signed rot about axis) + `PoseMath.SlideDistance`
+  (signed projection); `Sw2gzPipeline` subtracts that `limitShift` from
+  lower/upper so URDF joint=0 ≡ SW current pose. Verified full_arm joint-1:
+  twist=-1.464562 → URDF lower=0, upper=π.
+- **Slider snap-back fixed** (`1b6a791`). Dragging a slider now auto-disables
+  the Live toggle (`pollJoints` was re-overwriting the manual pose after the
+  grace timeout). HUD shows "manual pose — Live paused".
+- **Mesh-centroid markers** (`fec966f`). Explains the URDF link-frame
+  convention visually: RGB triad = link frame (joint pivot, what URDF uses);
+  new grey ◯ dot = mesh AABB center (where the body actually is); grey line
+  triad→dot = the `<visual><origin>` offset. `seedCentroidMarkers()` +
+  `recomputeCentroids()` + `◯ mesh` HUD toggle (default on). Answers the
+  "tf frame pose not mapped to link mesh" question — the offset is correct,
+  now just made visible.
+- New tests: `PoseMathTwistAngleTests` (22), `Sw2gzExportConfigCloneTests` (5).
+- Mockups/plan added (`866a000`): `docs/ui-mockups/preview/` (5 layout demos
+  + joint-mate reference) + `docs/superpowers/plans/2026-06-09-joint-mate-full-coverage.md`
+  (4-phase plan, **not yet implemented — deferred**).
+
+### Deferred / offered-but-not-selected (do NOT start without user pick)
+- Option B: base_link origin override in the Create-Robot wizard.
+- Option C: per-link frame re-anchor.
+- Joint-mate full-coverage Phases 1–4 (plan written, "plan to implement").
+
+### Key files (preview)
+- `SW2GZ/UI/PreviewWeb/index.html` — canonical preview; copies to
+  `bin/.../preview/`, ships via installer. Option-D layout (icon rail +
+  drawer + HUD toggle strip).
+- `SW2GZ/URDFExport/Sw2gzModelPreviewer.cs` — forces EmitWorldLink for preview.
+- `SW2GZ/URDFExport/Sw2gzExportConfig.cs` — `WithEmitWorldLink` clone.
+- `SW2GZ/Math/PoseMath.cs` — `TwistAngle` / `SlideDistance`.
+- `SW2GZ/URDFExport/Sw2gzPipeline.cs` — limit-shift emission.
+- `SW2GZ/SW/SwAddin.cs` — `PreviewEnable`/`LaunchPreview` gate on saved
+  doc-v1 (`Sw2gzDocSerialization.HasSaved`, load-from-attribute first).
 
 ## Done (post-shell session — preview + joint-type fixes)
 
@@ -109,7 +167,7 @@ Current: **v2.1.0 UI-shell** shipped on `v2.1.0` branch. Backend wiring in next 
   (FeatureManager walk filtered by GetTypeName2() == "CoordSys"/"RefAxis").
   Mate-driven fallback retained when both fields empty.
 
-Test count: 688 → 700.
+Test count: 688 → 700. (now 751 after preview-session tests.)
 
 ## Done (AutoJointResolver auto-detect wiring — this plan)
 
