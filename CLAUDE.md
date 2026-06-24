@@ -28,6 +28,10 @@ SolidWorks-lock gotchas).
 
 ## Conventions
 
+- **PowerShell + git.** git writes normal status (e.g. `Switched to branch`)
+  to stderr, which PowerShell flags as an error and sets `$?` to `$false` on
+  success. Don't chain git steps on `if ($?)`; check `$LASTEXITCODE -eq 0` or
+  run steps separately.
 - **No AI attribution.** No "Generated with Claude" footers, no
   `Co-Authored-By: Claude`. Credit Aryan Arlikar + the upstream
   `solidworks_urdf_exporter` only.
