@@ -1074,7 +1074,15 @@ namespace SW2GZ.UI.Pmp
             try { _nextBtn.Enabled = true; }
             catch (Exception ex) { logger.Error("ShowStep MICRO _nextBtn.Enabled threw", ex); }
             logger.Info("Sw2gzCreateRobotPmp.ShowStep MICRO before _nextBtn.Text");
-            try { _nextBtn.Text = (_currentStep == StepCount - 1) ? "Finish" : "▶"; }
+            try
+            {
+                bool lastStep = _currentStep == StepCount - 1;
+                _nextBtn.Text = lastStep ? "Finish" : "▶";
+                // The glyph fits 50px; "Finish" does not — widen it and
+                // re-center the row so the caption isn't clipped to "Finis".
+                _nextBtn.Width = lastStep ? 80 : 50;
+                CenterRow(_navBar, _backBtn, _nextBtn);
+            }
             catch (Exception ex) { logger.Error("ShowStep MICRO _nextBtn.Text threw", ex); }
             logger.Info("Sw2gzCreateRobotPmp.ShowStep MICRO after button block");
 
