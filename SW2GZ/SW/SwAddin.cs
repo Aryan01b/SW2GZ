@@ -592,6 +592,13 @@ namespace SW2GZ.SW
                     from, mode,
                     () => _ribbonRegistrar?.RefreshTabForMode(mode));
                 overlay.ShowDialog();
+
+                // The box swap inside RefreshTabForMode makes SW drop the active
+                // CommandManager tab back to its default (Assembly/Features). The
+                // user clicked a SW2GZ mode pill, so keep them on the SW2GZ tab —
+                // reactivate it by title (IModelDocExtension.ActiveCommandTab is a
+                // string setter keyed on the tab name).
+                modeldoc.Extension.ActiveCommandTab = "SW2GZ";
             }
             catch (Exception e) { logger.Warn("SetMode: tab refresh failed", e); }
         }
