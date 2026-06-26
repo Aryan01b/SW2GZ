@@ -124,6 +124,18 @@ namespace SW2GZ.UI.Ribbon
                     "Create / edit a reusable asset from this assembly.",
                     "OpenCreatePmp", "AssemblyEnable", IMG_CREATE, toolbar);
 
+            // Edit-variant labels — shown when a doc is already saved. Same
+            // OpenCreatePmp callback (it loads the saved doc to edit).
+            AddItem(grp, RibbonCommandIds.ModeEditRobot, "Edit Robot",
+                    "Edit the saved robot package for this assembly.",
+                    "OpenCreatePmp", "AssemblyEnable", IMG_CREATE, toolbar);
+            AddItem(grp, RibbonCommandIds.ModeEditWorld, "Edit World",
+                    "Edit the saved Gz world for this assembly.",
+                    "OpenCreatePmp", "AssemblyEnable", IMG_CREATE, toolbar);
+            AddItem(grp, RibbonCommandIds.ModeEditAsset, "Edit Asset",
+                    "Edit the saved asset for this assembly.",
+                    "OpenCreatePmp", "AssemblyEnable", IMG_CREATE, toolbar);
+
             // Common cluster — Coord button removed in v2.1.0 (advanced coord
             // convention moved into the Create wizard).
             AddItem(grp, RibbonCommandIds.PreviewPmp, "Preview", "Browser-based 3D preview",  "OpenPreviewPmp", "PreviewEnable",  IMG_PREVIEW, toolbar);
@@ -207,9 +219,11 @@ namespace SW2GZ.UI.Ribbon
         // arrays so the same data drives both the initial build and rebuild.
         private static readonly int[] RobotClusterUserIds = new[] {
             RibbonCommandIds.RobotSensors, RibbonCommandIds.RobotActuation };
-        private static readonly int[] WorldClusterUserIds = new[] {
-            RibbonCommandIds.WorldGround, RibbonCommandIds.WorldAssets,
-            RibbonCommandIds.WorldPhysics, RibbonCommandIds.WorldScene };
+        // World cluster emptied — Ground/Assets/Physics/Scene opened stub PMPs
+        // that did nothing; the Create World wizard already covers all of it.
+        // Commands stay registered (see BuildCommandGroup) so they can be
+        // re-added here later without re-plumbing.
+        private static readonly int[] WorldClusterUserIds = new int[0];
         private static readonly int[] AssetClusterUserIds = new[] {
             RibbonCommandIds.AssetBody, RibbonCommandIds.AssetSurface };
 
@@ -217,6 +231,14 @@ namespace SW2GZ.UI.Ribbon
         // calls BuildTab; the initial Register call also drives it from the
         // Sw2gzDoc state in SwAddin (see RefreshTabForMode below).
         private SW2GZ.URDFExport.Sw2gzMode _activeMode = SW2GZ.URDFExport.Sw2gzMode.Robot;
+        // Whether the active assembly already has a saved doc — drives the
+        // Create ↔ Edit label swap on the mode-start button.
+        private bool _activeSaved;
+
+        /// The mode the ribbon is currently rendering (so SwAddin can skip a
+        /// redundant box-swap when the active doc already matches).
+        public SW2GZ.URDFExport.Sw2gzMode ActiveMode => _activeMode;
+        public bool ActiveSaved => _activeSaved;
 
         // Cached refs so RefreshTabForMode can swap just the two boxes instead
         // of tearing down the whole tab. RemoveCommandTab + AddCommandTab
@@ -235,9 +257,13 @@ namespace SW2GZ.UI.Ribbon
         private CommandTabBox _actionsBox;
         private CommandTabBox _modeClusterBox;
 
-        public void RefreshTabForMode(SW2GZ.URDFExport.Sw2gzMode mode)
+        public void RefreshTabForMode(SW2GZ.URDFExport.Sw2gzMode mode) =>
+            RefreshTabForMode(mode, _activeSaved);
+
+        public void RefreshTabForMode(SW2GZ.URDFExport.Sw2gzMode mode, bool saved)
         {
             _activeMode = mode;
+            _activeSaved = saved;
 
             int asmType = (int)swDocumentTypes_e.swDocASSEMBLY;
             // Resolve a live tab handle each call — _tab may be stale across
@@ -316,12 +342,16 @@ namespace SW2GZ.UI.Ribbon
             var cmdIds = new List<int>(4);
             var textTypes = new List<int>(4);
 
+            // Saved doc → "Edit <Mode>"; fresh assembly → "Create <Mode>".
             int createUserId;
             switch (_activeMode)
             {
-                case SW2GZ.URDFExport.Sw2gzMode.World: createUserId = RibbonCommandIds.ModeCreateWorld; break;
-                case SW2GZ.URDFExport.Sw2gzMode.Asset: createUserId = RibbonCommandIds.ModeCreateAsset; break;
-                default:                               createUserId = RibbonCommandIds.ModeCreateRobot; break;
+                case SW2GZ.URDFExport.Sw2gzMode.World:
+                    createUserId = _activeSaved ? RibbonCommandIds.ModeEditWorld : RibbonCommandIds.ModeCreateWorld; break;
+                case SW2GZ.URDFExport.Sw2gzMode.Asset:
+                    createUserId = _activeSaved ? RibbonCommandIds.ModeEditAsset : RibbonCommandIds.ModeCreateAsset; break;
+                default:
+                    createUserId = _activeSaved ? RibbonCommandIds.ModeEditRobot : RibbonCommandIds.ModeCreateRobot; break;
             }
             if (_userToCmdId.TryGetValue(createUserId, out int createCmdId))
             {
@@ -375,6 +405,8 @@ namespace SW2GZ.UI.Ribbon
                 case SW2GZ.URDFExport.Sw2gzMode.Asset: activeIds = AssetClusterUserIds; activeName = "Asset"; break;
                 default:                               activeIds = RobotClusterUserIds; activeName = "Robot"; break;
             }
+            // Empty cluster (e.g. World) → no box at all, no warn spam.
+            if (activeIds.Length == 0) return null;
             var result = AddBox(tab, textBelow, activeIds);
             if (result != null)
                 logger.Info("Sw2gzRibbonRegistrar: rendered " + activeName + " panel cluster only (L3b hide-others)");

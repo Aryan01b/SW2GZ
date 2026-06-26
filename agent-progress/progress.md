@@ -1,8 +1,111 @@
 # Progress
 
 Current: **v2.1.0 UI-shell** shipped on `v2.1.0` branch. Backend wiring in next plan.
-Branch: `v2.1.0`. Tests: **751 green**. Addin built + installed last session
-(SW must be closed for MSBuild → `bin\x64\Release` and for the installer).
+Branch: `feat/world-mode`. Tests: **765 green**. Addin compiles clean
+(SW must be closed for MSBuild; regasm MSB3216 is the known non-fatal gotcha).
+
+## Done (world mode — 2nd attempt, this session)
+
+Re-implemented world mode (assembly → Gz Harmonic world) after the 1st attempt
+was reset. Scope (user-locked): pick ground (room/floor; none → default flat
+ground plane) → auto-locate every other top-level component as a **static**
+asset, positioned same as SW. Export → one self-contained `<pkg>/<pkg>.sdf` +
+`<pkg>/meshes/*.dae`. No joints/actuation/launch/ament. Review-only.
+
+- **Revised SDF structure** — `SdfWorldWriter.WriteScene(SdfSceneInput)`: inlined
+  `<model><static>true</static>` per component, `<visual>`+`<collision>` share
+  the same `meshes/<name>.dae`. Default `ground_plane` ONLY when no ground
+  picked. Whole-scene SW→ROS rpy rides each model's `<pose>` (placement baked
+  into mesh verts → position 0 0 0). Replaces the old `<include>model://` +
+  unconditional ground_plane shape. `SdfPhysicsBlock.Default(engine,step,rtf)`
+  overload (old no-arg kept byte-identical for robot golden).
+- **Config threading** (the seam the 1st attempt failed at): `Sw2gzExportConfig`
+  gains flat `WorldGround/WorldAssets/WorldPhysicsEngine/WorldMaxStepSize/
+  WorldRealTimeFactor` DataMembers + OnDeserializing defaults + clone copy;
+  `Sw2gzDocToExportConfig.Bridge` now copies `doc.World` through.
+- **`Sw2gzWorldExporter`** (COM-free, takes `IMeshTessellator`): tessellate each
+  pick (assembly-frame, baked) → `meshes/<name>.dae` → `WriteScene`. Per-
+  component try/catch skips an un-tessellatable comp with a Warning (sub-asm
+  bodies = known tessellator ceiling). `Sw2gzModelExporter.RunCore` branches to
+  it on `ExportMode.SdfWorld` before the robot pipeline.
+- **Wizard UI** (`Sw2gzCreateWorldPmp`): setting ground auto-seeds Assets =
+  top-level comps minus ground (editable list, only seeds when empty). Step
+  descriptions updated.
+- Tests: +14 (9 `WriteScene` + 5 `Sw2gzWorldExporterTests` via fake tessellator).
+- Deployed to `C:\Program Files\SW2GZ\`. Open assumption: Gz resolves the
+  relative `meshes/<name>.dae` URI vs the .sdf dir (unverified in real Gz).
+
+### Visual-quality improvements (4th live round — "make it smooth")
+- **Smooth shading** — new pure `MeshNormals.ComputeSmooth(mesh, creaseDeg=35)`:
+  welds vertex normals across coincident positions within a crease angle, so
+  curved CAD surfaces shade smoothly while hard edges stay sharp. `DaeWriter`
+  uses it on the `withNormals` (world) path; robot path (off) byte-identical.
+  Flows to Preview too (viewer keeps DAE normals). Tested (MeshNormalsTests).
+- **Multi-body parts** — `SolidWorksMeshTessellator` now tessellates + unions
+  EVERY solid body of a component (was `bodyObjs[0]` only → silently dropped
+  bodies 2+).
+- **Component-level color** — tessellator prefers `Component2.GetMaterialProperty
+  Values2` (assembly instance appearance override) over the part's own material,
+  with safe fallback. Matches how users colour an environment in-assembly.
+- **Sub-assembly recursion** — `SolidWorksMeshTessellator.CollectBodyComponents`
+  walks `Component2.GetChildren()` recursively: a sub-assembly asset now
+  tessellates its descendant part leaves (each baking its own assembly-frame
+  `Transform2`) instead of being skipped. Color fallback reads the first leaf's
+  part material. Defensive try/catch per branch so one bad child can't sink it.
+  ASSUMPTION (verify live): nested `Component2.Transform2` is top-assembly-frame
+  (global) — if a sub-asm asset lands mis-placed, that assumption is wrong and
+  transforms need composing down the chain.
+- 773 tests green (COM tessellator path is not unit-covered — live-test it).
+  **Still DEFERRED:** per-body/per-face colors (multi-submesh), textures/UV/PBR.
+
+### Ribbon/doc state-sync fixes (3rd live round)
+Reported: reopen a saved World assembly → ribbon shows "Create Robot" + pills
+disabled (mismatch). Root: `_activeMode` defaults Robot and nothing synced it
+from the persisted attribute; the in-memory store is blank on fresh launch.
+- **Sync ribbon to active doc** — `SwAddin.SyncRibbonToActiveDoc` (called from
+  `OnDocChange` + `FileOpenPostNotify`) loads the persisted doc, seeds the store
+  (`Sw2gzDocStore.Put`), and `RefreshTabForMode(mode, saved)`. Registrar gained
+  `ActiveMode`/`ActiveSaved` getters + `RefreshTabForMode(mode, saved)`.
+- **Create ↔ Edit label** — 3 new commands `ModeEdit{Robot,World,Asset}` (17/18/
+  19); `BuildModeStartBox` picks Create vs Edit by saved-state. `PersistDoc`
+  flips to "Edit <Mode>" after Finish; `SetMode` stays "Create".
+- **`OpenCreatePmp` loads saved doc** — was reading the blank store → reopened
+  Robot wizard for a saved World. Now Load-first + `Put` when `HasSaved`.
+- **Mode-specific attribute name** — `Sw2gzDocSerialization` saves
+  `SW2GZ <Mode> (v1)` (tree shows the mode); HasSaved/Load/Delete scan all known
+  names incl. legacy `SW2GZ Doc (v1)`. Re-saving migrates an old doc's name.
+- Compiles clean, 767 tests green. **Re-test live in SW.**
+  Remaining mismatch candidates (not yet touched): World/Asset cluster ribbon
+  buttons (Ground/Assets/Physics/Scene, Body/Surface) still open stub PMPs;
+  `DerivePackageNameFromAssembly` default is "robot_preview" even in World mode.
+
+### World export + preview fixes (2nd live round)
+- **Plain white / unlit in Gz** — DAE had diffuse color but NO normals
+  (`NeedVertexNormal=false`) → Gz can't light it. Added opt-in `DaeWriter.Write(
+  mesh, path, withNormals)` (area-weighted vertex normals); default false keeps
+  robot goldens byte-identical, world exporter passes true.
+- **World off-camera in Gz** — assembly modeled far from origin → baked verts
+  land the scene off the default camera. `Sw2gzWorldExporter` now recenters all
+  meshes about their combined AABB center before writing (rotation rides the
+  `<pose>` rpy about origin, so centered stays centered).
+- **No world preview** — `Sw2gzModelPreviewer.RunWorldPreview` runs the world
+  export to temp + synthesizes a throwaway URDF (base_link + one fixed link per
+  mesh) so the EXISTING robot three.js viewer renders it unchanged (viewer
+  neutralizes materials anyway). `SwAddin.LaunchPreview` branches on
+  `doc.Mode==World` (gate: ground or assets, not robot links). Tests: 767 green.
+
+### World wizard fixes (post-deploy live bugs)
+- **Create World opened Robot wizard** — `SwAddin.OpenCreatePmp` reset the doc
+  to `Mode=Robot` whenever nothing was saved yet (the mode pills only mutate the
+  in-memory doc, never persist), wiping the World pick. Fix: preserve `doc.Mode`
+  across the `Sw2gzDocStore.Reset`.
+- **Buttons vanished on double-click Clear; multi-select Add glitched; nav theme
+  off** — root cause: PMP `swControlType_Button` controls + mutating PMP state in
+  `OnButtonPress` corrupts SW's PMP renderer. Ported `Sw2gzCreateWorldPmp` to the
+  Robot wizard's chrome: WinForms nav bar (Back/Next + step indicator, dark
+  theme) deferred via `BeginInvoke`, and WinForms action-button bars (Set ground
+  / Clear / Add / Remove / Clear all) via `WindowFromHandle`. No PMP buttons or
+  footer group left. **Re-test live in SW.**
 
 ## Done (preview frame-migration + UX — latest session)
 

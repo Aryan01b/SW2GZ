@@ -75,6 +75,14 @@ namespace SW2GZ.UI.Ribbon
         public const int ModeCreateWorld = 15;
         public const int ModeCreateAsset = 16;
 
+        // Edit-variant Create buttons — shown in place of the Create button when
+        // a doc is already saved for this assembly. SW SDK can't rename a command
+        // post-Activate, so the "Create X" ↔ "Edit X" swap needs distinct
+        // commands selected by saved-state in BuildModeStartBox.
+        public const int ModeEditRobot = 17;
+        public const int ModeEditWorld = 18;
+        public const int ModeEditAsset = 19;
+
         // Robot cluster — RobotLinks (was 20) and RobotJoints (was 21) moved
         // into the Create-Robot wizard PMP. IDs left as gaps so the others
         // keep their stable values across the upgrade.
@@ -104,6 +112,7 @@ namespace SW2GZ.UI.Ribbon
             ModeRobot, ModeWorld, ModeAsset,
             ModeRobotPill, ModeWorldPill, ModeAssetPill,
             ModeCreateRobot, ModeCreateWorld, ModeCreateAsset,
+            ModeEditRobot, ModeEditWorld, ModeEditAsset,
             PreviewPmp, ExportPmp,
             RobotInertia, RobotSensors, RobotActuation, RobotStack,
             WorldGround, WorldAssets, WorldPhysics, WorldScene,

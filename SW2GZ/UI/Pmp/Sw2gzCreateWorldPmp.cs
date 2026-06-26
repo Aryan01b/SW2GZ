@@ -3,22 +3,24 @@ Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
 Sw2gzCreateWorldPmp — the "Create World" PropertyManagerPage opened from the
 mode-specific Create button when the active mode is World. Mirrors the
-Sw2gzCreateRobotPmp pattern (multi-step linear wizard, group-show/hide nav,
-Back/Next footer) but maps to Sw2gzDoc.World fields:
+Sw2gzCreateRobotPmp chrome: a WinForms nav bar (Back/Next + step indicator,
+dark theme) embedded via WindowFromHandle, and WinForms action-button bars per
+step. PMP swControlType_Button controls are avoided entirely — clicking one and
+mutating PMP state from inside OnButtonPress corrupts SW's PMP renderer
+(buttons vanish, selection glitches). Nav clicks defer via BeginInvoke so the
+group-visibility flip runs off the click-handler reentrancy frame.
 
-Steps:
-    0 — Scene    (pick a ground component → Sw2gzWorldConfig.Ground)
-    1 — Assets   (pick extra components → Sw2gzWorldConfig.Assets)
-    2 — Physics  (engine + step + RTF — defaults stay if user skips)
+Steps map to Sw2gzDoc.World:
+    0 — Scene    (pick a ground component → Sw2gzWorldConfig.Ground; auto-seeds Assets)
+    1 — Assets   (auto-located list, editable → Sw2gzWorldConfig.Assets)
+    2 — Physics  (engine + step + RTF)
     3 — Review   (counts; Next caption flips to "Finish")
-
-Schema is flat strings/numbers (no rich World/Asset model in v2.1.0). Pipeline
-still reads the legacy Sw2gzExportConfig attribute until backend wiring lands.
 */
 #if SW_INTEROP
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidWorks.Interop.swpublished;
@@ -47,63 +49,70 @@ namespace SW2GZ.UI.Pmp
         private const int StepCount = 4;
 
         private bool _okay;
-
         private int _currentStep = StepScene;
 
         private const int GroundSelectionMark = 0x4B0;
         private const int AssetsSelectionMark = 0x4B1;
 
-        private const int IdHeader = 1;
-        private const int IdFooter = 2;
-        private const int IdBackBtn = 3;
-        private const int IdNextBtn = 4;
+        // Header (Progress) group + nav bar.
+        private const int IdHeaderGroup  = 1;
+        private const int IdHeaderLabel  = 2;
+        private const int IdNavBar       = 3;
 
-        // Scene step
-        private const int IdSceneGroup     = 10;
-        private const int IdSceneDescr     = 11;
-        private const int IdGroundPicker   = 12;
-        private const int IdGroundSetBtn   = 13;
-        private const int IdGroundLabel    = 14;
-        private const int IdGroundClearBtn = 15;
+        // Step groups.
+        private const int IdSceneGroup   = 10;
+        private const int IdSceneDescr   = 11;
+        private const int IdGroundPicker = 12;
+        private const int IdGroundLabel  = 14;
+        private const int IdSceneBtnBar  = 16;
 
-        // Assets step
-        private const int IdAssetsGroup     = 20;
-        private const int IdAssetsDescr     = 21;
-        private const int IdAssetsPicker    = 22;
-        private const int IdAssetsAddBtn    = 23;
-        private const int IdAssetsList      = 24;
-        private const int IdAssetsRemoveBtn = 25;
-        private const int IdAssetsClearBtn  = 26;
+        private const int IdAssetsGroup  = 20;
+        private const int IdAssetsDescr  = 21;
+        private const int IdAssetsPicker = 22;
+        private const int IdAssetsList   = 24;
+        private const int IdAssetsBtnBar = 27;
 
-        // Physics step
-        private const int IdPhysicsGroup        = 30;
-        private const int IdPhysicsDescr        = 31;
-        private const int IdPhysicsEngineCombo  = 32;
-        private const int IdPhysicsStepBox      = 33;
-        private const int IdPhysicsRtfBox       = 34;
+        private const int IdPhysicsGroup       = 30;
+        private const int IdPhysicsDescr       = 31;
+        private const int IdPhysicsEngineCombo = 32;
+        private const int IdPhysicsStepBox     = 33;
+        private const int IdPhysicsRtfBox      = 34;
 
-        // Review step
         private const int IdReviewGroup        = 40;
         private const int IdReviewDescr        = 41;
         private const int IdReviewGroundLabel  = 42;
         private const int IdReviewAssetsLabel  = 43;
         private const int IdReviewPhysicsLabel = 44;
 
-        private PropertyManagerPageLabel _hdrLabel;
         private PropertyManagerPageGroup[] _stepGroups;
-        private PropertyManagerPageButton _backBtn;
-        private PropertyManagerPageButton _nextBtn;
 
+        // WinForms nav bar (Back/Next + step indicator).
+        private PropertyManagerPageWindowFromHandle _navHandle;
+        private System.Windows.Forms.Panel _navBar;
+        private System.Windows.Forms.Button _backBtn;
+        private System.Windows.Forms.Button _nextBtn;
+        private System.Windows.Forms.Label _stepIndicator;
+
+        // WinForms per-step action bars.
+        private PropertyManagerPageWindowFromHandle _sceneBarHandle;
+        private System.Windows.Forms.Panel _sceneBar;
+        private System.Windows.Forms.Button _setGroundBtn;
+        private System.Windows.Forms.Button _clearGroundBtn;
+
+        private PropertyManagerPageWindowFromHandle _assetsBarHandle;
+        private System.Windows.Forms.Panel _assetsBar;
+        private System.Windows.Forms.Button _addAssetBtn;
+        private System.Windows.Forms.Button _removeAssetBtn;
+        private System.Windows.Forms.Button _clearAssetsBtn;
+
+        // PMP-native controls (selection boxes / listbox / combo / numberboxes).
         private PropertyManagerPageSelectionbox _groundPicker;
         private PropertyManagerPageLabel _groundLabel;
-
         private PropertyManagerPageSelectionbox _assetsPicker;
         private PropertyManagerPageListbox _assetsList;
-
         private PropertyManagerPageCombobox _engineCombo;
         private PropertyManagerPageNumberbox _stepBox;
         private PropertyManagerPageNumberbox _rtfBox;
-
         private PropertyManagerPageLabel _reviewGroundLabel;
         private PropertyManagerPageLabel _reviewAssetsLabel;
         private PropertyManagerPageLabel _reviewPhysicsLabel;
@@ -135,47 +144,126 @@ namespace SW2GZ.UI.Pmp
             ShowStep(StepScene);
         }
 
+        // ── Dark-theme palette (mirrors Sw2gzCreateRobotPmp) ──────────────────
+        private static readonly System.Drawing.Color DarkBarBg     = System.Drawing.Color.FromArgb(53, 53, 53);
+        private static readonly System.Drawing.Color DarkBtnBg     = System.Drawing.Color.FromArgb(70, 70, 72);
+        private static readonly System.Drawing.Color DarkBtnHover  = System.Drawing.Color.FromArgb(95, 95, 98);
+        private static readonly System.Drawing.Color DarkFg        = System.Drawing.Color.FromArgb(220, 220, 220);
+        private static readonly System.Drawing.Color DarkBtnBorder = System.Drawing.Color.FromArgb(100, 100, 102);
+
+        private static System.Windows.Forms.Panel NewBar(int width, int height) =>
+            new System.Windows.Forms.Panel { Width = width, Height = height, BackColor = DarkBarBg };
+
+        private static System.Windows.Forms.Button NewBarButton(string text, int width)
+        {
+            var b = new System.Windows.Forms.Button
+            {
+                Text = text, Width = width, Height = 26, Top = 3,
+                FlatStyle = System.Windows.Forms.FlatStyle.Flat,
+                BackColor = DarkBtnBg, ForeColor = DarkFg, UseVisualStyleBackColor = false,
+            };
+            b.FlatAppearance.BorderColor = DarkBtnBorder;
+            b.FlatAppearance.MouseOverBackColor = DarkBtnHover;
+            return b;
+        }
+
+        private static void CenterRow(System.Windows.Forms.Panel bar, params System.Windows.Forms.Button[] btns)
+        {
+            const int gap = 8;
+            int total = -gap;
+            foreach (var b in btns) total += b.Width + gap;
+            int x = System.Math.Max(0, (bar.Width - total) / 2);
+            foreach (var b in btns) { b.Left = x; x += b.Width + gap; }
+        }
+
         private void BuildPage()
         {
             int leftEdge = (int)swPropertyManagerPageControlLeftAlign_e.swControlAlign_LeftEdge;
             int indent   = (int)swPropertyManagerPageControlLeftAlign_e.swControlAlign_Indent;
             int visibleEnabled = (int)swAddControlOptions_e.swControlOptions_Enabled |
                                  (int)swAddControlOptions_e.swControlOptions_Visible;
+            int grpOptions = (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Visible +
+                             (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Expanded;
 
-            _hdrLabel = (PropertyManagerPageLabel)_page.AddControl2(
-                IdHeader,
+            var header = (PropertyManagerPageGroup)_page.AddGroupBox(IdHeaderGroup, "Progress", grpOptions);
+            header.AddControl2(IdHeaderLabel,
                 (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Step 1 of " + StepCount + " — " + StepNames[0],
-                (short)leftEdge, visibleEnabled, "");
+                "", (short)leftEdge, visibleEnabled, "");
+            BuildNavBar();
+            _navHandle = (PropertyManagerPageWindowFromHandle)header.AddControl2(
+                IdNavBar,
+                (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
+                "", (short)leftEdge, visibleEnabled, "Step navigation");
+            _navHandle.Height = 58;
+            _navHandle.SetWindowHandlex64(_navBar.Handle.ToInt64());
 
             _stepGroups = new PropertyManagerPageGroup[StepCount];
-            _stepGroups[StepScene]   = BuildSceneGroup(leftEdge, indent, visibleEnabled);
-            _stepGroups[StepAssets]  = BuildAssetsGroup(leftEdge, indent, visibleEnabled);
-            _stepGroups[StepPhysics] = BuildPhysicsGroup(leftEdge, indent, visibleEnabled);
-            _stepGroups[StepReview]  = BuildReviewGroup(leftEdge, indent, visibleEnabled);
-
-            var footer = (PropertyManagerPageGroup)_page.AddGroupBox(IdFooter, "",
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Visible +
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Expanded);
-            _backBtn = (PropertyManagerPageButton)footer.AddControl2(
-                IdBackBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "< Back", (short)leftEdge, visibleEnabled, "Previous step");
-            _nextBtn = (PropertyManagerPageButton)footer.AddControl2(
-                IdNextBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Next >", (short)leftEdge, visibleEnabled, "Next step");
+            _stepGroups[StepScene]   = BuildSceneGroup(grpOptions, leftEdge, visibleEnabled);
+            _stepGroups[StepAssets]  = BuildAssetsGroup(grpOptions, leftEdge, visibleEnabled);
+            _stepGroups[StepPhysics] = BuildPhysicsGroup(grpOptions, leftEdge, visibleEnabled);
+            _stepGroups[StepReview]  = BuildReviewGroup(grpOptions, leftEdge, visibleEnabled);
         }
 
-        private PropertyManagerPageGroup BuildSceneGroup(int leftEdge, int indent, int visibleEnabled)
+        private void BuildNavBar()
         {
-            var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdSceneGroup, "Scene",
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Visible +
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Expanded);
+            _navBar = NewBar(260, 56);
+            _stepIndicator = new System.Windows.Forms.Label
+            {
+                AutoSize = false, Width = 240, Height = 18, Top = 2, Left = 10,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                ForeColor = System.Drawing.Color.White,
+                BackColor = System.Drawing.Color.FromArgb(48, 48, 48),
+                Font = new System.Drawing.Font("Segoe UI", 8.25f, System.Drawing.FontStyle.Bold),
+                Text = "",
+            };
+            _navBar.Controls.Add(_stepIndicator);
+            _backBtn = NewBarButton("◀", 50);
+            _nextBtn = NewBarButton("▶", 50);
+            _backBtn.Top = 24;
+            _nextBtn.Top = 24;
+            // Defer GoBack/GoNext off the click-handler reentrancy frame — the
+            // group-visibility flip mutates PMP COM controls and crashes SW's
+            // PMP renderer if run inside the WinForms button click stack.
+            _backBtn.Click += (s, e) => _navBar.BeginInvoke((Action)(() =>
+            {
+                try { GoBack(); } catch (Exception ex) { logger.Error("GoBack threw", ex); }
+            }));
+            _nextBtn.Click += (s, e) => _navBar.BeginInvoke((Action)(() =>
+            {
+                try { GoNext(); } catch (Exception ex) { logger.Error("GoNext threw", ex); }
+            }));
+            _navBar.Controls.Add(_backBtn);
+            _navBar.Controls.Add(_nextBtn);
+            _navBar.Resize += (s, e) => CenterRow(_navBar, _backBtn, _nextBtn);
+            CenterRow(_navBar, _backBtn, _nextBtn);
+        }
+
+        private PropertyManagerPageGroup BuildSceneGroup(int grpOptions, int leftEdge, int visibleEnabled)
+        {
+            var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdSceneGroup, "Scene", grpOptions);
             grp.AddControl2(IdSceneDescr,
                 (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Pick the component that represents the ground / world floor.",
+                "Pick the ground component (room / floor), then Set. Other top-level "
+                + "components are auto-located as assets on the next step. No ground? "
+                + "Skip this — a default flat ground plane is used.",
                 (short)leftEdge, visibleEnabled, "");
+
+            // WinForms button bar before the selectionbox (mirrors robot wizard).
+            _sceneBar       = NewBar(260, 32);
+            _setGroundBtn   = NewBarButton("Set ground", 90);
+            _clearGroundBtn = NewBarButton("Clear", 70);
+            _setGroundBtn.Click   += (s, e) => HandleSetGround();
+            _clearGroundBtn.Click += (s, e) => HandleClearGround();
+            _sceneBar.Controls.Add(_setGroundBtn);
+            _sceneBar.Controls.Add(_clearGroundBtn);
+            _sceneBar.Resize += (s, e) => CenterRow(_sceneBar, _setGroundBtn, _clearGroundBtn);
+            CenterRow(_sceneBar, _setGroundBtn, _clearGroundBtn);
+            _sceneBarHandle = (PropertyManagerPageWindowFromHandle)grp.AddControl2(
+                IdSceneBtnBar,
+                (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
+                "", (short)leftEdge, visibleEnabled, "Set or clear the ground component");
+            _sceneBarHandle.Height = 34;
+            _sceneBarHandle.SetWindowHandlex64(_sceneBar.Handle.ToInt64());
 
             _groundPicker = (PropertyManagerPageSelectionbox)grp.AddControl2(
                 IdGroundPicker,
@@ -186,32 +274,42 @@ namespace SW2GZ.UI.Pmp
             _groundPicker.Mark = GroundSelectionMark;
             _groundPicker.SetSelectionFilters((object)new swSelectType_e[] { swSelectType_e.swSelCOMPONENTS });
 
-            grp.AddControl2(IdGroundSetBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Set ground from selection", (short)indent, visibleEnabled, "Use the picked component as ground");
-
             _groundLabel = (PropertyManagerPageLabel)grp.AddControl2(
                 IdGroundLabel,
                 (short)swPropertyManagerPageControlType_e.swControlType_Label,
                 "", (short)leftEdge, visibleEnabled, "");
 
-            grp.AddControl2(IdGroundClearBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Clear", (short)indent, visibleEnabled, "Forget the assigned ground");
-
             RefreshGroundLabel();
             return grp;
         }
 
-        private PropertyManagerPageGroup BuildAssetsGroup(int leftEdge, int indent, int visibleEnabled)
+        private PropertyManagerPageGroup BuildAssetsGroup(int grpOptions, int leftEdge, int visibleEnabled)
         {
-            var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdAssetsGroup, "Assets",
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Visible +
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Expanded);
+            var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdAssetsGroup, "Assets", grpOptions);
             grp.AddControl2(IdAssetsDescr,
                 (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Pick world-asset components in the viewport, then Add.",
+                "Auto-located from the assembly. Remove any you don't want, or pick "
+                + "more in the viewport and Add. All assets export as static.",
                 (short)leftEdge, visibleEnabled, "");
+
+            _assetsBar      = NewBar(260, 32);
+            _addAssetBtn    = NewBarButton("Add", 60);
+            _removeAssetBtn = NewBarButton("Remove", 70);
+            _clearAssetsBtn = NewBarButton("Clear all", 80);
+            _addAssetBtn.Click    += (s, e) => HandleAddAssets();
+            _removeAssetBtn.Click += (s, e) => HandleRemoveAsset();
+            _clearAssetsBtn.Click += (s, e) => HandleClearAssets();
+            _assetsBar.Controls.Add(_addAssetBtn);
+            _assetsBar.Controls.Add(_removeAssetBtn);
+            _assetsBar.Controls.Add(_clearAssetsBtn);
+            _assetsBar.Resize += (s, e) => CenterRow(_assetsBar, _addAssetBtn, _removeAssetBtn, _clearAssetsBtn);
+            CenterRow(_assetsBar, _addAssetBtn, _removeAssetBtn, _clearAssetsBtn);
+            _assetsBarHandle = (PropertyManagerPageWindowFromHandle)grp.AddControl2(
+                IdAssetsBtnBar,
+                (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
+                "", (short)leftEdge, visibleEnabled, "Add, remove, or clear assets");
+            _assetsBarHandle.Height = 34;
+            _assetsBarHandle.SetWindowHandlex64(_assetsBar.Handle.ToInt64());
 
             _assetsPicker = (PropertyManagerPageSelectionbox)grp.AddControl2(
                 IdAssetsPicker,
@@ -223,32 +321,19 @@ namespace SW2GZ.UI.Pmp
             _assetsPicker.Mark = AssetsSelectionMark;
             _assetsPicker.SetSelectionFilters((object)new swSelectType_e[] { swSelectType_e.swSelCOMPONENTS });
 
-            grp.AddControl2(IdAssetsAddBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Add selected", (short)indent, visibleEnabled, "Add picked components to the asset list");
-
             _assetsList = (PropertyManagerPageListbox)grp.AddControl2(
                 IdAssetsList,
                 (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
                 "Assets", (short)leftEdge, visibleEnabled, "Current world assets");
             ((IPropertyManagerPageListbox)_assetsList).Height = 110;
 
-            grp.AddControl2(IdAssetsRemoveBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Remove selected", (short)indent, visibleEnabled, "");
-            grp.AddControl2(IdAssetsClearBtn,
-                (short)swPropertyManagerPageControlType_e.swControlType_Button,
-                "Clear all", (short)indent, visibleEnabled, "");
-
             RefreshAssetsList();
             return grp;
         }
 
-        private PropertyManagerPageGroup BuildPhysicsGroup(int leftEdge, int indent, int visibleEnabled)
+        private PropertyManagerPageGroup BuildPhysicsGroup(int grpOptions, int leftEdge, int visibleEnabled)
         {
-            var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdPhysicsGroup, "Physics",
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Visible +
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Expanded);
+            var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdPhysicsGroup, "Physics", grpOptions);
             grp.AddControl2(IdPhysicsDescr,
                 (short)swPropertyManagerPageControlType_e.swControlType_Label,
                 "Pick the physics engine and step size for the world.",
@@ -282,11 +367,9 @@ namespace SW2GZ.UI.Pmp
             return grp;
         }
 
-        private PropertyManagerPageGroup BuildReviewGroup(int leftEdge, int indent, int visibleEnabled)
+        private PropertyManagerPageGroup BuildReviewGroup(int grpOptions, int leftEdge, int visibleEnabled)
         {
-            var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdReviewGroup, "Review",
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Visible +
-                (int)swAddGroupBoxOptions_e.swGroupBoxOptions_Expanded);
+            var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdReviewGroup, "Review", grpOptions);
             grp.AddControl2(IdReviewDescr,
                 (short)swPropertyManagerPageControlType_e.swControlType_Label,
                 "Review and Finish to commit. Cancel rolls back.",
@@ -306,7 +389,9 @@ namespace SW2GZ.UI.Pmp
             return grp;
         }
 
-        // ─── Action handlers ─────────────────────────────────────────
+        // ─── Action handlers (called directly from WinForms button clicks; they
+        //     mutate the doc + listbox but never flip group visibility, so no
+        //     BeginInvoke deferral is needed — only nav needs that) ────────────
         private void HandleSetGround()
         {
             try
@@ -319,6 +404,7 @@ namespace SW2GZ.UI.Pmp
                 if (selObj is Component2 c && !string.IsNullOrEmpty(c.Name2))
                 {
                     _liveDoc.World.Ground = c.Name2;
+                    AutoSeedAssets(c.Name2);
                     RefreshGroundLabel();
                     _modelDoc.ClearSelection2(true);
                 }
@@ -330,6 +416,30 @@ namespace SW2GZ.UI.Pmp
         {
             _liveDoc.World.Ground = string.Empty;
             RefreshGroundLabel();
+        }
+
+        // Setting the ground auto-locates every other top-level component as a
+        // world asset (the user then edits the list). Only seeds an empty list
+        // so a return visit keeps prior edits.
+        private void AutoSeedAssets(string groundName)
+        {
+            if (_liveDoc.World.Assets.Count > 0) return;
+            try
+            {
+                object[] comps = (object[])((AssemblyDoc)_modelDoc).GetComponents(true);
+                if (comps == null) return;
+                foreach (object o in comps)
+                {
+                    var c = (Component2)o;
+                    if (c.IsSuppressed()) continue;
+                    if (string.IsNullOrEmpty(c.Name2)) continue;
+                    if (c.Name2 == groundName) continue;
+                    if (!_liveDoc.World.Assets.Contains(c.Name2))
+                        _liveDoc.World.Assets.Add(c.Name2);
+                }
+                RefreshAssetsList();
+            }
+            catch (Exception e) { logger.Warn("AutoSeedAssets failed", e); }
         }
 
         private void RefreshGroundLabel()
@@ -400,7 +510,7 @@ namespace SW2GZ.UI.Pmp
             CommitPhysicsFromControls();
             if (_reviewGroundLabel != null)
                 _reviewGroundLabel.Caption = "Ground: " +
-                    (string.IsNullOrEmpty(_liveDoc.World.Ground) ? "(not set)" : _liveDoc.World.Ground);
+                    (string.IsNullOrEmpty(_liveDoc.World.Ground) ? "(default ground plane)" : _liveDoc.World.Ground);
             if (_reviewAssetsLabel != null)
                 _reviewAssetsLabel.Caption = "Assets: " + _liveDoc.World.Assets.Count;
             if (_reviewPhysicsLabel != null)
@@ -408,24 +518,56 @@ namespace SW2GZ.UI.Pmp
                     "  step=" + _liveDoc.World.MaxStepSize + "s  rtf=" + _liveDoc.World.RealTimeFactor;
         }
 
+        // ─── Navigation ──────────────────────────────────────────────────────
         private void ShowStep(int step)
         {
             if (step < 0) step = 0;
             if (step > StepCount - 1) step = StepCount - 1;
 
-            // Leaving Physics: persist current control values back into the doc
-            // so Back/Next round-trip preserves the user's edits.
+            // Leaving Physics: persist current control values so Back/Next round-trips.
             if (_currentStep == StepPhysics && step != StepPhysics) CommitPhysicsFromControls();
 
             _currentStep = step;
             for (int i = 0; i < StepCount; i++)
             {
-                try { _stepGroups[i].Visible = (i == _currentStep); } catch { }
+                try { _stepGroups[i].Visible = (i == _currentStep); }
+                catch (Exception ex) { logger.Error("World ShowStep group[" + i + "].Visible failed", ex); }
             }
-            _hdrLabel.Caption = "Step " + (_currentStep + 1) + " of " + StepCount + " — " + StepNames[_currentStep];
-            ((IPropertyManagerPageControl)_backBtn).Enabled = _currentStep > 0;
-            _nextBtn.Caption = (_currentStep == StepCount - 1) ? "Finish" : "Next >";
+
+            // Step text rides the WinForms label (no PMP COM caption mutation
+            // from the deferred-click stack → no mscorlib AV).
+            try { _stepIndicator.Text = "Step " + (_currentStep + 1) + " of " + StepCount + " — " + StepNames[_currentStep]; }
+            catch (Exception ex) { logger.Error("World ShowStep _stepIndicator.Text threw", ex); }
+            try { _backBtn.Enabled = _currentStep > 0; } catch (Exception ex) { logger.Error("World ShowStep back threw", ex); }
+            try
+            {
+                bool lastStep = _currentStep == StepCount - 1;
+                _nextBtn.Text  = lastStep ? "Finish" : "▶";
+                _nextBtn.Width = lastStep ? 80 : 50;
+                CenterRow(_navBar, _backBtn, _nextBtn);
+            }
+            catch (Exception ex) { logger.Error("World ShowStep next threw", ex); }
+
             if (_currentStep == StepReview) RefreshReviewLabels();
+        }
+
+        private void GoBack()
+        {
+            if (_currentStep > 0) ShowStep(_currentStep - 1);
+        }
+
+        private void GoNext()
+        {
+            if (_currentStep < StepCount - 1)
+            {
+                ShowStep(_currentStep + 1);
+            }
+            else
+            {
+                CommitPhysicsFromControls();
+                _okay = true;
+                _page.Close(true);
+            }
         }
 
         public void Show()
@@ -434,22 +576,7 @@ namespace SW2GZ.UI.Pmp
             _page.Show2(0);
         }
 
-        void IPropertyManagerPage2Handler9.OnButtonPress(int Id)
-        {
-            switch (Id)
-            {
-                case IdBackBtn: if (_currentStep > 0) ShowStep(_currentStep - 1); break;
-                case IdNextBtn:
-                    if (_currentStep < StepCount - 1) ShowStep(_currentStep + 1);
-                    else { CommitPhysicsFromControls(); _okay = true; _page.Close(true); }
-                    break;
-                case IdGroundSetBtn:   HandleSetGround(); break;
-                case IdGroundClearBtn: HandleClearGround(); break;
-                case IdAssetsAddBtn:    HandleAddAssets(); break;
-                case IdAssetsRemoveBtn: HandleRemoveAsset(); break;
-                case IdAssetsClearBtn:  HandleClearAssets(); break;
-            }
-        }
+        void IPropertyManagerPage2Handler9.AfterActivation() { ShowStep(_currentStep); }
 
         void IPropertyManagerPage2Handler9.OnClose(int Reason)
         {
@@ -468,7 +595,7 @@ namespace SW2GZ.UI.Pmp
 
         void IPropertyManagerPage2Handler9.AfterClose() { if (_okay && _liveDoc != null) _onCommit(_liveDoc); }
 
-        void IPropertyManagerPage2Handler9.AfterActivation() { }
+        void IPropertyManagerPage2Handler9.OnButtonPress(int Id) { }
         void IPropertyManagerPage2Handler9.OnGainedFocus(int Id) { }
         void IPropertyManagerPage2Handler9.OnLostFocus(int Id) { }
         bool IPropertyManagerPage2Handler9.OnHelp() => true;

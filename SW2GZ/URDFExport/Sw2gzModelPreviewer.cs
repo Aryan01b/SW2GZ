@@ -14,12 +14,15 @@ honest preview; double-execution on accept is acceptable for v1.
 #if SW_INTEROP
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using SolidWorks.Interop.sldworks;
 using SW2GZ.Build;
 using SW2GZ.Build.Model;
 using SW2GZ.Ros2;
+using SW2GZ.SwSurface;
 
 namespace SW2GZ.URDFExport
 {
@@ -155,6 +158,89 @@ namespace SW2GZ.URDFExport
             return new PreviewResult(tempBase, workspace, meshesDir, config.Mode,
                 urdfText, urdfOrSdfRel, launchText, launchRel, logText, summary, tfTree, report,
                 sampler);
+        }
+
+        // Minimal world preview. World mode has no URDF/robot — it's a set of
+        // static CAD meshes. Rather than build a second three.js viewer, we run
+        // the real world export to a temp dir (meshes recentered, with normals)
+        // and synthesize a throwaway URDF of fixed links (one per mesh) so the
+        // EXISTING robot viewer renders the scene unchanged. The SW→ROS rotation
+        // rides each fixed joint's rpy (the browser scene is Z-up; the assembly
+        // is Y-up), mirroring the robot preview's EmitWorldLink trick.
+        public static PreviewResult RunWorldPreview(SldWorks swApp, ModelDoc2 model, Sw2gzExportConfig config)
+        {
+            if (swApp == null) throw new ArgumentNullException(nameof(swApp));
+            if (model == null) throw new ArgumentNullException(nameof(model));
+            if (config == null) throw new ArgumentNullException(nameof(config));
+
+            string tempBase = Path.Combine(Path.GetTempPath(),
+                "sw2gz_wpreview_" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            Directory.CreateDirectory(tempBase);
+
+            SW2GZ.Validate.ValidationReport report;
+            try
+            {
+                var tess = new SolidWorksMeshTessellator(swApp, (AssemblyDoc)model);
+                // rpy 0 → meshes stay assembly-frame (recentered, unrotated); the
+                // preview applies the SW→ROS rotation on the URDF joints instead.
+                report = Sw2gzWorldExporter.Export(tess, config, tempBase, 0, 0, 0);
+            }
+            catch
+            {
+                try { if (Directory.Exists(tempBase)) Directory.Delete(tempBase, recursive: true); }
+                catch { /* best-effort */ }
+                throw;
+            }
+
+            string pkg = PackageNameSanitizer.Sanitize(config.PackageName).Value;
+            string root = Path.Combine(tempBase, pkg);
+            string meshesDir = Path.Combine(root, "meshes");
+            string[] daeFiles = Directory.Exists(meshesDir)
+                ? Directory.GetFiles(meshesDir, "*.dae").Select(Path.GetFileName).OrderBy(f => f).ToArray()
+                : Array.Empty<string>();
+
+            (double r, double p, double y) = new CoordinateConvention(
+                SwToRosRotation.Build(config.SwUpAxis, config.SwForwardAxis), LengthScale: 1.0)
+                .SwToRos.ToRpy();
+
+            string urdf = BuildWorldPreviewUrdf(pkg, daeFiles, r, p, y);
+            string sdfText = SafeReadAll(Path.Combine(root, pkg + ".sdf"));
+            string summary = BuildSummary(config, root, report) +
+                System.Environment.NewLine + "World models: " + daeFiles.Length;
+
+            return new PreviewResult(tempBase, root, meshesDir, ExportMode.SdfWorld,
+                urdf, "robot.urdf", sdfText, pkg + ".sdf", "", summary, "", report,
+                () => new Dictionary<string, double>());
+        }
+
+        // Throwaway URDF: base_link + one fixed-jointed child link per world mesh.
+        // Placement is already baked + recentered into the verts, so each origin
+        // is xyz=0; the shared rpy rotates SW's up onto ROS Z for the viewport.
+        private static string BuildWorldPreviewUrdf(string pkg, IReadOnlyList<string> daeFiles,
+            double roll, double pitch, double yaw)
+        {
+            string rpy = roll.ToString("0.######", CultureInfo.InvariantCulture) + " " +
+                         pitch.ToString("0.######", CultureInfo.InvariantCulture) + " " +
+                         yaw.ToString("0.######", CultureInfo.InvariantCulture);
+            var sb = new StringBuilder();
+            sb.AppendLine("<?xml version=\"1.0\"?>");
+            sb.AppendLine("<robot name=\"" + pkg + "\">");
+            sb.AppendLine("  <link name=\"base_link\"/>");
+            for (int i = 0; i < daeFiles.Count; i++)
+            {
+                string link = "model_" + i;
+                sb.AppendLine("  <link name=\"" + link + "\">");
+                sb.AppendLine("    <visual><geometry>");
+                sb.AppendLine("      <mesh filename=\"package://" + pkg + "/meshes/" + daeFiles[i] + "\"/>");
+                sb.AppendLine("    </geometry></visual>");
+                sb.AppendLine("  </link>");
+                sb.AppendLine("  <joint name=\"" + link + "_fixed\" type=\"fixed\">");
+                sb.AppendLine("    <parent link=\"base_link\"/><child link=\"" + link + "\"/>");
+                sb.AppendLine("    <origin xyz=\"0 0 0\" rpy=\"" + rpy + "\"/>");
+                sb.AppendLine("  </joint>");
+            }
+            sb.AppendLine("</robot>");
+            return sb.ToString();
         }
 
         private static string SafeReadAll(string path)

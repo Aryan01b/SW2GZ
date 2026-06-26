@@ -43,6 +43,19 @@ namespace SW2GZ.URDFExport
                 Joints = CloneJoints(doc?.Robot?.Joints),
                 Stacks = StackProfile.Default(),
             };
+
+            // World mode — carry the Create-World picks through to the exporter.
+            // (memory world-mode-dev: the first attempt failed here — Bridge
+            // dropped World config so the exporter saw empty picks.)
+            var world = doc?.World;
+            if (world != null)
+            {
+                cfg.WorldGround        = world.Ground ?? string.Empty;
+                cfg.WorldAssets        = new List<string>(world.Assets ?? new List<string>());
+                cfg.WorldPhysicsEngine = world.PhysicsEngine ?? "ode";
+                cfg.WorldMaxStepSize   = world.MaxStepSize;
+                cfg.WorldRealTimeFactor = world.RealTimeFactor;
+            }
             return cfg;
         }
 

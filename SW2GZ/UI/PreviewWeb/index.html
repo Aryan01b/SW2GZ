@@ -616,15 +616,20 @@ Modules load from ./vendor/* — zero network calls at runtime.
   const loader = new URDFLoader();
   loader.packages = { '': '' };
 
-  // Override SW-exported DAE materials with a neutral standard material so
-  // geometry stays legible regardless of original diffuse color.
-  const overrideMat = new THREE.MeshStandardMaterial({
-    color: 0xc8cdd5, roughness: 0.55, metalness: 0.05,
-  });
+  // Keep each DAE's own diffuse color (the SW part appearance) but render it
+  // through a lit standard material so geometry stays shaded. Near-black or
+  // unset colors fall back to neutral gray so a part with no appearance set
+  // doesn't render as a black blob.
+  const NEUTRAL = 0xc8cdd5;
   function paintMeshes(obj) {
     obj.traverse(o => {
       if (o.isMesh) {
-        o.material = overrideMat;
+        const src = Array.isArray(o.material) ? o.material[0] : o.material;
+        let col = (src && src.color) ? src.color.clone() : null;
+        const tooDark = !col || (col.r + col.g + col.b) < 0.12;
+        o.material = new THREE.MeshStandardMaterial({
+          color: tooDark ? NEUTRAL : col, roughness: 0.55, metalness: 0.05,
+        });
         if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
       }
     });

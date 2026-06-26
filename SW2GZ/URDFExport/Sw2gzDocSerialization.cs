@@ -26,7 +26,21 @@ namespace SW2GZ.URDFExport
 
         private const double SerializationVersion = 1.0;
 
+        // Legacy generic name (docs saved before mode-specific naming). Kept so
+        // old assemblies still load; new saves use the mode-specific name so the
+        // FeatureManager tree shows which mode was configured.
         public const string Sw2gzDocAttributeName = "SW2GZ Doc (v1)";
+
+        private static string AttrNameForMode(Sw2gzMode mode) => "SW2GZ " + mode + " (v1)";
+
+        // Every name a persisted doc may carry — the scan matches any of these
+        // so HasSaved / Load / Delete work regardless of which mode (or the
+        // legacy generic name) the attribute was saved under.
+        private static readonly string[] KnownAttrNames =
+        {
+            Sw2gzDocAttributeName,
+            "SW2GZ Robot (v1)", "SW2GZ World (v1)", "SW2GZ Asset (v1)",
+        };
 
         /// True when the assembly has a persisted Sw2gzDoc.
         public static bool HasSaved(ModelDoc2 model)
@@ -43,8 +57,24 @@ namespace SW2GZ.URDFExport
             if (doc == null) throw new ArgumentNullException(nameof(doc));
 
             string data = Sw2gzDocCodec.ToXmlString(doc);
-            SaveDataToModelDoc(swApp, model, data);
-            logger.Info("Saved SW2GZ doc (v1) to assembly. Mode=" + doc.Mode
+            string wantName = AttrNameForMode(doc.Mode);
+
+            // If a prior attribute exists under a different name (legacy generic,
+            // or the assembly's mode changed), delete it so the tree shows the
+            // current mode's name and we don't leave two SW2GZ attributes behind.
+            Feature existing = GetAttributeFeature(model);
+            if (existing != null)
+            {
+                var ea = (SolidWorks.Interop.sldworks.Attribute)existing.GetSpecificFeature2();
+                if (ea.GetName() != wantName)
+                {
+                    try { existing.Select2(false, 0); model.EditDelete(); }
+                    catch (Exception e) { logger.Warn("Save: could not delete stale attribute", e); }
+                }
+            }
+
+            SaveDataToModelDoc(swApp, model, data, wantName);
+            logger.Info("Saved '" + wantName + "' to assembly. Mode=" + doc.Mode
                 + " RobotLinks=" + (doc.Robot?.Links?.Count ?? 0)
                 + " RobotJoints=" + (doc.Robot?.Joints?.Count ?? 0));
         }
@@ -103,7 +133,7 @@ namespace SW2GZ.URDFExport
                 Feature feat = (Feature)obj;
                 if (feat.GetTypeName2() != "Attribute") continue;
                 var a = (SolidWorks.Interop.sldworks.Attribute)feat.GetSpecificFeature2();
-                if (a.GetName() == Sw2gzDocAttributeName) return feat;
+                if (System.Array.IndexOf(KnownAttrNames, a.GetName()) >= 0) return feat;
             }
             return null;
         }
@@ -115,7 +145,8 @@ namespace SW2GZ.URDFExport
             return (SolidWorks.Interop.sldworks.Attribute)feat.GetSpecificFeature2();
         }
 
-        private static SolidWorks.Interop.sldworks.Attribute CreateAttribute(SldWorks swApp, ModelDoc2 model)
+        private static SolidWorks.Interop.sldworks.Attribute CreateAttribute(
+            SldWorks swApp, ModelDoc2 model, string attrName)
         {
             var existing = FindSWAttribute(model);
             if (existing != null) return existing;
@@ -123,7 +154,7 @@ namespace SW2GZ.URDFExport
             int options = 0;
             int configurationOptions = (int)swInConfigurationOpts_e.swAllConfiguration;
 
-            AttributeDef def = swApp.DefineAttribute(Sw2gzDocAttributeName);
+            AttributeDef def = swApp.DefineAttribute(attrName);
             def.AddParameter("data", (int)swParamType_e.swParamTypeString, 0, options);
             def.AddParameter("date", (int)swParamType_e.swParamTypeString, 0, options);
             def.AddParameter("version", (int)swParamType_e.swParamTypeDouble,
@@ -131,13 +162,13 @@ namespace SW2GZ.URDFExport
             def.Register();
 
             return def.CreateInstance5(
-                model, null, Sw2gzDocAttributeName, options, configurationOptions);
+                model, null, attrName, options, configurationOptions);
         }
 
-        private static void SaveDataToModelDoc(SldWorks swApp, ModelDoc2 model, string data)
+        private static void SaveDataToModelDoc(SldWorks swApp, ModelDoc2 model, string data, string attrName)
         {
             int configurationOptions = (int)swInConfigurationOpts_e.swAllConfiguration;
-            var att = CreateAttribute(swApp, model);
+            var att = CreateAttribute(swApp, model, attrName);
 
             Parameter p = att.GetParameter("data");
             p.SetStringValue2(data, configurationOptions, "");

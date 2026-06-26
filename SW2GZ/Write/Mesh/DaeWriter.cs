@@ -17,7 +17,13 @@ namespace SW2GZ.Write.Mesh
 {
     public static class DaeWriter
     {
-        public static void Write(MeshData mesh, string path)
+        public static void Write(MeshData mesh, string path) => Write(mesh, path, false);
+
+        // withNormals=true appends a per-vertex NORMAL source so Gz/Ogre can
+        // light the surface (without normals a mesh renders flat + unlit, i.e.
+        // plain white with no shading/shadows). Default false keeps existing
+        // robot golden DAE output byte-identical.
+        public static void Write(MeshData mesh, string path, bool withNormals)
         {
             if (mesh == null)
                 throw new ArgumentNullException(nameof(mesh));
@@ -92,12 +98,45 @@ namespace SW2GZ.Write.Mesh
             { w.WriteStartElement("param", ns); w.WriteAttributeString("name", p); w.WriteAttributeString("type", "float"); w.WriteEndElement(); }
             w.WriteEndElement(); w.WriteEndElement(); w.WriteEndElement();
 
+            if (withNormals)
+            {
+                // Crease-angle smooth normals: curved surfaces shade smoothly,
+                // CAD hard edges stay sharp (vs the old flat per-facet normal).
+                var normals = MeshNormals.ComputeSmooth(mesh);
+                var normSb = new StringBuilder();
+                foreach (var n in normals)
+                    normSb.Append(string.Format(CultureInfo.InvariantCulture, "{0:0.######} {1:0.######} {2:0.######} ", n.X, n.Y, n.Z));
+                w.WriteStartElement("source", ns);
+                w.WriteAttributeString("id", "g0-norm");
+                w.WriteStartElement("float_array", ns);
+                w.WriteAttributeString("id", "g0-norm-array");
+                w.WriteAttributeString("count", (normals.Length * 3).ToString());
+                w.WriteString(normSb.ToString().Trim());
+                w.WriteEndElement();
+                w.WriteStartElement("technique_common", ns);
+                w.WriteStartElement("accessor", ns);
+                w.WriteAttributeString("source", "#g0-norm-array");
+                w.WriteAttributeString("count", normals.Length.ToString());
+                w.WriteAttributeString("stride", "3");
+                foreach (var p in new[] { "X", "Y", "Z" })
+                { w.WriteStartElement("param", ns); w.WriteAttributeString("name", p); w.WriteAttributeString("type", "float"); w.WriteEndElement(); }
+                w.WriteEndElement(); w.WriteEndElement(); w.WriteEndElement();
+            }
+
             w.WriteStartElement("vertices", ns);
             w.WriteAttributeString("id", "g0-vtx");
             w.WriteStartElement("input", ns);
             w.WriteAttributeString("semantic", "POSITION");
             w.WriteAttributeString("source", "#g0-pos");
-            w.WriteEndElement(); w.WriteEndElement();
+            w.WriteEndElement();
+            if (withNormals)
+            {
+                w.WriteStartElement("input", ns);
+                w.WriteAttributeString("semantic", "NORMAL");
+                w.WriteAttributeString("source", "#g0-norm");
+                w.WriteEndElement();
+            }
+            w.WriteEndElement();
 
             w.WriteStartElement("triangles", ns);
             w.WriteAttributeString("count", (mesh.Triangles.Length / 3).ToString());
@@ -139,5 +178,6 @@ namespace SW2GZ.Write.Mesh
             w.WriteEndElement();
             w.WriteEndDocument();
         }
+
     }
 }

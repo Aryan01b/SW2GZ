@@ -25,8 +25,21 @@ namespace SW2GZ.URDFExport
         internal static SW2GZ.Validate.ValidationReport RunCore(
             SldWorks swApp, ModelDoc2 model, Sw2gzExportConfig config, string outputDirOverride)
         {
-            var mass = new SolidWorksMassProperties(swApp, (AssemblyDoc)model);
             var tess = new SolidWorksMeshTessellator(swApp, (AssemblyDoc)model);
+
+            // World mode = environment of static CAD assets, NOT a kinematic
+            // robot — route to the dedicated world exporter before the
+            // robot-only walk/mass/joint pipeline runs. The whole-scene SW→ROS
+            // rotation rides on each model's <pose>.
+            if (config.Mode == SW2GZ.Ros2.ExportMode.SdfWorld)
+            {
+                var worldCoord = new CoordinateConvention(
+                    SwToRosRotation.Build(config.SwUpAxis, config.SwForwardAxis), LengthScale: 1.0);
+                (double wr, double wp, double wy) = worldCoord.SwToRos.ToRpy();
+                return Sw2gzWorldExporter.Export(tess, config, outputDirOverride, wr, wp, wy);
+            }
+
+            var mass = new SolidWorksMassProperties(swApp, (AssemblyDoc)model);
             var walker = new WizardAssemblyWalker((AssemblyDoc)model, config.Links, config.Joints);
             var appearances = new DefaultAppearanceSource();
 

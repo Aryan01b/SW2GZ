@@ -1,6 +1,7 @@
 /*
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 */
+using System.Security;
 using System.Text;
 
 namespace SW2GZ.Gz
@@ -13,6 +14,22 @@ namespace SW2GZ.Gz
             sb.AppendLine("    <physics name=\"1ms\" type=\"ignored\">");
             sb.AppendLine("      <max_step_size>0.001</max_step_size>");
             sb.AppendLine("      <real_time_factor>1.0</real_time_factor>");
+            sb.AppendLine("    </physics>");
+            return sb.ToString();
+        }
+
+        // World-mode overload — engine type + step + RTF from the Create-World
+        // wizard. Gz Sim mostly ignores the `type` attribute (engine is picked
+        // by the Physics system plugin), but we echo the user's choice so the
+        // emitted world documents the intended engine.
+        public static string Default(string engineType, double maxStepSize, double realTimeFactor)
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            var sb = new StringBuilder();
+            sb.AppendLine("    <physics name=\"1ms\" type=\"" +
+                SecurityElement.Escape(string.IsNullOrWhiteSpace(engineType) ? "ignored" : engineType) + "\">");
+            sb.AppendLine("      <max_step_size>" + maxStepSize.ToString("0.######", ci) + "</max_step_size>");
+            sb.AppendLine("      <real_time_factor>" + realTimeFactor.ToString("0.######", ci) + "</real_time_factor>");
             sb.AppendLine("    </physics>");
             return sb.ToString();
         }

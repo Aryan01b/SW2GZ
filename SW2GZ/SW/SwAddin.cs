@@ -443,16 +443,31 @@ namespace SW2GZ.SW
             try
             {
                 if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
-                // If the persisted attribute is gone (user deleted "SW2GZ Doc
-                // (v1)" from the FeatureManager tree), drop the stale in-memory
-                // doc so the wizard re-seeds from the live assembly. Without
-                // this the user would see their old link tree carry over even
-                // though the on-disk state was wiped.
-                if (!SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc))
+
+                SW2GZ.URDFExport.Sw2gzDoc doc;
+                if (SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc))
                 {
-                    SW2GZ.URDFExport.Sw2gzDocStore.Reset(modeldoc);
+                    // Edit an existing doc: the persisted attribute is the source
+                    // of truth (the store is blank on a fresh SW launch, so it
+                    // would otherwise reopen the default Robot wizard for a saved
+                    // World/Asset). Seed the store with the loaded instance so the
+                    // wizard's edits + cancel-snapshot operate on the live doc.
+                    doc = SW2GZ.URDFExport.Sw2gzDocSerialization.Load(modeldoc)
+                          ?? SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                    SW2GZ.URDFExport.Sw2gzDocStore.Put(modeldoc, doc);
                 }
-                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                else
+                {
+                    // Fresh assembly: drop any stale in-memory doc so the wizard
+                    // re-seeds from live assembly state, but preserve the mode the
+                    // user picked via the pills (SetMode only mutates the in-memory
+                    // doc — the pills never persist — so a reset would discard a
+                    // World/Asset pick and always reopen the Robot wizard).
+                    var chosenMode = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc).Mode;
+                    SW2GZ.URDFExport.Sw2gzDocStore.Reset(modeldoc);
+                    doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                    doc.Mode = chosenMode;
+                }
                 switch (doc.Mode)
                 {
                     case SW2GZ.URDFExport.Sw2gzMode.World:
@@ -529,6 +544,10 @@ namespace SW2GZ.SW
             try
             {
                 SW2GZ.URDFExport.Sw2gzDocSerialization.Save((SldWorks)SwApp, modelDoc, doc);
+                // Doc now saved → swap the mode-start button to "Edit <Mode>" and
+                // lock the pills (PillUpdate polls HasSaved and disables them).
+                try { _ribbonRegistrar?.RefreshTabForMode(doc.Mode, true); modelDoc.Extension.ActiveCommandTab = "SW2GZ"; }
+                catch (Exception re) { logger.Warn("PersistDoc: ribbon refresh failed", re); }
             }
             catch (Exception e)
             {
@@ -590,7 +609,9 @@ namespace SW2GZ.SW
             {
                 var overlay = new SW2GZ.UI.Ribbon.Sw2gzModeChangeOverlay(
                     from, mode,
-                    () => _ribbonRegistrar?.RefreshTabForMode(mode));
+                    // saved:false — mode pills are only enabled on an unsaved doc,
+                    // so a mode switch always lands on the "Create <Mode>" label.
+                    () => _ribbonRegistrar?.RefreshTabForMode(mode, false));
                 overlay.ShowDialog();
 
                 // The box swap inside RefreshTabForMode makes SW drop the active
@@ -758,7 +779,23 @@ namespace SW2GZ.SW
                 // the user's saved tree being intact.
                 var doc = SW2GZ.URDFExport.Sw2gzDocSerialization.Load(modeldoc)
                           ?? SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
-                if (doc?.Robot == null || doc.Robot.Links == null || doc.Robot.Links.Count == 0)
+
+                bool isWorld = doc?.Mode == SW2GZ.URDFExport.Sw2gzMode.World;
+                if (isWorld)
+                {
+                    bool hasPicks = doc.World != null &&
+                        (!string.IsNullOrWhiteSpace(doc.World.Ground) ||
+                         (doc.World.Assets != null && doc.World.Assets.Count > 0));
+                    if (!hasPicks)
+                    {
+                        SwApp.SendMsgToUser2(
+                            "Saved World doc has no ground or assets — open Create World and pick at least one.",
+                            (int)swMessageBoxIcon_e.swMbInformation,
+                            (int)swMessageBoxBtn_e.swMbOk);
+                        return;
+                    }
+                }
+                else if (doc?.Robot == null || doc.Robot.Links == null || doc.Robot.Links.Count == 0)
                 {
                     SwApp.SendMsgToUser2(
                         "Saved SW2GZ doc has no links — open Create Robot and define at least one link.",
@@ -773,12 +810,13 @@ namespace SW2GZ.SW
                     OutputFolder = System.IO.Path.GetTempPath(),
                 };
                 Sw2gzExportConfig config = SW2GZ.URDFExport.Sw2gzDocToExportConfig.Bridge(doc, meta);
-                logger.Info("LaunchPreview: doc v1 loaded — pkg=" + config.PackageName +
+                logger.Info("LaunchPreview: doc v1 loaded — mode=" + doc.Mode + ", pkg=" + config.PackageName +
                             ", links=" + (config.Links?.Count ?? 0) +
                             ", joints=" + (config.Joints?.Count ?? 0));
 
-                var result = Sw2gzModelPreviewer.RunPreview(
-                    (SldWorks)SwApp, modeldoc, config);
+                var result = isWorld
+                    ? Sw2gzModelPreviewer.RunWorldPreview((SldWorks)SwApp, modeldoc, config)
+                    : Sw2gzModelPreviewer.RunPreview((SldWorks)SwApp, modeldoc, config);
                 using (var dlg = new PreviewDialog(result))
                 {
                     dlg.ShowDialog();
@@ -973,7 +1011,40 @@ namespace SW2GZ.SW
         //Events
         public int OnDocChange()
         {
+            try { SyncRibbonToActiveDoc(); }
+            catch (Exception e) { logger.Warn("OnDocChange: SyncRibbonToActiveDoc threw", e); }
             return 0;
+        }
+
+        // Sync the ribbon's Create button label + active mode cluster to the
+        // active assembly's persisted doc. On a fresh SW launch the in-memory
+        // store is blank, so a saved World/Asset assembly would otherwise show
+        // the default "Create Robot" button + Robot cluster. The persisted
+        // attribute is the source of truth; we also seed the store from it so
+        // OpenCreate / Preview / Export read the same mode.
+        private void SyncRibbonToActiveDoc()
+        {
+            if (_ribbonRegistrar == null) return;
+            if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+
+            bool saved = SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc);
+            SW2GZ.URDFExport.Sw2gzMode mode;
+            if (saved)
+            {
+                var loaded = SW2GZ.URDFExport.Sw2gzDocSerialization.Load(modeldoc);
+                if (loaded != null) SW2GZ.URDFExport.Sw2gzDocStore.Put(modeldoc, loaded);
+                mode = loaded?.Mode ?? SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc).Mode;
+            }
+            else
+            {
+                mode = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc).Mode;
+            }
+
+            if (_ribbonRegistrar.ActiveMode != mode || _ribbonRegistrar.ActiveSaved != saved)
+            {
+                _ribbonRegistrar.RefreshTabForMode(mode, saved);
+                try { modeldoc.Extension.ActiveCommandTab = "SW2GZ"; } catch { }
+            }
         }
 
         public int OnDocLoad(string docTitle, string docPath)
@@ -989,6 +1060,8 @@ namespace SW2GZ.SW
         {
             try { AttachEventsToAllDocuments(); }
             catch (Exception e) { logger.Warn("FileOpenPostNotify: AttachEventsToAllDocuments threw", e); }
+            try { SyncRibbonToActiveDoc(); }
+            catch (Exception e) { logger.Warn("FileOpenPostNotify: SyncRibbonToActiveDoc threw", e); }
             return 0;
         }
 

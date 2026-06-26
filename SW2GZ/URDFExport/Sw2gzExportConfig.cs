@@ -60,6 +60,17 @@ namespace SW2GZ.URDFExport
         // link tree (JointSeeder) and editable in the Joints step.
         [DataMember] public List<JointDef> Joints { get; set; } = new List<JointDef>();
 
+        // World mode — picked components + physics from the Create-World wizard.
+        // Flat schema mirroring Sw2gzWorldConfig (the v2.1.0 in-memory model);
+        // WorldGround empty ⇒ no ground component picked ⇒ default ground_plane.
+        // WorldAssets are the other static environment components, each inlined
+        // as a <model><static> at its assembly pose.
+        [DataMember] public string WorldGround { get; set; } = string.Empty;
+        [DataMember] public List<string> WorldAssets { get; set; } = new List<string>();
+        [DataMember] public string WorldPhysicsEngine { get; set; } = "ode";
+        [DataMember] public double WorldMaxStepSize { get; set; } = 0.001;
+        [DataMember] public double WorldRealTimeFactor { get; set; } = 1.0;
+
         // Stacks — à-la-carte ROS 2 / Gazebo stack selection for this assembly.
         // The full-stack default for legacy configs (saved before this field
         // existed) is guaranteed by the [OnDeserializing] hook below, NOT this
@@ -82,6 +93,12 @@ namespace SW2GZ.URDFExport
             Stacks = StackProfile.Default();
             Links = new List<LinkDef>();
             Joints = new List<JointDef>();
+            // World-mode defaults for checkpoints saved before these fields existed.
+            WorldGround = string.Empty;
+            WorldAssets = new List<string>();
+            WorldPhysicsEngine = "ode";
+            WorldMaxStepSize = 0.001;
+            WorldRealTimeFactor = 1.0;
             // Field-not-present defaults: legacy checkpoints saved before the
             // coordinate-convention fields existed deserialize them to the
             // enum default (PlusX = 0), which is the wrong "up". Seed the
@@ -114,6 +131,11 @@ namespace SW2GZ.URDFExport
                 Links         = this.Links,
                 Joints        = this.Joints,
                 Stacks        = this.Stacks,
+                WorldGround        = this.WorldGround,
+                WorldAssets        = this.WorldAssets,
+                WorldPhysicsEngine = this.WorldPhysicsEngine,
+                WorldMaxStepSize   = this.WorldMaxStepSize,
+                WorldRealTimeFactor = this.WorldRealTimeFactor,
             };
         }
     }

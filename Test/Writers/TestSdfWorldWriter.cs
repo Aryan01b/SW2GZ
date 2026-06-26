@@ -131,5 +131,107 @@ namespace SW2GZ.Writers.Tests
             Assert.Throws<System.ArgumentException>(
                 () => SdfWorldWriter.WriteWithModel(new SdfWorldInput("w"), "  "));
         }
+
+        // ── WriteScene (world-mode: inlined static asset models) ──────────────
+        private static SdfSceneInput Scene(params SdfSceneModel[] models) =>
+            new SdfSceneInput("env", models);
+
+        [Fact]
+        public void WriteScene_EmitsInlinedStaticModelPerComponent()
+        {
+            var sdf = SdfWorldWriter.WriteScene(Scene(
+                new SdfSceneModel("floor", "floor.dae"),
+                new SdfSceneModel("rack", "rack.dae")));
+            Assert.Contains("<model name=\"floor\">", sdf);
+            Assert.Contains("<model name=\"rack\">", sdf);
+            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(sdf, "<static>true</static>").Count);
+        }
+
+        [Fact]
+        public void WriteScene_VisualAndCollisionShareTheSameMesh()
+        {
+            var sdf = SdfWorldWriter.WriteScene(Scene(new SdfSceneModel("floor", "floor.dae")));
+            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(sdf, "meshes/floor.dae").Count);
+            Assert.Contains("<visual name=\"visual\">", sdf);
+            Assert.Contains("<collision name=\"collision\">", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_NoGround_OmitsGroundPlane()
+        {
+            var sdf = SdfWorldWriter.WriteScene(
+                new SdfSceneInput("env", new[] { new SdfSceneModel("floor", "floor.dae") },
+                    IncludeGroundPlane: false));
+            Assert.DoesNotContain("ground_plane", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_NoGroundPicked_IncludesDefaultGroundPlane()
+        {
+            var sdf = SdfWorldWriter.WriteScene(
+                new SdfSceneInput("env", System.Array.Empty<SdfSceneModel>(),
+                    IncludeGroundPlane: true));
+            Assert.Contains("ground_plane", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_PhysicsEngineAndStepFromInput()
+        {
+            var sdf = SdfWorldWriter.WriteScene(
+                new SdfSceneInput("env", System.Array.Empty<SdfSceneModel>(),
+                    PhysicsEngine: "bullet", MaxStepSize: 0.002, RealTimeFactor: 2.0));
+            Assert.Contains("type=\"bullet\"", sdf);
+            Assert.Contains("<max_step_size>0.002</max_step_size>", sdf);
+            Assert.Contains("<real_time_factor>2</real_time_factor>", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_NonIdentityRotation_EmitsModelPose()
+        {
+            var sdf = SdfWorldWriter.WriteScene(
+                new SdfSceneInput("env", new[] { new SdfSceneModel("floor", "floor.dae") },
+                    Roll: 1.5708, Pitch: 0, Yaw: 1.5708));
+            Assert.Contains("<pose>0 0 0 1.5708 0 1.5708</pose>", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_IdentityRotation_OmitsModelPose()
+        {
+            var sdf = SdfWorldWriter.WriteScene(Scene(new SdfSceneModel("floor", "floor.dae")));
+            Assert.DoesNotContain("<pose>0 0 0", sdf);  // no model pose (sun's own pose is unrelated)
+        }
+
+        [Fact]
+        public void WriteScene_EmitsHarmonicPluginsAndVersion()
+        {
+            var sdf = SdfWorldWriter.WriteScene(Scene(new SdfSceneModel("floor", "floor.dae")));
+            Assert.Contains("<sdf version=\"1.10\">", sdf);
+            Assert.Contains("gz-sim-scene-broadcaster-system", sdf);
+            Assert.Contains("<world name=\"env\">", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_WithRgba_EmitsPerModelMaterial()
+        {
+            var sdf = SdfWorldWriter.WriteScene(Scene(
+                new SdfSceneModel("floor", "floor.dae", new[] { 0.2, 0.4, 0.6, 1.0 })));
+            Assert.Contains("<material>", sdf);
+            Assert.Contains("<diffuse>0.2 0.4 0.6 1</diffuse>", sdf);
+            Assert.Contains("<scene>", sdf);   // ambient so back-facing facets aren't black
+        }
+
+        [Fact]
+        public void WriteScene_NoRgba_OmitsMaterial()
+        {
+            var sdf = SdfWorldWriter.WriteScene(Scene(new SdfSceneModel("floor", "floor.dae")));
+            Assert.DoesNotContain("<material>", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_NullWorldName_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(
+                () => SdfWorldWriter.WriteScene(new SdfSceneInput(null, System.Array.Empty<SdfSceneModel>())));
+        }
     }
 }
