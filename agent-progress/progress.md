@@ -1,8 +1,42 @@
 # Progress
 
-Current: **v2.1.0 UI-shell** shipped on `v2.1.0` branch. Backend wiring in next plan.
-Branch: `feat/world-mode`. Tests: **765 green**. Addin compiles clean
-(SW must be closed for MSBuild; regasm MSB3216 is the known non-fatal gotcha).
+Current: world mode + asset mode shipped on `main` (trunk). Tests: **779 green**.
+Branch model reconciled: `main` is trunk, `v2.1.0`/`v2.2.0` are tags.
+Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
+
+## Done (asset mode in PART documents)
+Asset mode now works on a standalone `.SLDPRT` (not just components in an
+assembly). Sub-assembly/part component picks in an assembly already worked
+(tessellator recursion).
+- `SolidWorksMeshTessellator(swApp, PartDoc)` ctor + `TessellatePart()` — unions
+  the part's own solid bodies (no component/assembly transform), colour from the
+  part material.
+- `RunCore` + `RunAssetPreview` detect `swDocPART` → build the part tessellator,
+  force Asset, route to `Sw2gzAssetExporter`.
+- `Sw2gzCreateAssetPmp` whole-part mode (`wholePartName` ctor arg): Part step
+  becomes an info label (no picker); BodyPart preset.
+- SwAddin: `ActivePartOrAssembly` + `TryGetActiveModelDoc` (popup-free enable
+  `AssetCreateEnable`; Preview/Export enables allow parts). `OpenCreatePmp`
+  forces Asset + whole-part wizard for part docs. `LaunchPreview`/`LaunchExport`
+  accept parts.
+- Ribbon: `BuildPartTab` adds a `swDocPART` tab = [Create Asset · Preview ·
+  Export] (no pills/clusters — Robot/World are assembly-only).
+- 779 green (COM part path not unit-covered). **Re-test live; may need a full SW
+  restart for the new part-doc tab to register.**
+
+## Done (asset mode — single part → reusable Gz model)
+Export one part with its SW colour as a drop-in Gz model (`model://`). Mirrors
+the proven world pattern (no glitches).
+- `SdfAssetModelWriter` (pure): standalone `<sdf><model><static><link>` w/ mesh
+  visual+`<material>`(part colour) + collision+friction; inertial only if dynamic.
+- `Sw2gzAssetExporter` (COM-free): tessellate part → bake SW→ROS rotation (Z-up)
+  → centre XY + floor z=0 → write `<name>/{model.config, model.sdf, meshes/
+  <name>.dae}` (smooth normals + colour). Wired via `Sw2gzExportConfig.Asset*` +
+  `Bridge` + `RunCore` branch on `ExportMode.SdfModel`.
+- `Sw2gzCreateAssetPmp` rebuilt on the WinForms nav-bar pattern (Part → Surface
+  → Review), no PMP-button re-entrancy. Asset preview via
+  `Sw2gzModelPreviewer.RunAssetPreview`. Asset cluster buttons removed.
+- **Re-test live in SW.**
 
 ## Done (world mode — 2nd attempt, this session)
 

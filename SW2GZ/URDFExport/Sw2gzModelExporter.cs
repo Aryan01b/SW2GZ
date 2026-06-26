@@ -25,6 +25,18 @@ namespace SW2GZ.URDFExport
         internal static SW2GZ.Validate.ValidationReport RunCore(
             SldWorks swApp, ModelDoc2 model, Sw2gzExportConfig config, string outputDirOverride)
         {
+            // Part document → export the whole part as a Gz asset model (no
+            // assembly / components). Forced to Asset mode regardless of the
+            // saved doc mode.
+            if (model.GetType() == (int)SolidWorks.Interop.swconst.swDocumentTypes_e.swDocPART)
+            {
+                var partTess = new SolidWorksMeshTessellator(swApp, (PartDoc)model);
+                if (string.IsNullOrWhiteSpace(config.AssetBodyPart))
+                    config.AssetBodyPart = "part";   // ignored by the part tessellator; keeps the exporter's guard happy
+                var partRot = SwToRosRotation.Build(config.SwUpAxis, config.SwForwardAxis);
+                return Sw2gzAssetExporter.Export(partTess, config, outputDirOverride, partRot);
+            }
+
             var tess = new SolidWorksMeshTessellator(swApp, (AssemblyDoc)model);
 
             // World mode = environment of static CAD assets, NOT a kinematic
@@ -37,6 +49,13 @@ namespace SW2GZ.URDFExport
                     SwToRosRotation.Build(config.SwUpAxis, config.SwForwardAxis), LengthScale: 1.0);
                 (double wr, double wp, double wy) = worldCoord.SwToRos.ToRpy();
                 return Sw2gzWorldExporter.Export(tess, config, outputDirOverride, wr, wp, wy);
+            }
+
+            // Asset mode = a single part exported as a reusable Gz model dir.
+            if (config.Mode == SW2GZ.Ros2.ExportMode.SdfModel)
+            {
+                var rot = SwToRosRotation.Build(config.SwUpAxis, config.SwForwardAxis);
+                return Sw2gzAssetExporter.Export(tess, config, outputDirOverride, rot);
             }
 
             var mass = new SolidWorksMassProperties(swApp, (AssemblyDoc)model);

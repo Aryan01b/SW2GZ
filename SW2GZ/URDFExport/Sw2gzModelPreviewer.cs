@@ -213,6 +213,55 @@ namespace SW2GZ.URDFExport
                 () => new Dictionary<string, double>());
         }
 
+        // Asset preview — run the asset export to temp, then render its single
+        // mesh in the existing viewer via a 1-link URDF. The asset exporter bakes
+        // the SW->ROS rotation into the verts (Z-up already), so the URDF needs
+        // no rpy.
+        public static PreviewResult RunAssetPreview(SldWorks swApp, ModelDoc2 model, Sw2gzExportConfig config)
+        {
+            if (swApp == null) throw new ArgumentNullException(nameof(swApp));
+            if (model == null) throw new ArgumentNullException(nameof(model));
+            if (config == null) throw new ArgumentNullException(nameof(config));
+
+            string tempBase = Path.Combine(Path.GetTempPath(),
+                "sw2gz_apreview_" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            Directory.CreateDirectory(tempBase);
+
+            SW2GZ.Validate.ValidationReport report;
+            try
+            {
+                bool isPart = model.GetType() ==
+                    (int)SolidWorks.Interop.swconst.swDocumentTypes_e.swDocPART;
+                var tess = isPart
+                    ? new SolidWorksMeshTessellator(swApp, (PartDoc)model)
+                    : new SolidWorksMeshTessellator(swApp, (AssemblyDoc)model);
+                if (isPart && string.IsNullOrWhiteSpace(config.AssetBodyPart))
+                    config.AssetBodyPart = "part";
+                var rot = SwToRosRotation.Build(config.SwUpAxis, config.SwForwardAxis);
+                report = Sw2gzAssetExporter.Export(tess, config, tempBase, rot);
+            }
+            catch
+            {
+                try { if (Directory.Exists(tempBase)) Directory.Delete(tempBase, recursive: true); }
+                catch { /* best-effort */ }
+                throw;
+            }
+
+            string name = PackageNameSanitizer.Sanitize(config.PackageName).Value;
+            string root = Path.Combine(tempBase, name);
+            string meshesDir = Path.Combine(root, "meshes");
+            string[] daeFiles = { name + ".dae" };
+
+            string urdf = BuildWorldPreviewUrdf(name, daeFiles, 0, 0, 0);
+            string sdfText = SafeReadAll(Path.Combine(root, "model.sdf"));
+            string summary = BuildSummary(config, root, report) +
+                System.Environment.NewLine + "Asset part: " + config.AssetBodyPart;
+
+            return new PreviewResult(tempBase, root, meshesDir, ExportMode.SdfModel,
+                urdf, "robot.urdf", sdfText, "model.sdf", "", summary, "", report,
+                () => new Dictionary<string, double>());
+        }
+
         // Throwaway URDF: base_link + one fixed-jointed child link per world mesh.
         // Placement is already baked + recentered into the verts, so each origin
         // is xyz=0; the shared rpy rotates SW's up onto ROS Z for the viewport.

@@ -71,6 +71,11 @@ namespace SW2GZ.URDFExport
         [DataMember] public double WorldMaxStepSize { get; set; } = 0.001;
         [DataMember] public double WorldRealTimeFactor { get; set; } = 1.0;
 
+        // Asset mode — single part exported as a reusable Gz model.
+        [DataMember] public string AssetBodyPart   { get; set; } = string.Empty;
+        [DataMember] public double AssetFrictionMu { get; set; } = 0.8;
+        [DataMember] public bool   AssetIsStatic   { get; set; } = true;
+
         // Stacks — à-la-carte ROS 2 / Gazebo stack selection for this assembly.
         // The full-stack default for legacy configs (saved before this field
         // existed) is guaranteed by the [OnDeserializing] hook below, NOT this
@@ -99,6 +104,9 @@ namespace SW2GZ.URDFExport
             WorldPhysicsEngine = "ode";
             WorldMaxStepSize = 0.001;
             WorldRealTimeFactor = 1.0;
+            AssetBodyPart = string.Empty;
+            AssetFrictionMu = 0.8;
+            AssetIsStatic = true;
             // Field-not-present defaults: legacy checkpoints saved before the
             // coordinate-convention fields existed deserialize them to the
             // enum default (PlusX = 0), which is the wrong "up". Seed the
@@ -136,6 +144,9 @@ namespace SW2GZ.URDFExport
                 WorldPhysicsEngine = this.WorldPhysicsEngine,
                 WorldMaxStepSize   = this.WorldMaxStepSize,
                 WorldRealTimeFactor = this.WorldRealTimeFactor,
+                AssetBodyPart   = this.AssetBodyPart,
+                AssetFrictionMu = this.AssetFrictionMu,
+                AssetIsStatic   = this.AssetIsStatic,
             };
         }
     }

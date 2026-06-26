@@ -28,29 +28,41 @@ namespace SW2GZ.SwSurface
 #if SW_INTEROP
         private readonly SldWorks _swApp;
         private readonly AssemblyDoc _doc;
+        private readonly PartDoc _part;   // set for a standalone part document
 #endif
 
         // Skeleton ctor — preserves Moq test: Tessellate() throws NotImplementedException.
         public SolidWorksMeshTessellator() { }
 
 #if SW_INTEROP
-        // Real ctor for production use.
+        // Real ctor for production use (assembly document).
         public SolidWorksMeshTessellator(SldWorks swApp, AssemblyDoc doc)
         {
             _swApp = swApp;
             _doc = doc;
+        }
+
+        // Part-document ctor — tessellates the part's own solid bodies (no
+        // component / assembly transform; part-local IS the model frame). The
+        // componentPathName arg to Tessellate is ignored in this mode.
+        public SolidWorksMeshTessellator(SldWorks swApp, PartDoc part)
+        {
+            _swApp = swApp;
+            _part = part;
         }
 #endif
 
         public MeshData Tessellate(string componentPathName, TessellationLod lod)
         {
 #if SW_INTEROP
-            if (_swApp == null || _doc == null)
+            if (_swApp == null || (_doc == null && _part == null))
 #endif
                 throw new NotImplementedException(
                     "SolidWorksMeshTessellator.Tessellate() not yet wired to SldWorks API — see Task 28.");
 
 #if SW_INTEROP
+            if (_part != null) return TessellatePart();
+
             // Find the component.
             Component2 comp = SolidWorksMassProperties.FindComponent(
                 (object[])_doc.GetComponents(false), componentPathName);
@@ -226,6 +238,74 @@ namespace SW2GZ.SwSurface
         }
 
 #if SW_INTEROP
+        // Tessellate a standalone part document: union all its solid bodies in
+        // part-local coords (the model frame), colour from the part material.
+        private MeshData TessellatePart()
+        {
+            var modelDoc = (IModelDoc2)_part;
+            object[] bodyObjs = null;
+            try { bodyObjs = _part.GetBodies2((int)swBodyType_e.swSolidBody, false) as object[]; }
+            catch (Exception ex) { throw new Sw2gzMeshException("Cannot read solid bodies from the part.", ex); }
+            if (bodyObjs == null || bodyObjs.Length == 0)
+                throw new Sw2gzMeshException("No solid bodies found in the part document.");
+
+            var verts = new List<System.Numerics.Vector3>();
+            var tris  = new List<int>();
+            try
+            {
+                foreach (object bodyObj in bodyObjs)
+                {
+                    Body2 body = bodyObj as Body2;
+                    if (body == null) continue;
+                    var bodyTess = (ITessellation)body.GetTessellation(null);
+                    bodyTess.NeedVertexNormal = false;
+                    bodyTess.NeedFaceFacetMap = false;
+                    bodyTess.NeedEdgeFinMap   = false;
+                    if (!bodyTess.Tessellate())
+                    {
+                        Marshal.ReleaseComObject(bodyTess);
+                        throw new Sw2gzMeshException("ITessellation.Tessellate() returned false for the part.");
+                    }
+                    int facetCount = bodyTess.GetFacetCount();
+                    for (int f = 0; f < facetCount; f++)
+                    {
+                        int[] fins = (int[])bodyTess.GetFacetFins(f);
+                        int baseIdx = verts.Count;
+                        for (int fi = 0; fi < 3; fi++)
+                        {
+                            int[] finVerts = (int[])bodyTess.GetFinVertices(fins[fi]);
+                            double[] pt = (double[])bodyTess.GetVertexPoint(finVerts[0]);
+                            verts.Add(new System.Numerics.Vector3((float)pt[0], (float)pt[1], (float)pt[2]));
+                        }
+                        tris.Add(baseIdx); tris.Add(baseIdx + 1); tris.Add(baseIdx + 2);
+                    }
+                    Marshal.ReleaseComObject(bodyTess);
+                }
+            }
+            catch (COMException ex)
+            {
+                throw new Sw2gzMeshException("Tessellation failed for the part document.", ex);
+            }
+            if (verts.Count == 0)
+                throw new Sw2gzMeshException("Tessellation produced no geometry for the part.");
+
+            System.Drawing.Color? color = null;
+            try
+            {
+                double[] matProps = modelDoc.MaterialPropertyValues as double[];
+                if (matProps != null && matProps.Length >= 8 &&
+                    (matProps[0] > 0 || matProps[1] > 0 || matProps[2] > 0))
+                {
+                    color = System.Drawing.Color.FromArgb(
+                        (int)((1.0 - matProps[7]) * 255),
+                        (int)(matProps[0] * 255), (int)(matProps[1] * 255), (int)(matProps[2] * 255));
+                }
+            }
+            catch (COMException) { }
+
+            return new MeshData(verts.ToArray(), tris.ToArray(), color);
+        }
+
         // Recursively gather every descendant component that carries solid
         // bodies. A part component is itself a leaf; a sub-assembly component has
         // no bodies of its own, so we descend into GetChildren(). Defensive: any

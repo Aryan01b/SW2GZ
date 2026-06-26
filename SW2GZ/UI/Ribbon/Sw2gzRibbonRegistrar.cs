@@ -121,8 +121,8 @@ namespace SW2GZ.UI.Ribbon
                     "Create / edit the Gz world for this assembly.",
                     "OpenCreatePmp", "AssemblyEnable", IMG_CREATE, toolbar);
             AddItem(grp, RibbonCommandIds.ModeCreateAsset, "Create Asset",
-                    "Create / edit a reusable asset from this assembly.",
-                    "OpenCreatePmp", "AssemblyEnable", IMG_CREATE, toolbar);
+                    "Create / edit a reusable asset from this part or assembly.",
+                    "OpenCreatePmp", "AssetCreateEnable", IMG_CREATE, toolbar);
 
             // Edit-variant labels — shown when a doc is already saved. Same
             // OpenCreatePmp callback (it loads the saved doc to edit).
@@ -133,8 +133,8 @@ namespace SW2GZ.UI.Ribbon
                     "Edit the saved Gz world for this assembly.",
                     "OpenCreatePmp", "AssemblyEnable", IMG_CREATE, toolbar);
             AddItem(grp, RibbonCommandIds.ModeEditAsset, "Edit Asset",
-                    "Edit the saved asset for this assembly.",
-                    "OpenCreatePmp", "AssemblyEnable", IMG_CREATE, toolbar);
+                    "Edit the saved asset for this part or assembly.",
+                    "OpenCreatePmp", "AssetCreateEnable", IMG_CREATE, toolbar);
 
             // Common cluster — Coord button removed in v2.1.0 (advanced coord
             // convention moved into the Create wizard).
@@ -180,8 +180,34 @@ namespace SW2GZ.UI.Ribbon
             ResolveCmdIds(grp);
 
             BuildTab(title);
+            BuildPartTab(title);
             logger.Info("Sw2gzRibbonRegistrar: registered " + _userToCmdId.Count +
                 " commands across 4 clusters");
+        }
+
+        // Part documents only do Asset mode (Robot/World need an assembly), so
+        // their SW2GZ tab is a single box: [Create Asset] [Preview] [Export].
+        // Static — no mode pills, no Create↔Edit swap (OpenCreatePmp loads the
+        // saved doc to edit regardless of the button label).
+        private void BuildPartTab(string title)
+        {
+            int partType = (int)swDocumentTypes_e.swDocPART;
+            CommandTab existing = _cmdMgr.GetCommandTab(partType, title);
+            if (existing != null) _cmdMgr.RemoveCommandTab(existing);
+            CommandTab tab = _cmdMgr.AddCommandTab(partType, title);
+            if (tab == null)
+            {
+                logger.Warn("Sw2gzRibbonRegistrar: part-doc AddCommandTab returned null");
+                return;
+            }
+            int textBelow = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow;
+            AddBox(tab, textBelow, new[]
+            {
+                RibbonCommandIds.ModeCreateAsset,
+                RibbonCommandIds.PreviewPmp,
+                RibbonCommandIds.ExportPmp,
+            });
+            logger.Info("Sw2gzRibbonRegistrar: part-doc Asset tab built");
         }
 
         private void ResolveCmdIds(ICommandGroup grp)
@@ -224,8 +250,9 @@ namespace SW2GZ.UI.Ribbon
         // Commands stay registered (see BuildCommandGroup) so they can be
         // re-added here later without re-plumbing.
         private static readonly int[] WorldClusterUserIds = new int[0];
-        private static readonly int[] AssetClusterUserIds = new[] {
-            RibbonCommandIds.AssetBody, RibbonCommandIds.AssetSurface };
+        // Asset cluster emptied — Body/Surface opened stub PMPs; the Create
+        // Asset wizard covers both. Commands stay registered for easy re-add.
+        private static readonly int[] AssetClusterUserIds = new int[0];
 
         // Active mode used by the next BuildTab call. Refresh sets this then
         // calls BuildTab; the initial Register call also drives it from the

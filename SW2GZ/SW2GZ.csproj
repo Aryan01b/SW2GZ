@@ -502,6 +502,7 @@
     <Compile Include="Gz\SdfPhysicsBlock.cs" />
     <Compile Include="Gz\SdfWorldWriter.cs" />
     <Compile Include="Gz\SdfModelWriter.cs" />
+    <Compile Include="Gz\SdfAssetModelWriter.cs" />
     <Compile Include="Gz\SdfSensorBlocks.cs" />
     <Compile Include="Gz\SdfSensorPlugins.cs" />
     <Compile Include="Gz\RosGzBridgeYaml.cs" />
@@ -532,6 +533,7 @@
     <Compile Include="SwSurface\SwRefAxisCreator.cs" />
     <Compile Include="URDFExport\Sw2gzModelExporter.cs" />
     <Compile Include="URDFExport\Sw2gzWorldExporter.cs" />
+    <Compile Include="URDFExport\Sw2gzAssetExporter.cs" />
     <Compile Include="URDFExport\Sw2gzModelPreviewer.cs" />
     <Compile Include="URDFExport\PreviewServer.cs" />
     <Compile Include="URDFExport\SwJointStateSampler.cs" />

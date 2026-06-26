@@ -56,6 +56,15 @@ namespace SW2GZ.URDFExport
                 cfg.WorldMaxStepSize   = world.MaxStepSize;
                 cfg.WorldRealTimeFactor = world.RealTimeFactor;
             }
+
+            // Asset mode — carry the Create-Asset picks through to the exporter.
+            var asset = doc?.Asset;
+            if (asset != null)
+            {
+                cfg.AssetBodyPart   = asset.BodyPart ?? string.Empty;
+                cfg.AssetFrictionMu = asset.FrictionMu;
+                cfg.AssetIsStatic   = asset.IsStatic;
+            }
             return cfg;
         }
 

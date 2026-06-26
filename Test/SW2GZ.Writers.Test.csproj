@@ -32,6 +32,8 @@
     <Compile Include="..\SW2GZ\Ros2\StackRibbonGate.cs"      Link="Sources\Ros2\StackRibbonGate.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzExportConfig.cs" Link="Sources\URDFExport\Sw2gzExportConfig.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzWorldExporter.cs" Link="Sources\URDFExport\Sw2gzWorldExporter.cs" />
+    <Compile Include="..\SW2GZ\URDFExport\Sw2gzAssetExporter.cs" Link="Sources\URDFExport\Sw2gzAssetExporter.cs" />
+    <Compile Include="..\SW2GZ\Gz\SdfAssetModelWriter.cs"     Link="Sources\Gz\SdfAssetModelWriter.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzDoc.cs"          Link="Sources\URDFExport\Sw2gzDoc.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzDocSnapshot.cs"  Link="Sources\URDFExport\Sw2gzDocSnapshot.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzDocLock.cs"      Link="Sources\URDFExport\Sw2gzDocLock.cs" />

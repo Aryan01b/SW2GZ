@@ -343,7 +343,7 @@ namespace SW2GZ.SW
         {
             try
             {
-                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+                if (!TryGetActiveModelDoc(out ModelDoc2 modeldoc)) return;
 
                 if (!SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc))
                 {
@@ -442,7 +442,22 @@ namespace SW2GZ.SW
         {
             try
             {
-                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+                if (!TryGetActiveModelDoc(out ModelDoc2 modeldoc)) return;
+
+                // A standalone part document can only be an Asset — force the
+                // mode and open the whole-part Create Asset wizard directly.
+                bool isPart = modeldoc.GetType() == (int)swDocumentTypes_e.swDocPART;
+                if (isPart)
+                {
+                    SW2GZ.URDFExport.Sw2gzDoc pdoc =
+                        SW2GZ.URDFExport.Sw2gzDocSerialization.Load(modeldoc)
+                        ?? SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                    pdoc.Mode = SW2GZ.URDFExport.Sw2gzMode.Asset;
+                    SW2GZ.URDFExport.Sw2gzDocStore.Put(modeldoc, pdoc);
+                    string partName = DerivePackageNameFromAssembly(modeldoc);
+                    DeferToIdle(() => OpenCreateAsset(modeldoc, pdoc, partName));
+                    return;
+                }
 
                 SW2GZ.URDFExport.Sw2gzDoc doc;
                 if (SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc))
@@ -520,13 +535,13 @@ namespace SW2GZ.SW
             }
         }
 
-        private void OpenCreateAsset(ModelDoc2 modelDoc, SW2GZ.URDFExport.Sw2gzDoc doc)
+        private void OpenCreateAsset(ModelDoc2 modelDoc, SW2GZ.URDFExport.Sw2gzDoc doc, string wholePartName = null)
         {
             try
             {
                 _createAssetPmp = new SW2GZ.UI.Pmp.Sw2gzCreateAssetPmp(
                     (SldWorks)SwApp, modelDoc, doc,
-                    d => PersistDoc(modelDoc, d));
+                    d => PersistDoc(modelDoc, d), wholePartName);
                 _createAssetPmp.Show();
             }
             catch (Exception e)
@@ -703,11 +718,39 @@ namespace SW2GZ.SW
         {
             try
             {
-                if (AssemblyEnable() == 0) return 0;
-                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
-                return SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc) ? 1 : 0;
+                ModelDoc2 m = ActivePartOrAssembly();
+                if (m == null) return 0;
+                return SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(m) ? 1 : 0;
             }
             catch (Exception e) { logger.Warn("PreviewEnable failed", e); return 0; }
+        }
+
+        // Active doc if it's a part OR an assembly, else null. Silent (no popup)
+        // so it's safe to call from the polled ribbon-enable callbacks.
+        private ModelDoc2 ActivePartOrAssembly()
+        {
+            if (SwApp == null) return null;
+            ModelDoc2 m = SwApp.ActiveDoc;
+            if (m == null) return null;
+            int t = m.GetType();
+            return (t == (int)swDocumentTypes_e.swDocPART ||
+                    t == (int)swDocumentTypes_e.swDocASSEMBLY) ? m : null;
+        }
+
+        // Enable for the Asset Create/Edit ribbon buttons — Asset mode works on a
+        // part document too, so it's not gated to assemblies like Robot/World.
+        public int AssetCreateEnable() => ActivePartOrAssembly() != null ? 1 : 0;
+
+        // Action-handler variant with a friendly popup (parts OR assemblies).
+        private bool TryGetActiveModelDoc(out ModelDoc2 modeldoc)
+        {
+            modeldoc = ActivePartOrAssembly();
+            if (modeldoc != null) return true;
+            SwApp?.SendMsgToUser2(
+                "Open a part or assembly document first.",
+                (int)swMessageBoxIcon_e.swMbInformation,
+                (int)swMessageBoxBtn_e.swMbOk);
+            return false;
         }
 
         // Export-specific gate: enabled only when an assembly is active AND
@@ -718,9 +761,9 @@ namespace SW2GZ.SW
         {
             try
             {
-                if (AssemblyEnable() == 0) return 0;
-                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
-                return SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc) ? 1 : 0;
+                ModelDoc2 m = ActivePartOrAssembly();
+                if (m == null) return 0;
+                return SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(m) ? 1 : 0;
             }
             catch (Exception e) { logger.Warn("ExportEnable failed", e); return 0; }
         }
@@ -767,7 +810,7 @@ namespace SW2GZ.SW
         {
             try
             {
-                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+                if (!TryGetActiveModelDoc(out ModelDoc2 modeldoc)) return;
 
                 // Load the saved SW2GZ Doc (v1) and bridge it to the legacy
                 // Sw2gzExportConfig shape the pipeline still consumes. Mirror
@@ -780,7 +823,10 @@ namespace SW2GZ.SW
                 var doc = SW2GZ.URDFExport.Sw2gzDocSerialization.Load(modeldoc)
                           ?? SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
 
-                bool isWorld = doc?.Mode == SW2GZ.URDFExport.Sw2gzMode.World;
+                // A part document is always an Asset preview.
+                bool isPart = modeldoc.GetType() == (int)swDocumentTypes_e.swDocPART;
+                bool isWorld = !isPart && doc?.Mode == SW2GZ.URDFExport.Sw2gzMode.World;
+                bool isAsset = isPart || doc?.Mode == SW2GZ.URDFExport.Sw2gzMode.Asset;
                 if (isWorld)
                 {
                     bool hasPicks = doc.World != null &&
@@ -790,6 +836,17 @@ namespace SW2GZ.SW
                     {
                         SwApp.SendMsgToUser2(
                             "Saved World doc has no ground or assets — open Create World and pick at least one.",
+                            (int)swMessageBoxIcon_e.swMbInformation,
+                            (int)swMessageBoxBtn_e.swMbOk);
+                        return;
+                    }
+                }
+                else if (isAsset)
+                {
+                    if (doc.Asset == null || string.IsNullOrWhiteSpace(doc.Asset.BodyPart))
+                    {
+                        SwApp.SendMsgToUser2(
+                            "Saved Asset doc has no part — open Create Asset and pick a part.",
                             (int)swMessageBoxIcon_e.swMbInformation,
                             (int)swMessageBoxBtn_e.swMbOk);
                         return;
@@ -814,8 +871,9 @@ namespace SW2GZ.SW
                             ", links=" + (config.Links?.Count ?? 0) +
                             ", joints=" + (config.Joints?.Count ?? 0));
 
-                var result = isWorld
-                    ? Sw2gzModelPreviewer.RunWorldPreview((SldWorks)SwApp, modeldoc, config)
+                Sw2gzModelPreviewer.PreviewResult result =
+                    isWorld ? Sw2gzModelPreviewer.RunWorldPreview((SldWorks)SwApp, modeldoc, config)
+                    : isAsset ? Sw2gzModelPreviewer.RunAssetPreview((SldWorks)SwApp, modeldoc, config)
                     : Sw2gzModelPreviewer.RunPreview((SldWorks)SwApp, modeldoc, config);
                 using (var dlg = new PreviewDialog(result))
                 {
@@ -1025,7 +1083,12 @@ namespace SW2GZ.SW
         private void SyncRibbonToActiveDoc()
         {
             if (_ribbonRegistrar == null) return;
-            if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+            // Only the assembly tab has a mode-dependent Create/cluster layout to
+            // sync. Part docs use the static part tab — silently no-op (and never
+            // pop the assembly-only message on a part-document activation).
+            ModelDoc2 modeldoc = SwApp?.ActiveDoc;
+            if (modeldoc == null ||
+                modeldoc.GetType() != (int)swDocumentTypes_e.swDocASSEMBLY) return;
 
             bool saved = SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc);
             SW2GZ.URDFExport.Sw2gzMode mode;
