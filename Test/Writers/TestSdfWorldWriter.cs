@@ -233,5 +233,45 @@ namespace SW2GZ.Writers.Tests
             Assert.Throws<System.ArgumentException>(
                 () => SdfWorldWriter.WriteScene(new SdfSceneInput(null, System.Array.Empty<SdfSceneModel>())));
         }
+
+        // ── GUI block (Phase 1: framed camera + control panels) ───────────────
+        [Fact]
+        public void WriteScene_NoCamera_OmitsGuiBlock()
+        {
+            var sdf = SdfWorldWriter.WriteScene(Scene(new SdfSceneModel("floor", "floor.dae")));
+            Assert.DoesNotContain("<gui", sdf);
+            Assert.DoesNotContain("camera_pose", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_WithCamera_EmitsGuiAndCameraPose()
+        {
+            var sdf = SdfWorldWriter.WriteScene(new SdfSceneInput(
+                "env", new[] { new SdfSceneModel("floor", "floor.dae") },
+                Camera: new SdfCamera(3, -3, 2, 0, 0.5, 2.356)));
+            Assert.Contains("<gui", sdf);
+            Assert.Contains("MinimalScene", sdf);
+            Assert.Contains("<camera_pose>3 -3 2 0 0.5 2.356</camera_pose>", sdf);
+        }
+
+        [Fact]
+        public void GuiBlock_Default_EmitsStandardHarmonicPanels()
+        {
+            var gui = SdfGuiBlock.Default(new SdfCamera(1, 2, 3, 0, 0, 0));
+            Assert.Contains("MinimalScene", gui);
+            Assert.Contains("GzSceneManager", gui);
+            Assert.Contains("WorldControl", gui);
+            Assert.Contains("WorldStats", gui);
+            Assert.Contains("EntityTree", gui);
+            Assert.Contains("<engine>ogre2</engine>", gui);
+        }
+
+        [Fact]
+        public void GuiBlock_NullCamera_OmitsCameraPose()
+        {
+            var gui = SdfGuiBlock.Default(null);
+            Assert.DoesNotContain("camera_pose", gui);
+            Assert.Contains("MinimalScene", gui);   // panels still emitted
+        }
     }
 }

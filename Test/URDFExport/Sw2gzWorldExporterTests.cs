@@ -153,6 +153,41 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void Export_EmitsFramedGuiCamera()
+        {
+            // A scene that tessellates must get a <gui> with a non-origin camera
+            // so `gz sim` opens looking at the assets, not empty space.
+            Sw2gzWorldExporter.Export(new FarTess(100f), Cfg("floor-1"), _dir, 0, 0, 0);
+            string sdf = Sdf();
+            Assert.Contains("<gui", sdf);
+            Assert.Contains("<camera_pose>", sdf);
+            // Iso default frames from above the floor → camera Z must be > 0.
+            string pose = sdf.Substring(sdf.IndexOf("<camera_pose>") + "<camera_pose>".Length);
+            pose = pose.Substring(0, pose.IndexOf("</camera_pose>"));
+            string[] p = pose.Split(' ');
+            Assert.True(double.Parse(p[2], System.Globalization.CultureInfo.InvariantCulture) > 0,
+                "camera should sit above the ground plane, got Z=" + p[2]);
+        }
+
+        [Fact]
+        public void Export_TopView_LooksStraightDown()
+        {
+            var c = Cfg("floor-1");
+            c.WorldInitialView = "top";
+            Sw2gzWorldExporter.Export(new FakeTess("floor-1"), c, _dir, 0, 0, 0);
+            string sdf = Sdf();
+            Assert.Contains("<camera_pose>", sdf);
+            // Top view: camera over origin (x≈0, y≈0), pitched ~+pi/2 (looking down).
+            string pose = sdf.Substring(sdf.IndexOf("<camera_pose>") + "<camera_pose>".Length);
+            pose = pose.Substring(0, pose.IndexOf("</camera_pose>"));
+            string[] p = pose.Split(' ');
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            Assert.Equal(0.0, double.Parse(p[0], ci), 3);
+            Assert.Equal(0.0, double.Parse(p[1], ci), 3);
+            Assert.True(double.Parse(p[4], ci) > 1.4, "pitch should be ~pi/2 looking down");
+        }
+
+        [Fact]
         public void Export_PhysicsAndRotationFlowThrough()
         {
             var c = Cfg("floor-1");

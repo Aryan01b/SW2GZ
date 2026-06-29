@@ -81,7 +81,16 @@ namespace SW2GZ.URDFExport
             // Gz's grid plane rather than the scene's vertical mid-point. The
             // SW→ROS rpy rides each model's <pose> and rotates the up axis onto
             // ROS +Z about the origin, so floor-at-0 lands the ground at Z=0.
-            Vector3 shift = SceneShift(tessellated, config.SwUpAxis);
+            ComputeBounds(tessellated, out Vector3 min, out Vector3 max, out bool anyVerts);
+            Vector3 shift = SceneShift(min, max, anyVerts, config.SwUpAxis);
+
+            // GUI camera framed on the (post-reframe) scene so `gz sim` opens
+            // looking at the assets. Reframe puts the footprint at the XY origin
+            // and the floor at Z=0, so the camera target is the scene's
+            // mid-height above origin and the distance scales to its size.
+            SdfCamera camera = anyVerts
+                ? FramingCamera(min, max, config.SwUpAxis, config.WorldInitialView)
+                : null;
 
             var models = new List<SdfSceneModel>();
             Directory.CreateDirectory(meshesDir);
@@ -99,19 +108,20 @@ namespace SW2GZ.URDFExport
                 PhysicsEngine: config.WorldPhysicsEngine,
                 MaxStepSize: config.WorldMaxStepSize,
                 RealTimeFactor: config.WorldRealTimeFactor,
-                Roll: roll, Pitch: pitch, Yaw: yaw);
+                Roll: roll, Pitch: pitch, Yaw: yaw,
+                Camera: camera);
 
             File.WriteAllText(Path.Combine(root, pkg + ".sdf"), SdfWorldWriter.WriteScene(scene));
             return new ValidationReport(issues);
         }
 
-        // Per-axis reframe offset: center the two horizontal axes, and align the
-        // floor (extreme point in the DOWN = -up direction) to 0 on the up axis.
-        private static Vector3 SceneShift(List<(string, string, MeshData)> meshes, AxisDirection upAxis)
+        // Combined AABB over every tessellated mesh, in SW (pre-reframe) space.
+        private static void ComputeBounds(
+            List<(string, string, MeshData)> meshes, out Vector3 min, out Vector3 max, out bool any)
         {
-            bool any = false;
-            var min = new Vector3(float.MaxValue);
-            var max = new Vector3(float.MinValue);
+            any = false;
+            min = new Vector3(float.MaxValue);
+            max = new Vector3(float.MinValue);
             foreach (var (_, _, mesh) in meshes)
             {
                 if (mesh?.Vertices == null) continue;
@@ -122,6 +132,12 @@ namespace SW2GZ.URDFExport
                     max = Vector3.Max(max, v);
                 }
             }
+        }
+
+        // Per-axis reframe offset: center the two horizontal axes, and align the
+        // floor (extreme point in the DOWN = -up direction) to 0 on the up axis.
+        private static Vector3 SceneShift(Vector3 min, Vector3 max, bool any, AxisDirection upAxis)
+        {
             if (!any) return Vector3.Zero;
 
             (double ux, double uy, double uz) = upAxis.ToVector();
@@ -140,6 +156,63 @@ namespace SW2GZ.URDFExport
                     shift[i] = (mn[i] + mx[i]) * 0.5f;
             }
             return new Vector3(shift[0], shift[1], shift[2]);
+        }
+
+        // Initial GUI camera framing the reframed scene. After reframe the
+        // footprint is centered on the XY origin and the floor sits at Z=0 in the
+        // ROS (Z-up) world frame, so the camera target is the scene's mid-height
+        // above the origin and the stand-off distance scales to the scene size.
+        // `view` picks the direction: "iso" (default) | "top" | "front".
+        private static SdfCamera FramingCamera(Vector3 min, Vector3 max, AxisDirection upAxis, string view)
+        {
+            (double ux, double uy, double uz) = upAxis.ToVector();
+            int upIdx = ux != 0 ? 0 : (uy != 0 ? 1 : 2);
+            float[] mn = { min.X, min.Y, min.Z };
+            float[] mx = { max.X, max.Y, max.Z };
+
+            double height = mx[upIdx] - mn[upIdx];
+            // The two horizontal extents (every axis that isn't "up").
+            double w1 = 0, w2 = 0;
+            bool firstSet = false;
+            for (int i = 0; i < 3; i++)
+            {
+                if (i == upIdx) continue;
+                double e = mx[i] - mn[i];
+                if (!firstSet) { w1 = e; firstSet = true; } else { w2 = e; }
+            }
+            double footprint = System.Math.Sqrt(w1 * w1 + w2 * w2);
+            double size = System.Math.Max(footprint, height);
+            double R = size * 1.3 + 1.0;   // +1 keeps a tiny/degenerate scene framed
+
+            float midZ = (float)(height * 0.5);
+            var target = new Vector3(0f, 0f, midZ);
+
+            Vector3 pos;
+            string v = (view ?? "iso").Trim().ToLowerInvariant();
+            if (v == "top")
+            {
+                pos = new Vector3(0f, 0f, (float)(midZ + R));
+            }
+            else if (v == "front")
+            {
+                pos = new Vector3(0f, (float)(-R), midZ);
+            }
+            else // iso — looking in from the front-left and above
+            {
+                double el = 30.0 * System.Math.PI / 180.0;   // elevation
+                double az = 225.0 * System.Math.PI / 180.0;  // azimuth (front-left)
+                pos = new Vector3(
+                    (float)(R * System.Math.Cos(el) * System.Math.Cos(az)),
+                    (float)(R * System.Math.Cos(el) * System.Math.Sin(az)),
+                    (float)(midZ + R * System.Math.Sin(el)));
+            }
+
+            // Orient the camera (forward = its local +X) to look at the target.
+            Vector3 dir = Vector3.Normalize(target - pos);
+            double yaw = System.Math.Atan2(dir.Y, dir.X);
+            double sinP = System.Math.Max(-1.0, System.Math.Min(1.0, -(double)dir.Z));
+            double pitch = System.Math.Asin(sinP);
+            return new SdfCamera(pos.X, pos.Y, pos.Z, 0.0, pitch, yaw);
         }
 
         private static double[] ToRgba(System.Drawing.Color? c)

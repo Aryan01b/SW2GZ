@@ -41,7 +41,8 @@ namespace SW2GZ.Gz
         double RealTimeFactor = 1.0,
         double Roll = 0.0,
         double Pitch = 0.0,
-        double Yaw = 0.0);
+        double Yaw = 0.0,
+        SdfCamera Camera = null);
 
     public static class SdfWorldWriter
     {
@@ -74,6 +75,10 @@ namespace SW2GZ.Gz
             sb.AppendLine("      <ambient>0.5 0.5 0.5 1</ambient>");
             sb.AppendLine("      <background>0.8 0.85 0.9 1</background>");
             sb.AppendLine("    </scene>");
+            // GUI panels + an initial camera framed on the scene (when supplied),
+            // so `gz sim` opens looking at the assets instead of empty origin.
+            if (input.Camera != null)
+                sb.Append(SdfGuiBlock.Default(input.Camera));
             sb.Append(SdfPhysicsBlock.Sun());
             if (input.IncludeGroundPlane)
                 sb.Append(SdfPhysicsBlock.GroundPlane());

@@ -70,6 +70,10 @@ namespace SW2GZ.URDFExport
         [DataMember] public string WorldPhysicsEngine { get; set; } = "ode";
         [DataMember] public double WorldMaxStepSize { get; set; } = 0.001;
         [DataMember] public double WorldRealTimeFactor { get; set; } = 1.0;
+        // Initial GUI camera framing: "iso" (default) | "top" | "front". The
+        // exporter computes the actual camera pose from the scene bounds; this
+        // only picks the viewing direction.
+        [DataMember] public string WorldInitialView { get; set; } = "iso";
 
         // Asset mode — single part exported as a reusable Gz model.
         [DataMember] public string AssetBodyPart   { get; set; } = string.Empty;
@@ -104,6 +108,7 @@ namespace SW2GZ.URDFExport
             WorldPhysicsEngine = "ode";
             WorldMaxStepSize = 0.001;
             WorldRealTimeFactor = 1.0;
+            WorldInitialView = "iso";
             AssetBodyPart = string.Empty;
             AssetFrictionMu = 0.8;
             AssetIsStatic = true;
@@ -144,6 +149,7 @@ namespace SW2GZ.URDFExport
                 WorldPhysicsEngine = this.WorldPhysicsEngine,
                 WorldMaxStepSize   = this.WorldMaxStepSize,
                 WorldRealTimeFactor = this.WorldRealTimeFactor,
+                WorldInitialView   = this.WorldInitialView,
                 AssetBodyPart   = this.AssetBodyPart,
                 AssetFrictionMu = this.AssetFrictionMu,
                 AssetIsStatic   = this.AssetIsStatic,

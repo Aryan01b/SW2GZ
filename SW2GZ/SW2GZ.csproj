@@ -499,6 +499,7 @@
     <Compile Include="Write\Mesh\DaeWriter.cs" />
     <Compile Include="Gz\ModelConfigWriter.cs" />
     <Compile Include="Gz\GzPluginTags.cs" />
+    <Compile Include="Gz\SdfGuiBlock.cs" />
     <Compile Include="Gz\SdfPhysicsBlock.cs" />
     <Compile Include="Gz\SdfWorldWriter.cs" />
     <Compile Include="Gz\SdfModelWriter.cs" />

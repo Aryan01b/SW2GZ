@@ -1,8 +1,28 @@
 # Progress
 
-Current: world mode + asset mode shipped on `main` (trunk). Tests: **779 green**.
+Current: world mode + asset mode shipped on `main` (trunk). Tests: **785 green**.
 Branch model reconciled: `main` is trunk, `v2.1.0`/`v2.2.0` are tags.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
+
+## In progress (world Phase 1 — runnable, framed world)
+
+Gz-Harmonic world-feature roadmap (4 phases) planned from the SDF-worlds docs.
+Phase 1 = emit a `<gui>` block + an auto-framed initial camera so `gz sim`
+opens looking at the assets (today: default origin view → scene often off-
+screen). System plugins were already emitted; this fills the real gap.
+
+- **`SdfGuiBlock.Default(SdfCamera)`** (NEW pure writer, `Gz/`): standard
+  Harmonic panels — MinimalScene(+`<camera_pose>`) · GzSceneManager ·
+  InteractiveViewControl · WorldControl(start_paused) · WorldStats · EntityTree.
+- **`SdfCamera` record** + `SdfSceneInput.Camera` (null → no `<gui>`, keeps
+  robot/asset goldens intact). `WriteScene` emits the gui after `<scene>`.
+- **`Sw2gzWorldExporter.FramingCamera`** — reuses the scene AABB (refactored
+  `ComputeBounds`); frames target at mid-height above the reframed XY origin,
+  stand-off ∝ scene size. `WorldInitialView` config (`iso`|`top`|`front`,
+  default iso) picks the direction. Camera emitted in ROS (Z-up) world frame.
+- Backend only this cut — auto-iso works with ZERO new UI. The wizard
+  *Initial view* combo (Scene step) is the only remaining UI piece, DEFERRED.
+- +6 tests (785 green). Addin compiles clean. **Not yet deployed / live-tested.**
 
 ## Done (asset mode in PART documents)
 Asset mode now works on a standalone `.SLDPRT` (not just components in an
