@@ -43,7 +43,8 @@ namespace SW2GZ.Gz
         double Pitch = 0.0,
         double Yaw = 0.0,
         SdfCamera Camera = null,
-        SdfSceneSettings Settings = null);
+        SdfSceneSettings Settings = null,
+        SdfWorldPlugins Plugins = null);
 
     public static class SdfWorldWriter
     {
@@ -66,8 +67,18 @@ namespace SW2GZ.Gz
             sb.AppendLine("<sdf version=\"1.10\">");
             sb.AppendLine($"  <world name=\"{SecurityElement.Escape(input.WorldName)}\">");
             sb.AppendLine("    <plugin filename=\"gz-sim-physics-system\"           name=\"gz::sim::systems::Physics\"/>");
-            sb.AppendLine("    <plugin filename=\"gz-sim-user-commands-system\"     name=\"gz::sim::systems::UserCommands\"/>");
-            sb.AppendLine("    <plugin filename=\"gz-sim-scene-broadcaster-system\" name=\"gz::sim::systems::SceneBroadcaster\"/>");
+            // World support plugins the user enabled in the "Sensors" panel
+            // (sensor-family systems + keyboard teleop). A null Plugins keeps the
+            // legacy baseline (user-commands + scene-broadcaster) byte-identical.
+            if (input.Plugins == null)
+            {
+                sb.AppendLine("    <plugin filename=\"gz-sim-user-commands-system\"     name=\"gz::sim::systems::UserCommands\"/>");
+                sb.AppendLine("    <plugin filename=\"gz-sim-scene-broadcaster-system\" name=\"gz::sim::systems::SceneBroadcaster\"/>");
+            }
+            else
+            {
+                sb.Append(SdfWorldPluginsWriter.WriteWorldPlugins(input.Plugins));
+            }
             sb.Append(SdfPhysicsBlock.Default(input.PhysicsEngine, input.MaxStepSize, input.RealTimeFactor));
 
             SdfSceneSettings s = input.Settings;
@@ -116,8 +127,11 @@ namespace SW2GZ.Gz
             sb.AppendLine("    </scene>");
             // GUI panels + an initial camera framed on the scene (when supplied),
             // so `gz sim` opens looking at the assets instead of empty origin.
-            if (input.Camera != null)
-                sb.Append(SdfGuiBlock.Default(input.Camera));
+            // GUI block — emitted when there's a framed camera OR a KeyPublisher
+            // to host (KeyPublisher is a GUI plugin, so it rides inside <gui>).
+            bool keyPub = input.Plugins != null && input.Plugins.KeyPublisher;
+            if (input.Camera != null || keyPub)
+                sb.Append(SdfGuiBlock.Default(input.Camera, keyPub));
             sb.Append(s == null
                 ? SdfPhysicsBlock.Sun()
                 : SdfPhysicsBlock.Sun(s.SunAzimuthDeg, s.SunElevationDeg, s.SunIntensity, s.CastShadows));

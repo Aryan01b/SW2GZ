@@ -84,6 +84,10 @@ namespace SW2GZ.URDFExport
             PhysicsEngine = src.PhysicsEngine,
             MaxStepSize = src.MaxStepSize,
             RealTimeFactor = src.RealTimeFactor,
+            // Scene + SensorPlugins must round-trip so a Settings/Sensors PMP
+            // cancel restores the pre-edit values instead of resetting to default.
+            Scene = (src.Scene ?? new Sw2gzWorldSceneConfig()).Clone(),
+            SensorPlugins = (src.SensorPlugins ?? new Sw2gzWorldSensorsConfig()).Clone(),
         };
 
         private static Sw2gzAssetConfig CloneAsset(Sw2gzAssetConfig src) => new Sw2gzAssetConfig

@@ -188,6 +188,43 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void Export_SensorPluginsEnabled_EmitWorldSystemPlugins()
+        {
+            var c = Cfg("floor-1");
+            c.WorldSensorPlugins = new Sw2gzWorldSensorsConfig { Sensors = true, Imu = true };
+            Sw2gzWorldExporter.Export(new FakeTess("floor-1"), c, _dir, 0, 0, 0);
+            string sdf = Sdf();
+            Assert.Contains("gz-sim-sensors-system", sdf);
+            Assert.Contains("gz-sim-imu-system", sdf);
+            // World mode never places per-model <sensor> blocks.
+            Assert.DoesNotContain("<sensor", sdf);
+        }
+
+        [Fact]
+        public void Export_KeyboardTeleopEnabled_EmitsKeyPublisherAndTriggeredPublisher()
+        {
+            var c = Cfg("floor-1");
+            c.WorldSensorPlugins = new Sw2gzWorldSensorsConfig { KeyPublisher = true, TriggeredPublisher = true };
+            Sw2gzWorldExporter.Export(new FakeTess("floor-1"), c, _dir, 0, 0, 0);
+            string sdf = Sdf();
+            Assert.Contains("KeyPublisher", sdf);
+            Assert.Contains("gz-sim-triggered-publisher-system", sdf);
+            Assert.Contains("topic=\"/cmd_vel\"", sdf);
+        }
+
+        [Fact]
+        public void Export_DefaultSensorPlugins_EmitBaselineOnly()
+        {
+            var c = Cfg("floor-1");   // default WorldSensorPlugins
+            Sw2gzWorldExporter.Export(new FakeTess("floor-1"), c, _dir, 0, 0, 0);
+            string sdf = Sdf();
+            Assert.Contains("gz-sim-user-commands-system", sdf);
+            Assert.Contains("gz-sim-scene-broadcaster-system", sdf);
+            Assert.DoesNotContain("gz-sim-sensors-system", sdf);
+            Assert.DoesNotContain("<sensor", sdf);
+        }
+
+        [Fact]
         public void Export_PhysicsAndRotationFlowThrough()
         {
             var c = Cfg("floor-1");

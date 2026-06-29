@@ -1,8 +1,66 @@
 # Progress
 
-Current: world mode + asset mode shipped on `main` (trunk). Tests: **785 green**.
-Branch model reconciled: `main` is trunk, `v2.1.0`/`v2.2.0` are tags.
+Current: world mode + asset mode + World GUI/camera (v2.4.0) + World Settings
+(v2.5.0) shipped on `main`. Tests: **797 green**.
+Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
+
+## ▶ CONTINUE HERE — World sensors = plugin toggles + left-dock PMPs (branch `feat/world-sensors`)
+
+**State:** code COMPLETE + green (**801 tests**), add-in compiles clean, NOT
+deployed, NOT committed. Pivoted away from the earlier per-model sensor S1.
+
+**The pivot (user-directed 2026-06-30):** World mode does NOT place sensors on
+its models. The "Sensors" panel just ENABLES world-level Gz system/GUI plugins
+so spawned models can use them (sensor families + keyboard teleop). Both
+"Settings" and "Sensors" moved from floating WinForms dialogs → native left-dock
+PMPs. Ribbon labels dropped "World" → just **Settings** / **Sensors**.
+
+- **BLOCKER — not deployed.** Elevated copy keeps auto-cancelling at UAC
+  (non-interactive harness). Fresh DLL `bin/Release/SW2GZ.dll` **04:26:22**;
+  installed still **18:04:58** (old). **Deploy manually** (SW closed):
+  `Copy-Item 'C:\aryan\SW2GZ\SW2GZ\bin\Release\SW2GZ.dll' 'C:\Program Files\SW2GZ\SW2GZ.dll' -Force`
+
+**Next steps:** (1) confirm manual deploy, (2) live-test (World mode →
+**Settings** PMP edits scene/env; **Sensors** PMP toggles → Export → `.sdf` has
+the `gz-sim-*-system` / KeyPublisher / triggered-publisher plugins, NO `<sensor>`
+blocks), (3) commit + merge to main + tag (**v2.6.0**).
+
+**Changes (all on the branch, uncommitted):**
+- NEW `URDFExport/Sw2gzWorldSensorsConfig.cs` — [DataContract] bool toggles
+  (Sensors/Imu/Contact/ForceTorque/Navsat + UserCommands/SceneBroadcaster
+  default-on + KeyPublisher/TriggeredPublisher). Lives on
+  `Sw2gzDoc.World.SensorPlugins`; OnDeserializing reseeds baseline-on.
+- NEW `Gz/SdfWorldPluginsWriter.cs` — pure `SdfWorldPlugins` record +
+  `WriteWorldPlugins` (world `<plugin>` lines) + `WriteGuiKeyPublisher` (GUI
+  line). Teleop = 4 triggered-publisher blocks mapping arrow Qt keycodes →
+  Twist on `/cmd_vel`.
+- `Gz/SdfWorldWriter.cs` — `SdfSceneModel` lost `Sensors`; `SdfSceneInput` gained
+  `Plugins`. WriteScene emits world plugins from flags (null Plugins =
+  byte-identical baseline); per-model `<sensor>` emission removed. GUI block now
+  also emitted when KeyPublisher on; `SdfGuiBlock.Default(cam, keyPublisher)`.
+- `Sw2gzWorldExporter.ToWorldPlugins(config.WorldSensorPlugins)` → SdfSceneInput.
+  Old sensorsByModel/mapper/modelByComp gone.
+- `Sw2gzExportConfig.WorldSensorPlugins` (replaces WorldSensors list) + `Bridge`
+  copies `world.SensorPlugins`. `Sw2gzDocSnapshot.CloneWorld` now deep-clones
+  Scene + SensorPlugins (was dropping Scene → fixed so PMP cancel restores).
+- NEW `UI/Pmp/Sw2gzWorldSettingsPmp.cs` + `UI/Pmp/Sw2gzWorldSensorsPmp.cs` —
+  native PMPs (Okay/Cancel, snapshot rollback). `SwAddin.OpenWorldSettings/
+  OpenWorldSensors` build+Show them (fields `_worldSettingsPmp`/`_worldSensorsPmp`
+  root the COM handler). Sensors no longer gated on ground/assets.
+- DELETED: `Sw2gzWorldSensorConfig.cs`, `WorldSensorMapper.cs`,
+  `WorldSensorsDialog.cs`, `WorldSettingsDialog.cs`, `Sw2gzDarkTheme.cs` (the
+  last 3 went dead with the dialog removal). csproj entries updated in both.
+- Robot-side `SdfSensorPlugins`/`SdfSensorBlocks` UNTOUCHED (still per-sensor).
+
+**Gotchas burned in this session:**
+- Manual elevated deploy required (UAC non-interactive). SW must be CLOSED.
+- **Native PMP checkboxes AV-crash SW on toggle** (empty OnCheckboxCheck, doesn't
+  matter). Both PMPs now host their controls in a WinForms panel via
+  swControlType_WindowFromHandle (the Create-wizard pattern) — WinForms controls
+  bypass SW's native-control event path. Read values on Okay. Installed 04:40:07.
+- Commit messages: no double-quotes in the `git commit -m @'...'@` here-string
+  (breaks PowerShell parsing) and NO AI attribution.
 
 ## Done (World Settings panel — scene/environment prefs) — v2.5.0
 

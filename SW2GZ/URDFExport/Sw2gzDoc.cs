@@ -50,11 +50,15 @@ namespace SW2GZ.URDFExport
         // before this field deserialize it to null (initializers are skipped),
         // so the hook below reseeds a default — callers never see null.
         public Sw2gzWorldSceneConfig Scene { get; set; } = new Sw2gzWorldSceneConfig();
+        // World-level sensor/teleop support plugins ("Sensors" panel) — the
+        // world enables these so spawned models can use them.
+        public Sw2gzWorldSensorsConfig SensorPlugins { get; set; } = new Sw2gzWorldSensorsConfig();
 
         [OnDeserializing]
         private void OnDeserializing(StreamingContext context)
         {
             Scene = new Sw2gzWorldSceneConfig();
+            SensorPlugins = new Sw2gzWorldSensorsConfig();
         }
     }
 

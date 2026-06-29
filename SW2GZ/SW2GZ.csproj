@@ -361,6 +361,7 @@
     <Compile Include="URDFExport\ConfigurationSerialization.cs" />
     <Compile Include="URDFExport\Sw2gzExportConfig.cs" />
     <Compile Include="URDFExport\Sw2gzWorldSceneConfig.cs" />
+    <Compile Include="URDFExport\Sw2gzWorldSensorsConfig.cs" />
     <Compile Include="URDFExport\Sw2gzDoc.cs" />
     <Compile Include="URDFExport\Sw2gzDocSnapshot.cs" />
     <Compile Include="URDFExport\Sw2gzDocStore.cs" />
@@ -508,6 +509,7 @@
     <Compile Include="Gz\SdfAssetModelWriter.cs" />
     <Compile Include="Gz\SdfSensorBlocks.cs" />
     <Compile Include="Gz\SdfSensorPlugins.cs" />
+    <Compile Include="Gz\SdfWorldPluginsWriter.cs" />
     <Compile Include="Gz\RosGzBridgeYaml.cs" />
     <Compile Include="URDFExport\Ros2Package.cs" />
     <Compile Include="URDFExport\OutputValidator.cs" />
@@ -541,7 +543,6 @@
     <Compile Include="URDFExport\PreviewServer.cs" />
     <Compile Include="URDFExport\SwJointStateSampler.cs" />
     <Compile Include="UI\ExportDialog.cs" />
-    <Compile Include="UI\WorldSettingsDialog.cs" />
     <Compile Include="UI\PreviewDialog.cs" />
     <Compile Include="UI\StackConfigDialog.cs" />
     <Compile Include="SwSurface\Abstractions\IMeshTessellator.cs" />
@@ -594,6 +595,8 @@
     <Compile Include="UI\Pmp\Sw2gzCreateRobotPmp.cs" />
     <Compile Include="UI\Pmp\Sw2gzCreateWorldPmp.cs" />
     <Compile Include="UI\Pmp\Sw2gzCreateAssetPmp.cs" />
+    <Compile Include="UI\Pmp\Sw2gzWorldSettingsPmp.cs" />
+    <Compile Include="UI\Pmp\Sw2gzWorldSensorsPmp.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>

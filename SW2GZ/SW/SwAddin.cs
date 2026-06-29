@@ -428,6 +428,8 @@ namespace SW2GZ.SW
         private SW2GZ.UI.Pmp.Sw2gzCreateRobotPmp _createRobotPmp;
         private SW2GZ.UI.Pmp.Sw2gzCreateWorldPmp _createWorldPmp;
         private SW2GZ.UI.Pmp.Sw2gzCreateAssetPmp _createAssetPmp;
+        private SW2GZ.UI.Pmp.Sw2gzWorldSettingsPmp _worldSettingsPmp;
+        private SW2GZ.UI.Pmp.Sw2gzWorldSensorsPmp _worldSensorsPmp;
 
         // Bisecting confirmed: calling swApp.CreatePropertyManagerPage directly
         // from inside an IFlyoutGroup face callback throws InvalidCastException
@@ -699,9 +701,9 @@ namespace SW2GZ.SW
         public void OpenWorldPhysicsPmp() => OpenStub("Physics");
         public void OpenWorldScenePmp()   => OpenStub("Scene");   // legacy stub (unwired)
 
-        // World Settings — scene/environment preferences (lighting, sky, fog,
-        // grid, gravity, wind, geo). Modal WinForms dialog seeded from the doc's
-        // World.Scene; persists the doc on Save.
+        // Settings — scene/environment preferences (lighting, sky, fog, grid,
+        // gravity, wind, geo). Native left-dock PMP seeded from doc.World.Scene;
+        // persists the doc on Okay.
         public void OpenWorldSettings()
         {
             try
@@ -713,21 +715,39 @@ namespace SW2GZ.SW
                 if (doc.World == null) doc.World = new SW2GZ.URDFExport.Sw2gzWorldConfig();
                 if (doc.World.Scene == null) doc.World.Scene = new SW2GZ.URDFExport.Sw2gzWorldSceneConfig();
 
-                // Apply (callback) persists without closing; Save persists + closes.
-                using (var dlg = new SW2GZ.UI.WorldSettingsDialog(
-                    doc.World.Scene, () => PersistDoc(modeldoc, doc)))
-                {
-                    if (dlg.ShowDialog() == DialogResult.OK)
-                    {
-                        dlg.ApplyTo(doc.World.Scene);
-                        PersistDoc(modeldoc, doc);
-                    }
-                }
+                _worldSettingsPmp = new SW2GZ.UI.Pmp.Sw2gzWorldSettingsPmp(
+                    (SldWorks)SwApp, doc, d => PersistDoc(modeldoc, d));
+                _worldSettingsPmp.Show();
             }
             catch (Exception e)
             {
                 logger.Error("OpenWorldSettings failed", e);
-                MessageBox.Show("Could not open World Settings: " + e.Message);
+                MessageBox.Show("Could not open Settings: " + e.Message);
+            }
+        }
+
+        // Sensors — toggle the world-level support plugins (sensor families +
+        // keyboard teleop) that spawned models use. Native left-dock PMP seeded
+        // from doc.World.SensorPlugins; persists the doc on Okay.
+        public void OpenWorldSensors()
+        {
+            try
+            {
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+                var doc = SW2GZ.URDFExport.Sw2gzDocSerialization.Load(modeldoc)
+                          ?? SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                SW2GZ.URDFExport.Sw2gzDocStore.Put(modeldoc, doc);
+                if (doc.World == null) doc.World = new SW2GZ.URDFExport.Sw2gzWorldConfig();
+                if (doc.World.SensorPlugins == null) doc.World.SensorPlugins = new SW2GZ.URDFExport.Sw2gzWorldSensorsConfig();
+
+                _worldSensorsPmp = new SW2GZ.UI.Pmp.Sw2gzWorldSensorsPmp(
+                    (SldWorks)SwApp, doc, d => PersistDoc(modeldoc, d));
+                _worldSensorsPmp.Show();
+            }
+            catch (Exception e)
+            {
+                logger.Error("OpenWorldSensors failed", e);
+                MessageBox.Show("Could not open Sensors: " + e.Message);
             }
         }
 
@@ -907,10 +927,17 @@ namespace SW2GZ.SW
                     isWorld ? Sw2gzModelPreviewer.RunWorldPreview((SldWorks)SwApp, modeldoc, config)
                     : isAsset ? Sw2gzModelPreviewer.RunAssetPreview((SldWorks)SwApp, modeldoc, config)
                     : Sw2gzModelPreviewer.RunPreview((SldWorks)SwApp, modeldoc, config);
+                bool proceedToExport;
                 using (var dlg = new PreviewDialog(result))
                 {
-                    dlg.ShowDialog();
+                    // "Looks good — Export" returns OK; "Back to edit" cancels.
+                    proceedToExport = dlg.ShowDialog() == DialogResult.OK;
                 }
+
+                // Confirming the preview launches the real export sequence — same
+                // entry as the ribbon Export button, so it covers every mode
+                // (robot / world / asset / part) the same way.
+                if (proceedToExport) LaunchExport();
             }
             catch (Exception e)
             {

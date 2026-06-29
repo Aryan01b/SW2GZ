@@ -333,6 +333,82 @@ namespace SW2GZ.Writers.Tests
             Assert.DoesNotContain("<spherical_coordinates>", off);
         }
 
+        // ── World support plugins ("Sensors" panel) ───────────────────────────
+        // World mode no longer places <sensor> blocks; it just enables the
+        // world-level system/GUI plugins spawned models need.
+        [Fact]
+        public void WriteScene_PluginsNull_KeepsBaselineByteIdentical()
+        {
+            // No Plugins → legacy baseline (user-commands + scene-broadcaster),
+            // no sensor systems, never any <sensor> block.
+            var sdf = SdfWorldWriter.WriteScene(Scene(new SdfSceneModel("floor", "floor.dae")));
+            Assert.Contains("gz-sim-user-commands-system", sdf);
+            Assert.Contains("gz-sim-scene-broadcaster-system", sdf);
+            Assert.DoesNotContain("<sensor", sdf);
+            Assert.DoesNotContain("gz-sim-sensors-system", sdf);
+            Assert.DoesNotContain("gz-sim-imu-system", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_DefaultPlugins_EmitOnlyBaseline()
+        {
+            // Default flags = baseline on, every sensor family off.
+            var sdf = SdfWorldWriter.WriteScene(new SdfSceneInput("env",
+                new[] { new SdfSceneModel("floor", "floor.dae") },
+                Plugins: new SdfWorldPlugins()));
+            Assert.Contains("gz-sim-user-commands-system", sdf);
+            Assert.Contains("gz-sim-scene-broadcaster-system", sdf);
+            Assert.DoesNotContain("gz-sim-sensors-system", sdf);
+            Assert.DoesNotContain("<sensor", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_SensorFamilyFlags_EmitWorldSystemPlugins()
+        {
+            var sdf = SdfWorldWriter.WriteScene(new SdfSceneInput("env",
+                new[] { new SdfSceneModel("floor", "floor.dae") },
+                Plugins: new SdfWorldPlugins(Sensors: true, Imu: true, Contact: true,
+                    ForceTorque: true, Navsat: true)));
+            Assert.Contains("gz-sim-sensors-system", sdf);
+            Assert.Contains("<render_engine>ogre2</render_engine>", sdf);
+            Assert.Contains("gz-sim-imu-system", sdf);
+            Assert.Contains("gz-sim-contact-system", sdf);
+            Assert.Contains("gz-sim-forcetorque-system", sdf);
+            Assert.Contains("gz-sim-navsat-system", sdf);
+            // Still no per-model <sensor> blocks in World mode.
+            Assert.DoesNotContain("<sensor", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_KeyboardTeleop_EmitsGuiKeyPublisherAndTriggeredPublishers()
+        {
+            var sdf = SdfWorldWriter.WriteScene(new SdfSceneInput("env",
+                new[] { new SdfSceneModel("floor", "floor.dae") },
+                Plugins: new SdfWorldPlugins(KeyPublisher: true, TriggeredPublisher: true)));
+
+            // KeyPublisher rides inside the <gui> block.
+            int gi = sdf.IndexOf("<gui", System.StringComparison.Ordinal);
+            int ge = sdf.IndexOf("</gui>", System.StringComparison.Ordinal);
+            int ki = sdf.IndexOf("KeyPublisher", System.StringComparison.Ordinal);
+            Assert.True(gi >= 0 && ki > gi && ki < ge, "KeyPublisher must sit inside <gui>");
+
+            // TriggeredPublisher maps keypresses to a Twist on /cmd_vel.
+            Assert.Contains("gz-sim-triggered-publisher-system", sdf);
+            Assert.Contains("/keyboard/keypress", sdf);
+            Assert.Contains("topic=\"/cmd_vel\"", sdf);
+            Assert.Contains("16777235", sdf);   // up arrow
+        }
+
+        [Fact]
+        public void WriteScene_BaselineOff_OmitsBaselinePlugins()
+        {
+            var sdf = SdfWorldWriter.WriteScene(new SdfSceneInput("env",
+                new[] { new SdfSceneModel("floor", "floor.dae") },
+                Plugins: new SdfWorldPlugins(UserCommands: false, SceneBroadcaster: false)));
+            Assert.DoesNotContain("gz-sim-user-commands-system", sdf);
+            Assert.DoesNotContain("gz-sim-scene-broadcaster-system", sdf);
+        }
+
         [Fact]
         public void Sun_FromAzimuthElevation_PointsDownAndScalesIntensity()
         {

@@ -27,8 +27,11 @@ namespace SW2GZ.Gz
     public static class SdfGuiBlock
     {
         // Emits the <gui> block. When cam is non-null MinimalScene opens framed
-        // at that pose; otherwise Gz's default origin view is used.
-        public static string Default(SdfCamera cam)
+        // at that pose; otherwise Gz's default origin view is used. keyPublisher
+        // appends the KeyPublisher GUI plugin (keyboard teleop) before </gui>.
+        public static string Default(SdfCamera cam) => Default(cam, false);
+
+        public static string Default(SdfCamera cam, bool keyPublisher)
         {
             var ci = CultureInfo.InvariantCulture;
             string N(double d) => d.ToString("0.######", ci);
@@ -90,6 +93,11 @@ namespace SW2GZ.Gz
 
             // Hierarchical entity list.
             sb.AppendLine("      <plugin filename=\"EntityTree\" name=\"Entity tree\"/>");
+
+            // Keyboard teleop publisher (publishes keystrokes on
+            // /keyboard/keypress; paired with TriggeredPublisher at world level).
+            if (keyPublisher)
+                sb.Append(SdfWorldPluginsWriter.WriteGuiKeyPublisher(new SdfWorldPlugins(KeyPublisher: true)));
 
             sb.AppendLine("    </gui>");
             return sb.ToString();

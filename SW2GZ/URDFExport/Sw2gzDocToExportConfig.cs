@@ -57,6 +57,7 @@ namespace SW2GZ.URDFExport
                 cfg.WorldRealTimeFactor = world.RealTimeFactor;
                 cfg.WorldScene         = (world.Scene ?? new Sw2gzWorldSceneConfig()).Clone();
                 cfg.WorldInitialView   = cfg.WorldScene.InitialView ?? "iso";
+                cfg.WorldSensorPlugins = (world.SensorPlugins ?? new Sw2gzWorldSensorsConfig()).Clone();
             }
 
             // Asset mode — carry the Create-Asset picks through to the exporter.

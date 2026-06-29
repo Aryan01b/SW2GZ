@@ -152,9 +152,9 @@ namespace SW2GZ.UI.Ribbon
 
             // World cluster
             AddItem(grp, RibbonCommandIds.WorldGround,  "Ground",  "Static ground / heightmap", "OpenWorldGroundPmp",  "WorldClusterEnable", IMG_GROUND,  toolbar);
-            AddItem(grp, RibbonCommandIds.WorldAssets,  "Assets",  "Non-ground asset includes", "OpenWorldAssetsPmp",  "WorldClusterEnable", IMG_ASSETS,  toolbar);
+            AddItem(grp, RibbonCommandIds.WorldAssets,  "Sensors", "Enable world sensor / teleop support plugins for spawned models", "OpenWorldSensors", "AssemblyEnable", IMG_SENSORS, toolbar);
             AddItem(grp, RibbonCommandIds.WorldPhysics, "Physics", "Engine + step + RTF",       "OpenWorldPhysicsPmp", "WorldClusterEnable", IMG_PHYSICS, toolbar);
-            AddItem(grp, RibbonCommandIds.WorldScene,   "World Settings", "Lighting, sky, fog, grid, gravity, wind, geo", "OpenWorldSettings", "AssemblyEnable", IMG_SCENE, toolbar);
+            AddItem(grp, RibbonCommandIds.WorldScene,   "Settings", "Lighting, sky, fog, grid, gravity, wind, geo", "OpenWorldSettings", "AssemblyEnable", IMG_SCENE, toolbar);
 
             // Asset cluster
             AddItem(grp, RibbonCommandIds.AssetBody,    "Body",    "Single-part body",          "OpenAssetBodyPmp",    "AssetClusterEnable", IMG_BODY,    toolbar);
@@ -250,7 +250,7 @@ namespace SW2GZ.UI.Ribbon
         // other stubs (Ground/Assets/Physics) stay registered but unplaced —
         // the Create World wizard already covers those picks.
         private static readonly int[] WorldClusterUserIds = new[] {
-            RibbonCommandIds.WorldScene };
+            RibbonCommandIds.WorldScene, RibbonCommandIds.WorldAssets };
         // Asset cluster emptied — Body/Surface opened stub PMPs; the Create
         // Asset wizard covers both. Commands stay registered for easy re-add.
         private static readonly int[] AssetClusterUserIds = new int[0];

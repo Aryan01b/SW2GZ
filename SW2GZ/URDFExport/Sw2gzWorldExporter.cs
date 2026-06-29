@@ -110,10 +110,29 @@ namespace SW2GZ.URDFExport
                 RealTimeFactor: config.WorldRealTimeFactor,
                 Roll: roll, Pitch: pitch, Yaw: yaw,
                 Camera: camera,
-                Settings: (config.WorldScene ?? new Sw2gzWorldSceneConfig()).ToSceneSettings());
+                Settings: (config.WorldScene ?? new Sw2gzWorldSceneConfig()).ToSceneSettings(),
+                Plugins: ToWorldPlugins(config.WorldSensorPlugins));
 
             File.WriteAllText(Path.Combine(root, pkg + ".sdf"), SdfWorldWriter.WriteScene(scene));
             return new ValidationReport(issues);
+        }
+
+        // Map the persisted "Sensors" toggles to the pure writer flags. Null
+        // (legacy config) → defaults (baseline user-commands + scene-broadcaster
+        // on, everything else off).
+        private static SdfWorldPlugins ToWorldPlugins(Sw2gzWorldSensorsConfig c)
+        {
+            c = c ?? new Sw2gzWorldSensorsConfig();
+            return new SdfWorldPlugins(
+                Sensors: c.Sensors,
+                Imu: c.Imu,
+                Contact: c.Contact,
+                ForceTorque: c.ForceTorque,
+                Navsat: c.Navsat,
+                UserCommands: c.UserCommands,
+                SceneBroadcaster: c.SceneBroadcaster,
+                KeyPublisher: c.KeyPublisher,
+                TriggeredPublisher: c.TriggeredPublisher);
         }
 
         // Combined AABB over every tessellated mesh, in SW (pre-reframe) space.

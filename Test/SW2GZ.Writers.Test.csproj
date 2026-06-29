@@ -32,6 +32,7 @@
     <Compile Include="..\SW2GZ\Ros2\StackRibbonGate.cs"      Link="Sources\Ros2\StackRibbonGate.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzExportConfig.cs" Link="Sources\URDFExport\Sw2gzExportConfig.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzWorldSceneConfig.cs" Link="Sources\URDFExport\Sw2gzWorldSceneConfig.cs" />
+    <Compile Include="..\SW2GZ\URDFExport\Sw2gzWorldSensorsConfig.cs" Link="Sources\URDFExport\Sw2gzWorldSensorsConfig.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzWorldExporter.cs" Link="Sources\URDFExport\Sw2gzWorldExporter.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzAssetExporter.cs" Link="Sources\URDFExport\Sw2gzAssetExporter.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfAssetModelWriter.cs"     Link="Sources\Gz\SdfAssetModelWriter.cs" />
@@ -123,6 +124,7 @@
     <Compile Include="..\SW2GZ\Gz\SdfModelWriter.cs"         Link="Sources\Gz\SdfModelWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfSensorBlocks.cs"        Link="Sources\Gz\SdfSensorBlocks.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfSensorPlugins.cs"       Link="Sources\Gz\SdfSensorPlugins.cs" />
+    <Compile Include="..\SW2GZ\Gz\SdfWorldPluginsWriter.cs"  Link="Sources\Gz\SdfWorldPluginsWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\RosGzBridgeYaml.cs"        Link="Sources\Gz\RosGzBridgeYaml.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Ros2Package.cs"    Link="Sources\URDFExport\Ros2Package.cs" />
     <Compile Include="..\SW2GZ\URDFExport\OutputValidator.cs" Link="Sources\URDFExport\OutputValidator.cs" />

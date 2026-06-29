@@ -78,6 +78,9 @@ namespace SW2GZ.URDFExport
         // sky, fog, grid, gravity, wind, geo). One nested object so there's a
         // single place to default / clone / serialize.
         [DataMember] public Sw2gzWorldSceneConfig WorldScene { get; set; } = new Sw2gzWorldSceneConfig();
+        // World-level sensor/teleop support plugins ("Sensors" panel) — toggles
+        // which Gz system/GUI plugins the world enables for spawned models.
+        [DataMember] public Sw2gzWorldSensorsConfig WorldSensorPlugins { get; set; } = new Sw2gzWorldSensorsConfig();
 
         // Asset mode — single part exported as a reusable Gz model.
         [DataMember] public string AssetBodyPart   { get; set; } = string.Empty;
@@ -114,6 +117,7 @@ namespace SW2GZ.URDFExport
             WorldRealTimeFactor = 1.0;
             WorldInitialView = "iso";
             WorldScene = new Sw2gzWorldSceneConfig();
+            WorldSensorPlugins = new Sw2gzWorldSensorsConfig();
             AssetBodyPart = string.Empty;
             AssetFrictionMu = 0.8;
             AssetIsStatic = true;
@@ -156,6 +160,7 @@ namespace SW2GZ.URDFExport
                 WorldRealTimeFactor = this.WorldRealTimeFactor,
                 WorldInitialView   = this.WorldInitialView,
                 WorldScene         = this.WorldScene,
+                WorldSensorPlugins = this.WorldSensorPlugins,
                 AssetBodyPart   = this.AssetBodyPart,
                 AssetFrictionMu = this.AssetFrictionMu,
                 AssetIsStatic   = this.AssetIsStatic,
