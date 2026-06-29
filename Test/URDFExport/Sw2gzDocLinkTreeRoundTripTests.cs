@@ -61,5 +61,47 @@ namespace SW2GZ.Test.URDFExport
             Assert.NotNull(dst);
             Assert.Empty(dst.Robot.Links);
         }
+
+        [Fact]
+        [Trait("Category", "Unit")]
+        public void WorldSceneSettings_SurviveXmlRoundTrip()
+        {
+            var src = new Sw2gzDoc { Mode = Sw2gzMode.World };
+            src.World.Ground = "floor-1";
+            src.World.Scene.SunAzimuthDeg = 42.5;
+            src.World.Scene.CastShadows = false;
+            src.World.Scene.Sky = true;
+            src.World.Scene.GravityZ = -1.62;          // moon
+            src.World.Scene.UseGeo = true;
+            src.World.Scene.Latitude = 12.25;
+
+            string xml = Sw2gzDocCodec.ToXmlString(src);
+            Sw2gzDoc dst = Sw2gzDocCodec.FromXmlString(xml);
+
+            Assert.NotNull(dst.World.Scene);
+            Assert.Equal(42.5, dst.World.Scene.SunAzimuthDeg);
+            Assert.False(dst.World.Scene.CastShadows);
+            Assert.True(dst.World.Scene.Sky);
+            Assert.Equal(-1.62, dst.World.Scene.GravityZ);
+            Assert.True(dst.World.Scene.UseGeo);
+            Assert.Equal(12.25, dst.World.Scene.Latitude);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
+        public void LegacyDoc_WithoutSceneElement_DeserializesWithDefaults()
+        {
+            // Simulate a checkpoint saved before World.Scene existed: strip the
+            // <Scene> element from the serialized XML, then load it.
+            string xml = Sw2gzDocCodec.ToXmlString(new Sw2gzDoc { Mode = Sw2gzMode.World });
+            string stripped = System.Text.RegularExpressions.Regex.Replace(
+                xml, "<Scene>.*?</Scene>", "", System.Text.RegularExpressions.RegexOptions.Singleline);
+
+            Sw2gzDoc dst = Sw2gzDocCodec.FromXmlString(stripped);
+
+            Assert.NotNull(dst.World.Scene);                 // OnDeserializing reseeds it
+            Assert.True(dst.World.Scene.CastShadows);         // default
+            Assert.Equal(-9.8, dst.World.Scene.GravityZ);     // default
+        }
     }
 }

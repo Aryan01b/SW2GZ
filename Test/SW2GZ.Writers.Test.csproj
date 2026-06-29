@@ -31,6 +31,7 @@
     <Compile Include="..\SW2GZ\Ros2\StackConfigMap.cs"       Link="Sources\Ros2\StackConfigMap.cs" />
     <Compile Include="..\SW2GZ\Ros2\StackRibbonGate.cs"      Link="Sources\Ros2\StackRibbonGate.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzExportConfig.cs" Link="Sources\URDFExport\Sw2gzExportConfig.cs" />
+    <Compile Include="..\SW2GZ\URDFExport\Sw2gzWorldSceneConfig.cs" Link="Sources\URDFExport\Sw2gzWorldSceneConfig.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzWorldExporter.cs" Link="Sources\URDFExport\Sw2gzWorldExporter.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzAssetExporter.cs" Link="Sources\URDFExport\Sw2gzAssetExporter.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfAssetModelWriter.cs"     Link="Sources\Gz\SdfAssetModelWriter.cs" />
@@ -116,6 +117,7 @@
     <Compile Include="..\SW2GZ\Gz\ModelConfigWriter.cs"      Link="Sources\Gz\ModelConfigWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\GzPluginTags.cs"           Link="Sources\Gz\GzPluginTags.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfGuiBlock.cs"            Link="Sources\Gz\SdfGuiBlock.cs" />
+    <Compile Include="..\SW2GZ\Gz\SdfSceneSettings.cs"       Link="Sources\Gz\SdfSceneSettings.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfPhysicsBlock.cs"        Link="Sources\Gz\SdfPhysicsBlock.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfWorldWriter.cs"         Link="Sources\Gz\SdfWorldWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfModelWriter.cs"         Link="Sources\Gz\SdfModelWriter.cs" />

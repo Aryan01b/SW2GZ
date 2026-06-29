@@ -697,7 +697,39 @@ namespace SW2GZ.SW
         public void OpenWorldGroundPmp()  => OpenStub("Ground");
         public void OpenWorldAssetsPmp()  => OpenStub("Assets");
         public void OpenWorldPhysicsPmp() => OpenStub("Physics");
-        public void OpenWorldScenePmp()   => OpenStub("Scene");
+        public void OpenWorldScenePmp()   => OpenStub("Scene");   // legacy stub (unwired)
+
+        // World Settings — scene/environment preferences (lighting, sky, fog,
+        // grid, gravity, wind, geo). Modal WinForms dialog seeded from the doc's
+        // World.Scene; persists the doc on Save.
+        public void OpenWorldSettings()
+        {
+            try
+            {
+                if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return;
+                var doc = SW2GZ.URDFExport.Sw2gzDocSerialization.Load(modeldoc)
+                          ?? SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                SW2GZ.URDFExport.Sw2gzDocStore.Put(modeldoc, doc);
+                if (doc.World == null) doc.World = new SW2GZ.URDFExport.Sw2gzWorldConfig();
+                if (doc.World.Scene == null) doc.World.Scene = new SW2GZ.URDFExport.Sw2gzWorldSceneConfig();
+
+                // Apply (callback) persists without closing; Save persists + closes.
+                using (var dlg = new SW2GZ.UI.WorldSettingsDialog(
+                    doc.World.Scene, () => PersistDoc(modeldoc, doc)))
+                {
+                    if (dlg.ShowDialog() == DialogResult.OK)
+                    {
+                        dlg.ApplyTo(doc.World.Scene);
+                        PersistDoc(modeldoc, doc);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                logger.Error("OpenWorldSettings failed", e);
+                MessageBox.Show("Could not open World Settings: " + e.Message);
+            }
+        }
 
         // ─── Asset cluster ────────────────────────────────────────────
         public void OpenAssetBodyPmp()    => OpenStub("Body");

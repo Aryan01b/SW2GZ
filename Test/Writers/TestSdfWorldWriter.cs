@@ -273,5 +273,79 @@ namespace SW2GZ.Writers.Tests
             Assert.DoesNotContain("camera_pose", gui);
             Assert.Contains("MinimalScene", gui);   // panels still emitted
         }
+
+        // ── Scene settings (World Settings dialog) ────────────────────────────
+        private static SdfSceneInput SceneWith(SdfSceneSettings s) =>
+            new SdfSceneInput("env", new[] { new SdfSceneModel("floor", "floor.dae") }, Settings: s);
+
+        [Fact]
+        public void WriteScene_NullSettings_OmitsGravityAndExtras()
+        {
+            var sdf = SdfWorldWriter.WriteScene(Scene(new SdfSceneModel("floor", "floor.dae")));
+            Assert.DoesNotContain("<gravity>", sdf);
+            Assert.DoesNotContain("<grid>", sdf);
+            Assert.DoesNotContain("<shadows>", sdf);
+            Assert.Contains("<background>0.8 0.85 0.9 1</background>", sdf);  // legacy default
+        }
+
+        [Fact]
+        public void WriteScene_WithSettings_EmitsGravityGridShadowsBackground()
+        {
+            var sdf = SdfWorldWriter.WriteScene(SceneWith(new SdfSceneSettings(
+                ShowGrid: false, CastShadows: false, BgR: 0.1, BgG: 0.2, BgB: 0.3, GravityZ: -3.7)));
+            Assert.Contains("<gravity>0 0 -3.7</gravity>", sdf);
+            Assert.Contains("<grid>false</grid>", sdf);
+            Assert.Contains("<shadows>false</shadows>", sdf);
+            Assert.Contains("<background>0.1 0.2 0.3 1</background>", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_SkyAndFog_EmittedOnlyWhenEnabled()
+        {
+            var on = SdfWorldWriter.WriteScene(SceneWith(new SdfSceneSettings(Sky: true, Fog: true, FogDensity: 0.05)));
+            Assert.Contains("<sky>", on);
+            Assert.Contains("<fog><type>linear</type><density>0.05</density></fog>", on);
+
+            var off = SdfWorldWriter.WriteScene(SceneWith(new SdfSceneSettings(Sky: false, Fog: false)));
+            Assert.DoesNotContain("<sky>", off);
+            Assert.DoesNotContain("<fog>", off);
+        }
+
+        [Fact]
+        public void WriteScene_Wind_EmittedOnlyWhenNonZero()
+        {
+            var on = SdfWorldWriter.WriteScene(SceneWith(new SdfSceneSettings(WindX: 1.5)));
+            Assert.Contains("<wind><linear_velocity>1.5 0 0</linear_velocity></wind>", on);
+            var off = SdfWorldWriter.WriteScene(SceneWith(new SdfSceneSettings()));
+            Assert.DoesNotContain("<wind>", off);
+        }
+
+        [Fact]
+        public void WriteScene_Geo_EmittedOnlyWhenEnabled()
+        {
+            var on = SdfWorldWriter.WriteScene(SceneWith(new SdfSceneSettings(
+                UseGeo: true, Latitude: 37.4, Longitude: -122.1, Elevation: 10, HeadingDeg: 90)));
+            Assert.Contains("<spherical_coordinates>", on);
+            Assert.Contains("<latitude_deg>37.4</latitude_deg>", on);
+            Assert.Contains("<heading_deg>90</heading_deg>", on);
+
+            var off = SdfWorldWriter.WriteScene(SceneWith(new SdfSceneSettings(UseGeo: false)));
+            Assert.DoesNotContain("<spherical_coordinates>", off);
+        }
+
+        [Fact]
+        public void Sun_FromAzimuthElevation_PointsDownAndScalesIntensity()
+        {
+            // Elevation 90° → sun straight overhead → direction points straight down.
+            var sun = SdfPhysicsBlock.Sun(0, 90, 1.0, true);
+            Assert.Contains("<direction>", sun);
+            Assert.Contains("-1</direction>", sun);            // dz = -sin(90°) = -1
+            Assert.Contains("<cast_shadows>true</cast_shadows>", sun);
+            Assert.Contains("<diffuse>0.8 0.8 0.8 1</diffuse>", sun);   // 0.8 * intensity 1.0
+
+            var dim = SdfPhysicsBlock.Sun(0, 90, 0.5, false);
+            Assert.Contains("<diffuse>0.4 0.4 0.4 1</diffuse>", dim);   // 0.8 * 0.5
+            Assert.Contains("<cast_shadows>false</cast_shadows>", dim);
+        }
     }
 }

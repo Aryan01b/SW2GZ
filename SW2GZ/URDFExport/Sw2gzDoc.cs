@@ -16,6 +16,7 @@ full link-tree + mate-driven joint flow. Sw2gzDocSerialization persists the
 full tree to a "SW2GZ Doc v1" SolidWorks Attribute.
 */
 using System.Collections.Generic;
+using System.Runtime.Serialization;
 using SW2GZ.Build.Model;
 
 namespace SW2GZ.URDFExport
@@ -45,6 +46,16 @@ namespace SW2GZ.URDFExport
         public string PhysicsEngine     { get; set; } = "ode";
         public double MaxStepSize       { get; set; } = 0.001;
         public double RealTimeFactor    { get; set; } = 1.0;
+        // Scene/environment settings ("World Settings" dialog). Legacy docs saved
+        // before this field deserialize it to null (initializers are skipped),
+        // so the hook below reseeds a default — callers never see null.
+        public Sw2gzWorldSceneConfig Scene { get; set; } = new Sw2gzWorldSceneConfig();
+
+        [OnDeserializing]
+        private void OnDeserializing(StreamingContext context)
+        {
+            Scene = new Sw2gzWorldSceneConfig();
+        }
     }
 
     public sealed class Sw2gzAssetConfig

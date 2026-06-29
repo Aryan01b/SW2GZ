@@ -154,7 +154,7 @@ namespace SW2GZ.UI.Ribbon
             AddItem(grp, RibbonCommandIds.WorldGround,  "Ground",  "Static ground / heightmap", "OpenWorldGroundPmp",  "WorldClusterEnable", IMG_GROUND,  toolbar);
             AddItem(grp, RibbonCommandIds.WorldAssets,  "Assets",  "Non-ground asset includes", "OpenWorldAssetsPmp",  "WorldClusterEnable", IMG_ASSETS,  toolbar);
             AddItem(grp, RibbonCommandIds.WorldPhysics, "Physics", "Engine + step + RTF",       "OpenWorldPhysicsPmp", "WorldClusterEnable", IMG_PHYSICS, toolbar);
-            AddItem(grp, RibbonCommandIds.WorldScene,   "Scene",   "Light + sky + GUI",         "OpenWorldScenePmp",   "WorldClusterEnable", IMG_SCENE,   toolbar);
+            AddItem(grp, RibbonCommandIds.WorldScene,   "World Settings", "Lighting, sky, fog, grid, gravity, wind, geo", "OpenWorldSettings", "AssemblyEnable", IMG_SCENE, toolbar);
 
             // Asset cluster
             AddItem(grp, RibbonCommandIds.AssetBody,    "Body",    "Single-part body",          "OpenAssetBodyPmp",    "AssetClusterEnable", IMG_BODY,    toolbar);
@@ -245,11 +245,12 @@ namespace SW2GZ.UI.Ribbon
         // arrays so the same data drives both the initial build and rebuild.
         private static readonly int[] RobotClusterUserIds = new[] {
             RibbonCommandIds.RobotSensors, RibbonCommandIds.RobotActuation };
-        // World cluster emptied — Ground/Assets/Physics/Scene opened stub PMPs
-        // that did nothing; the Create World wizard already covers all of it.
-        // Commands stay registered (see BuildCommandGroup) so they can be
-        // re-added here later without re-plumbing.
-        private static readonly int[] WorldClusterUserIds = new int[0];
+        // World cluster — one button: "World Settings" (the old WorldScene
+        // command id, repurposed to open the scene/environment dialog). The
+        // other stubs (Ground/Assets/Physics) stay registered but unplaced —
+        // the Create World wizard already covers those picks.
+        private static readonly int[] WorldClusterUserIds = new[] {
+            RibbonCommandIds.WorldScene };
         // Asset cluster emptied — Body/Surface opened stub PMPs; the Create
         // Asset wizard covers both. Commands stay registered for easy re-add.
         private static readonly int[] AssetClusterUserIds = new int[0];

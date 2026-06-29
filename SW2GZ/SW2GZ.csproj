@@ -360,6 +360,7 @@
     <Compile Include="URDFExport\CSV\CSVImportExport.cs" />
     <Compile Include="URDFExport\ConfigurationSerialization.cs" />
     <Compile Include="URDFExport\Sw2gzExportConfig.cs" />
+    <Compile Include="URDFExport\Sw2gzWorldSceneConfig.cs" />
     <Compile Include="URDFExport\Sw2gzDoc.cs" />
     <Compile Include="URDFExport\Sw2gzDocSnapshot.cs" />
     <Compile Include="URDFExport\Sw2gzDocStore.cs" />
@@ -500,6 +501,7 @@
     <Compile Include="Gz\ModelConfigWriter.cs" />
     <Compile Include="Gz\GzPluginTags.cs" />
     <Compile Include="Gz\SdfGuiBlock.cs" />
+    <Compile Include="Gz\SdfSceneSettings.cs" />
     <Compile Include="Gz\SdfPhysicsBlock.cs" />
     <Compile Include="Gz\SdfWorldWriter.cs" />
     <Compile Include="Gz\SdfModelWriter.cs" />
@@ -539,6 +541,7 @@
     <Compile Include="URDFExport\PreviewServer.cs" />
     <Compile Include="URDFExport\SwJointStateSampler.cs" />
     <Compile Include="UI\ExportDialog.cs" />
+    <Compile Include="UI\WorldSettingsDialog.cs" />
     <Compile Include="UI\PreviewDialog.cs" />
     <Compile Include="UI\StackConfigDialog.cs" />
     <Compile Include="SwSurface\Abstractions\IMeshTessellator.cs" />

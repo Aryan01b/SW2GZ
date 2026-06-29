@@ -109,7 +109,8 @@ namespace SW2GZ.URDFExport
                 MaxStepSize: config.WorldMaxStepSize,
                 RealTimeFactor: config.WorldRealTimeFactor,
                 Roll: roll, Pitch: pitch, Yaw: yaw,
-                Camera: camera);
+                Camera: camera,
+                Settings: (config.WorldScene ?? new Sw2gzWorldSceneConfig()).ToSceneSettings());
 
             File.WriteAllText(Path.Combine(root, pkg + ".sdf"), SdfWorldWriter.WriteScene(scene));
             return new ValidationReport(issues);

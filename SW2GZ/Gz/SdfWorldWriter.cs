@@ -42,7 +42,8 @@ namespace SW2GZ.Gz
         double Roll = 0.0,
         double Pitch = 0.0,
         double Yaw = 0.0,
-        SdfCamera Camera = null);
+        SdfCamera Camera = null,
+        SdfSceneSettings Settings = null);
 
     public static class SdfWorldWriter
     {
@@ -68,18 +69,58 @@ namespace SW2GZ.Gz
             sb.AppendLine("    <plugin filename=\"gz-sim-user-commands-system\"     name=\"gz::sim::systems::UserCommands\"/>");
             sb.AppendLine("    <plugin filename=\"gz-sim-scene-broadcaster-system\" name=\"gz::sim::systems::SceneBroadcaster\"/>");
             sb.Append(SdfPhysicsBlock.Default(input.PhysicsEngine, input.MaxStepSize, input.RealTimeFactor));
+
+            SdfSceneSettings s = input.Settings;
+
+            // World environment (gravity / wind / geo) — only when the user has
+            // settings; a null Settings keeps the legacy world byte-for-byte.
+            if (s != null)
+            {
+                sb.AppendLine("    <gravity>0 0 " + s.GravityZ.ToString("0.######", ci) + "</gravity>");
+                if (s.WindX != 0 || s.WindY != 0 || s.WindZ != 0)
+                    sb.AppendLine("    <wind><linear_velocity>" +
+                        s.WindX.ToString("0.######", ci) + " " +
+                        s.WindY.ToString("0.######", ci) + " " +
+                        s.WindZ.ToString("0.######", ci) + "</linear_velocity></wind>");
+                if (s.UseGeo)
+                {
+                    sb.AppendLine("    <spherical_coordinates>");
+                    sb.AppendLine("      <surface_model>EARTH_WGS84</surface_model>");
+                    sb.AppendLine("      <world_frame_orientation>ENU</world_frame_orientation>");
+                    sb.AppendLine("      <latitude_deg>" + s.Latitude.ToString("0.######", ci) + "</latitude_deg>");
+                    sb.AppendLine("      <longitude_deg>" + s.Longitude.ToString("0.######", ci) + "</longitude_deg>");
+                    sb.AppendLine("      <elevation>" + s.Elevation.ToString("0.######", ci) + "</elevation>");
+                    sb.AppendLine("      <heading_deg>" + s.HeadingDeg.ToString("0.######", ci) + "</heading_deg>");
+                    sb.AppendLine("    </spherical_coordinates>");
+                }
+            }
+
             // Scene ambient so faces whose tessellated normal points away from
             // the sun still read as their material color instead of going black
             // (CAD tessellation winding isn't guaranteed outward).
             sb.AppendLine("    <scene>");
             sb.AppendLine("      <ambient>0.5 0.5 0.5 1</ambient>");
-            sb.AppendLine("      <background>0.8 0.85 0.9 1</background>");
+            if (s == null)
+                sb.AppendLine("      <background>0.8 0.85 0.9 1</background>");
+            else
+            {
+                string F(double d) => d.ToString("0.###", ci);
+                sb.AppendLine("      <background>" + F(s.BgR) + " " + F(s.BgG) + " " + F(s.BgB) + " 1</background>");
+                sb.AppendLine("      <grid>" + (s.ShowGrid ? "true" : "false") + "</grid>");
+                sb.AppendLine("      <shadows>" + (s.CastShadows ? "true" : "false") + "</shadows>");
+                if (s.Sky) sb.AppendLine("      <sky></sky>");
+                if (s.Fog)
+                    sb.AppendLine("      <fog><type>linear</type><density>" +
+                        s.FogDensity.ToString("0.######", ci) + "</density></fog>");
+            }
             sb.AppendLine("    </scene>");
             // GUI panels + an initial camera framed on the scene (when supplied),
             // so `gz sim` opens looking at the assets instead of empty origin.
             if (input.Camera != null)
                 sb.Append(SdfGuiBlock.Default(input.Camera));
-            sb.Append(SdfPhysicsBlock.Sun());
+            sb.Append(s == null
+                ? SdfPhysicsBlock.Sun()
+                : SdfPhysicsBlock.Sun(s.SunAzimuthDeg, s.SunElevationDeg, s.SunIntensity, s.CastShadows));
             if (input.IncludeGroundPlane)
                 sb.Append(SdfPhysicsBlock.GroundPlane());
 

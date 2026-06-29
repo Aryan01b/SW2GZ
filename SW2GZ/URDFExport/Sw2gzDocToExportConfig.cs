@@ -55,6 +55,8 @@ namespace SW2GZ.URDFExport
                 cfg.WorldPhysicsEngine = world.PhysicsEngine ?? "ode";
                 cfg.WorldMaxStepSize   = world.MaxStepSize;
                 cfg.WorldRealTimeFactor = world.RealTimeFactor;
+                cfg.WorldScene         = (world.Scene ?? new Sw2gzWorldSceneConfig()).Clone();
+                cfg.WorldInitialView   = cfg.WorldScene.InitialView ?? "iso";
             }
 
             // Asset mode — carry the Create-Asset picks through to the exporter.

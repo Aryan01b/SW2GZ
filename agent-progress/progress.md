@@ -4,7 +4,33 @@ Current: world mode + asset mode shipped on `main` (trunk). Tests: **785 green**
 Branch model reconciled: `main` is trunk, `v2.1.0`/`v2.2.0` are tags.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
-## In progress (world Phase 1 — runnable, framed world)
+## In progress (World Settings panel — scene/environment prefs)
+
+New "World Settings" ribbon button (World tab) → modal WinForms dialog editing
+all scene/environment knobs; persisted per-doc; emitted by the world writer.
+Groups: View (camera iso/top/front + grid), Lighting (sun az/el/intensity +
+shadows), Sky & fog (+ background RGB), Environment (gravity + wind), Geo
+(spherical coords). Pure-writer + config; UI is a plain Form (no PMP re-entrancy).
+
+- `SdfSceneSettings` (pure record, `Gz/`) + `SdfPhysicsBlock.Sun(az,el,int,shadows)`;
+  `SdfWorldWriter.WriteScene` gained `Settings` param → emits `<gravity>/<wind>/
+  <spherical_coordinates>`, `<scene>` grid/shadows/sky/fog/background, parametric
+  sun. **Null Settings = legacy byte-identical** (robot path + old tests safe).
+- `Sw2gzWorldSceneConfig` ([DataContract], `URDFExport/`) holds the persisted
+  knobs + `InitialView`; lives on `Sw2gzDoc.World.Scene` (POCO DataContract
+  round-trips it; `OnDeserializing` reseeds so legacy docs never load null).
+  `Bridge` copies it to `cfg.WorldScene` + `cfg.WorldInitialView`; exporter maps
+  `ToSceneSettings()` into the scene.
+- `WorldSettingsDialog` (WinForms, `#if SW_INTEROP`) seeded from / `ApplyTo` the
+  scene config. Ribbon: repurposed the unplaced `WorldScene` cmd (id 33) →
+  label "World Settings", callback `OpenWorldSettings`, added to
+  `WorldClusterUserIds` so it shows only in World mode. `SwAddin.OpenWorldSettings`
+  loads doc → dialog → `PersistDoc` on Save.
+- +9 tests (793 green): scene-settings emit, parametric sun, doc round-trip,
+  legacy-doc defaults. Addin compiles clean; deployed 17:30. **Live-test in SW,
+  then commit (planned tag v2.5.0).**
+
+## Done (world Phase 1 — runnable, framed world)
 
 Gz-Harmonic world-feature roadmap (4 phases) planned from the SDF-worlds docs.
 Phase 1 = emit a `<gui>` block + an auto-framed initial camera so `gz sim`

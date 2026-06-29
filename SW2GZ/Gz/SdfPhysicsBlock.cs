@@ -47,6 +47,32 @@ namespace SW2GZ.Gz
 ";
         }
 
+        // World-mode overload — sun from azimuth/elevation (degrees) with an
+        // intensity scale and a shadow toggle. The light direction points FROM
+        // the sun TO the scene, so it is the negated sun bearing. Diffuse scales
+        // with intensity; specular is a quarter of diffuse for a soft highlight.
+        public static string Sun(double azimuthDeg, double elevationDeg, double intensity, bool castShadows)
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            double az = azimuthDeg * System.Math.PI / 180.0;
+            double el = elevationDeg * System.Math.PI / 180.0;
+            double dx = -(System.Math.Cos(el) * System.Math.Cos(az));
+            double dy = -(System.Math.Cos(el) * System.Math.Sin(az));
+            double dz = -System.Math.Sin(el);
+            double d = System.Math.Max(0.0, intensity) * 0.8;     // diffuse level
+            double s = d * 0.25;                                   // specular level
+            string F(double v) => v.ToString("0.######", ci);
+            var sb = new StringBuilder();
+            sb.AppendLine("    <light name=\"sun\" type=\"directional\">");
+            sb.AppendLine("      <cast_shadows>" + (castShadows ? "true" : "false") + "</cast_shadows>");
+            sb.AppendLine("      <pose>0 0 10 0 0 0</pose>");
+            sb.AppendLine("      <diffuse>" + F(d) + " " + F(d) + " " + F(d) + " 1</diffuse>");
+            sb.AppendLine("      <specular>" + F(s) + " " + F(s) + " " + F(s) + " 1</specular>");
+            sb.AppendLine("      <direction>" + F(dx) + " " + F(dy) + " " + F(dz) + "</direction>");
+            sb.AppendLine("    </light>");
+            return sb.ToString();
+        }
+
         public static string GroundPlane()
         {
             return
