@@ -4,7 +4,7 @@ Current: world mode + asset mode shipped on `main` (trunk). Tests: **785 green**
 Branch model reconciled: `main` is trunk, `v2.1.0`/`v2.2.0` are tags.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
-## In progress (World Settings panel — scene/environment prefs)
+## Done (World Settings panel — scene/environment prefs) — v2.5.0
 
 New "World Settings" ribbon button (World tab) → modal WinForms dialog editing
 all scene/environment knobs; persisted per-doc; emitted by the world writer.
@@ -27,8 +27,19 @@ shadows), Sky & fog (+ background RGB), Environment (gravity + wind), Geo
   `WorldClusterUserIds` so it shows only in World mode. `SwAddin.OpenWorldSettings`
   loads doc → dialog → `PersistDoc` on Save.
 - +9 tests (793 green): scene-settings emit, parametric sun, doc round-trip,
-  legacy-doc defaults. Addin compiles clean; deployed 17:30. **Live-test in SW,
-  then commit (planned tag v2.5.0).**
+  legacy-doc defaults. Dialog is theme-aware (dark/light, dark title bar via
+  DWMWA_USE_IMMERSIVE_DARK_MODE). Shipped: commit a438240, **tag v2.5.0**,
+  pushed to origin/main.
+
+## Next (planned, not started)
+
+- **World sensors & actuators** — phased roadmap written:
+  [`docs/superpowers/plans/2026-06-29-world-sensors-actuators.md`](../docs/superpowers/plans/2026-06-29-world-sensors-actuators.md).
+  S1 (sensors on world models) + A0 (dynamic props) are the low-risk entry
+  points; A1+ (articulated props → joint control → ros2_control/bridge) needs a
+  product decision to move World mode beyond static review-only, plus a
+  robot/world model-builder unification checkpoint first. Most writers already
+  exist (sensors, ros2_control, RosGzBridgeYaml, LaunchPyWriter).
 
 ## Done (world Phase 1 — runnable, framed world)
 
