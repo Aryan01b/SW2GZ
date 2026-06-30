@@ -67,6 +67,19 @@ always stays mesh. `Sw2gzExportConfig.AssetCollision` ("mesh" default).
 computes the AABB of the grounded mesh and passes it. Zero AABB → falls back to
 mesh (no zero-size box). +5 tests (**842 green**); add-in compiles clean.
 
+### ✅ UI + persistence COMPLETE — Asset wizard live-tested; World Settings WP1+WP2 done
+- **Asset wizard UI (A1-A3):** Create-Asset Surface step has collision/joint+axis+
+  limits/sensor+topic controls; doc-persisted; **live-tested OK** (commit 4ddb666).
+- **WP1 — World friction knob:** `Sw2gzWorldSceneConfig.Friction` + Bridge →
+  `cfg.WorldFriction`; World Settings PMP "Ground friction μ" (Environment).
+- **WP2 — World extra lights:** `Sw2gzLightConfig` + `Scene.Lights` (deep-clone) +
+  `ToExtraLights()`; exporter passes `ExtraLights`; World Settings PMP "Lights"
+  section, 2 fill-light slots. **849 tests green.**
+- Deployed `C:\Program Files\SW2GZ\SW2GZ.dll` **07:28:45** (fresh).
+- **WP3 PENDING (user live-test → tag v2.6.0):** test World Settings (friction +
+  lights) + the world-sensors Settings/Sensors PMPs; export a World; verify the
+  world `.sdf` (friction/lights) + `launch_world.py` + `ros_gz_bridge.yaml`.
+
 ### ✅ World+Asset ➕ matrix set BACKEND-COMPLETE (this session, branch `feat/world-sensors`)
 W1 launch+bridge · W2 friction · W3 lights(writer) · A1 articulated asset ·
 A2 sensor asset · A3 primitive collision. 801→842 tests. Every feature is
