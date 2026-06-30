@@ -57,6 +57,7 @@ namespace SW2GZ.URDFExport
                 cfg.WorldRealTimeFactor = world.RealTimeFactor;
                 cfg.WorldScene         = (world.Scene ?? new Sw2gzWorldSceneConfig()).Clone();
                 cfg.WorldInitialView   = cfg.WorldScene.InitialView ?? "iso";
+                cfg.WorldFriction      = cfg.WorldScene.Friction;
                 cfg.WorldSensorPlugins = (world.SensorPlugins ?? new Sw2gzWorldSensorsConfig()).Clone();
             }
 

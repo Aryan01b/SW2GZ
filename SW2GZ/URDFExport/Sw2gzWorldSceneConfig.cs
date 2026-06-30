@@ -38,6 +38,10 @@ namespace SW2GZ.URDFExport
         [DataMember] public double WindX { get; set; } = 0.0;
         [DataMember] public double WindY { get; set; } = 0.0;
         [DataMember] public double WindZ { get; set; } = 0.0;
+        // W2 — Coulomb friction (mu=mu2) emitted on every world collision so a
+        // spawned robot grips the floor. Threaded to cfg.WorldFriction by the
+        // Bridge; the world writer always emits it.
+        [DataMember] public double Friction { get; set; } = 1.0;
         // Geo
         [DataMember] public bool UseGeo { get; set; } = false;
         [DataMember] public double Latitude { get; set; } = 0.0;
@@ -54,6 +58,7 @@ namespace SW2GZ.URDFExport
             Sky = false; Fog = false; FogDensity = 0.02;
             BgR = 0.8; BgG = 0.85; BgB = 0.9;
             GravityZ = -9.8; WindX = 0.0; WindY = 0.0; WindZ = 0.0;
+            Friction = 1.0;
             UseGeo = false; Latitude = 0.0; Longitude = 0.0; Elevation = 0.0; HeadingDeg = 0.0;
         }
 

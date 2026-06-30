@@ -46,6 +46,7 @@ namespace SW2GZ.UI.Pmp
         private CheckBox _grid, _shadows, _sky, _fog, _useGeo;
         private NumericUpDown _sunAz, _sunEl, _sunInt, _fogDensity, _bgR, _bgG, _bgB;
         private NumericUpDown _gravity, _windX, _windY, _windZ, _lat, _lon, _elev, _heading;
+        private NumericUpDown _friction;
 
         public Sw2gzWorldSettingsPmp(SldWorks swApp, Sw2gzDoc liveDoc, Action<Sw2gzDoc> onCommit)
         {
@@ -115,6 +116,7 @@ namespace SW2GZ.UI.Pmp
 
             Header("Environment", ref y);
             _gravity = Num("Gravity Z (m/s2)", -30, 0,  0.1m, 2, (decimal)s.GravityZ, ref y);
+            _friction = Num("Ground friction μ", 0, 2, 0.05m, 2, (decimal)s.Friction, ref y);
             _windX   = Num("Wind X (m/s)",     -50, 50, 0.1m, 2, (decimal)s.WindX, ref y);
             _windY   = Num("Wind Y (m/s)",     -50, 50, 0.1m, 2, (decimal)s.WindY, ref y);
             _windZ   = Num("Wind Z (m/s)",     -50, 50, 0.1m, 2, (decimal)s.WindZ, ref y);
@@ -192,6 +194,7 @@ namespace SW2GZ.UI.Pmp
             if (_bgG != null)     s.BgG = (double)_bgG.Value;
             if (_bgB != null)     s.BgB = (double)_bgB.Value;
             if (_gravity != null) s.GravityZ = (double)_gravity.Value;
+            if (_friction != null) s.Friction = (double)_friction.Value;
             if (_windX != null)   s.WindX = (double)_windX.Value;
             if (_windY != null)   s.WindY = (double)_windY.Value;
             if (_windZ != null)   s.WindZ = (double)_windZ.Value;

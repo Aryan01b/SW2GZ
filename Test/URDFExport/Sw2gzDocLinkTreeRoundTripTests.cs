@@ -135,6 +135,21 @@ namespace SW2GZ.Test.URDFExport
 
         [Fact]
         [Trait("Category", "Unit")]
+        public void WorldFriction_RoundTripsAndBridgesToExportConfig()
+        {
+            var src = new Sw2gzDoc { Mode = Sw2gzMode.World };
+            src.World.Scene.Friction = 0.35;
+
+            Sw2gzDoc dst = Sw2gzDocCodec.FromXmlString(Sw2gzDocCodec.ToXmlString(src));
+            Assert.Equal(0.35, dst.World.Scene.Friction);
+
+            // Bridge threads Scene.Friction → cfg.WorldFriction (what the exporter reads).
+            var cfg = Sw2gzDocToExportConfig.Bridge(dst, new ExportMetaInput());
+            Assert.Equal(0.35, cfg.WorldFriction);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
         public void LegacyDoc_WithoutSceneElement_DeserializesWithDefaults()
         {
             // Simulate a checkpoint saved before World.Scene existed: strip the
