@@ -67,5 +67,29 @@ namespace SW2GZ.URDFExport
         public string BodyPart   { get; set; } = string.Empty;
         public double FrictionMu { get; set; } = 0.8;
         public bool IsStatic     { get; set; } = true;
+        // A1 — 1-DOF joint anchoring the asset to the world (door/lift/wheel).
+        public string JointType  { get; set; } = "none";   // none|fixed|revolute|continuous|prismatic
+        public double JointAxisX { get; set; } = 0.0;
+        public double JointAxisY { get; set; } = 0.0;
+        public double JointAxisZ { get; set; } = 1.0;
+        public double JointLower { get; set; } = -1.5708;
+        public double JointUpper { get; set; } = 1.5708;
+        // A2 — optional sensor on the asset link.
+        public string SensorKind  { get; set; } = "none";  // none|camera|gpu_lidar|imu
+        public string SensorTopic { get; set; } = "/asset/sensor";
+        // A3 — collision geometry.
+        public string Collision   { get; set; } = "mesh";  // mesh|box|sphere|cylinder
+
+        [OnDeserializing]
+        private void OnDeserializing(StreamingContext context)
+        {
+            // Legacy docs saved before these fields existed deserialize them to
+            // null/0 (initializers are skipped); reseed safe defaults.
+            JointType = "none";
+            JointAxisX = 0.0; JointAxisY = 0.0; JointAxisZ = 1.0;
+            JointLower = -1.5708; JointUpper = 1.5708;
+            SensorKind = "none"; SensorTopic = "/asset/sensor";
+            Collision = "mesh";
+        }
     }
 }

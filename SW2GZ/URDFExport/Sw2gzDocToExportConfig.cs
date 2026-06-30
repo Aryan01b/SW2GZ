@@ -67,6 +67,15 @@ namespace SW2GZ.URDFExport
                 cfg.AssetBodyPart   = asset.BodyPart ?? string.Empty;
                 cfg.AssetFrictionMu = asset.FrictionMu;
                 cfg.AssetIsStatic   = asset.IsStatic;
+                cfg.AssetJointType  = asset.JointType ?? "none";
+                cfg.AssetJointAxisX = asset.JointAxisX;
+                cfg.AssetJointAxisY = asset.JointAxisY;
+                cfg.AssetJointAxisZ = asset.JointAxisZ;
+                cfg.AssetJointLower = asset.JointLower;
+                cfg.AssetJointUpper = asset.JointUpper;
+                cfg.AssetSensorKind  = asset.SensorKind ?? "none";
+                cfg.AssetSensorTopic = asset.SensorTopic ?? "/asset/sensor";
+                cfg.AssetCollision   = asset.Collision ?? "mesh";
             }
             return cfg;
         }

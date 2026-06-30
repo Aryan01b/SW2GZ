@@ -49,6 +49,52 @@ namespace SW2GZ.Test.URDFExport
 
         [Fact]
         [Trait("Category", "Unit")]
+        public void AssetArticulationSensorCollision_SurviveXmlRoundTrip()
+        {
+            var src = new Sw2gzDoc { Mode = Sw2gzMode.Asset };
+            src.Asset.BodyPart = "door-1@asm";
+            src.Asset.IsStatic = false;
+            src.Asset.JointType = "revolute";
+            src.Asset.JointAxisX = 0; src.Asset.JointAxisY = 0; src.Asset.JointAxisZ = 1;
+            src.Asset.JointLower = -1.0; src.Asset.JointUpper = 2.0;
+            src.Asset.SensorKind = "camera";
+            src.Asset.SensorTopic = "/door/cam";
+            src.Asset.Collision = "box";
+
+            Sw2gzDoc dst = Sw2gzDocCodec.FromXmlString(Sw2gzDocCodec.ToXmlString(src));
+
+            Assert.NotNull(dst);
+            Assert.Equal("revolute", dst.Asset.JointType);
+            Assert.Equal(1.0, dst.Asset.JointAxisZ);
+            Assert.Equal(-1.0, dst.Asset.JointLower);
+            Assert.Equal(2.0, dst.Asset.JointUpper);
+            Assert.Equal("camera", dst.Asset.SensorKind);
+            Assert.Equal("/door/cam", dst.Asset.SensorTopic);
+            Assert.Equal("box", dst.Asset.Collision);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
+        public void LegacyAssetDoc_DefaultsNewFields()
+        {
+            // A doc XML saved before the A1/A2/A3 fields existed: only the old
+            // asset fields present. New fields must reseed to safe defaults, not
+            // null/0, via [OnDeserializing].
+            string legacy =
+                "<Sw2gzDoc xmlns=\"http://schemas.datacontract.org/2004/07/SW2GZ.URDFExport\" " +
+                "xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">" +
+                "<Asset><BodyPart>w-1@asm</BodyPart><FrictionMu>0.8</FrictionMu><IsStatic>true</IsStatic></Asset>" +
+                "<Mode>Asset</Mode></Sw2gzDoc>";
+            Sw2gzDoc dst = Sw2gzDocCodec.FromXmlString(legacy);
+            Assert.NotNull(dst);
+            Assert.Equal("none", dst.Asset.JointType);
+            Assert.Equal("none", dst.Asset.SensorKind);
+            Assert.Equal("mesh", dst.Asset.Collision);
+            Assert.Equal(1.0, dst.Asset.JointAxisZ);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
         public void EmptyLinks_RoundTripsAsEmpty()
         {
             var src = new Sw2gzDoc();
