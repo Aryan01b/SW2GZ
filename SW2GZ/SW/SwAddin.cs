@@ -433,6 +433,13 @@ namespace SW2GZ.SW
         // ribbon Create button on a different mode than the open panel after a
         // Cancel). Reset when the wizard closes (OK or Cancel).
         private bool _wizardOpen;
+        // Off-poll marshalling for the Create/Edit label. The mode pills are
+        // polled every UI tick and already read HasSaved; when it changes with no
+        // doc-change event (e.g. the user deletes the "SW2GZ Doc (v1)" attribute),
+        // we defer a ribbon re-sync onto the message loop — RefreshTabForMode
+        // must NOT run inside the enable-poll call stack.
+        private System.Windows.Forms.Control _uiMarshal;
+        private bool _labelSyncPending;
         private SW2GZ.UI.Pmp.Sw2gzWorldSettingsPmp _worldSettingsPmp;
         private SW2GZ.UI.Pmp.Sw2gzWorldSensorsPmp _worldSensorsPmp;
 
@@ -550,6 +557,34 @@ namespace SW2GZ.SW
             _wizardOpen = false;
             try { SyncRibbonToActiveDoc(); }
             catch (Exception e) { logger.Warn("OnWizardClosed: SyncRibbonToActiveDoc threw", e); }
+        }
+
+        // Called from the pill enable-poll with the current HasSaved. When it
+        // differs from what the ribbon currently shows (ActiveSaved), the Create/
+        // Edit label is stale — e.g. the user just deleted the SW2GZ Doc attribute
+        // (no doc-change event fires for that). Defer the actual ribbon rebuild
+        // onto the message loop via BeginInvoke so RefreshTabForMode never mutates
+        // the ribbon inside SW's enable-poll stack. No-op unless the state changed.
+        private void MaybeDeferLabelSync(bool saved)
+        {
+            if (_ribbonRegistrar == null || _labelSyncPending) return;
+            if (_ribbonRegistrar.ActiveSaved == saved) return;
+            try
+            {
+                if (_uiMarshal == null)
+                {
+                    _uiMarshal = new System.Windows.Forms.Control();
+                    var _ = _uiMarshal.Handle;   // force handle creation on this (UI) thread
+                }
+                _labelSyncPending = true;
+                _uiMarshal.BeginInvoke((Action)(() =>
+                {
+                    _labelSyncPending = false;
+                    try { SyncRibbonToActiveDoc(); }
+                    catch (Exception ex) { logger.Warn("deferred label sync threw", ex); }
+                }));
+            }
+            catch (Exception e) { _labelSyncPending = false; logger.Warn("MaybeDeferLabelSync failed", e); }
         }
 
         private void OpenCreateAsset(ModelDoc2 modelDoc, SW2GZ.URDFExport.Sw2gzDoc doc, string wholePartName = null)
@@ -680,8 +715,12 @@ namespace SW2GZ.SW
                 if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
                 var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
                 if (SW2GZ.URDFExport.Sw2gzDocLock.IsLocked(doc)) return 0;
+                bool saved = SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc);
+                // If the saved-state changed with no doc-change event (attribute
+                // deleted from the tree), re-sync the Create/Edit label off-poll.
+                MaybeDeferLabelSync(saved);
                 // Locked by saved attribute — user must Delete Config first.
-                if (SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc)) return 0;
+                if (saved) return 0;
                 // Disable the pill that already represents the active mode —
                 // gives the grayed-out "you are here" visual cue.
                 return (doc.Mode == pillMode) ? 0 : 1;
