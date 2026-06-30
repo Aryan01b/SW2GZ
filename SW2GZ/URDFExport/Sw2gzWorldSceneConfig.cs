@@ -10,11 +10,32 @@ DataContractSerializer builds instances with GetUninitializedObject (skips field
 initializers), so the [OnDeserializing] hook reseeds defaults for any field a
 legacy checkpoint omitted.
 */
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.Serialization;
 using SW2GZ.Gz;
 
 namespace SW2GZ.URDFExport
 {
+    // W3 — one extra fill light beyond the sun. Pose in ROS (Z-up) world frame;
+    // Range drives point/spot attenuation. Persisted on Sw2gzWorldSceneConfig.
+    [DataContract]
+    public sealed class Sw2gzLightConfig
+    {
+        [DataMember] public string Type { get; set; } = "point";   // point|spot|directional
+        [DataMember] public double X { get; set; } = 0.0;
+        [DataMember] public double Y { get; set; } = 0.0;
+        [DataMember] public double Z { get; set; } = 2.0;
+        [DataMember] public double R { get; set; } = 1.0;
+        [DataMember] public double G { get; set; } = 1.0;
+        [DataMember] public double B { get; set; } = 1.0;
+        [DataMember] public double Intensity { get; set; } = 1.0;
+        [DataMember] public double Range { get; set; } = 10.0;
+        [DataMember] public bool CastShadows { get; set; } = false;
+
+        public Sw2gzLightConfig Clone() => (Sw2gzLightConfig)MemberwiseClone();
+    }
+
     [DataContract]
     public sealed class Sw2gzWorldSceneConfig
     {
@@ -42,6 +63,8 @@ namespace SW2GZ.URDFExport
         // spawned robot grips the floor. Threaded to cfg.WorldFriction by the
         // Bridge; the world writer always emits it.
         [DataMember] public double Friction { get; set; } = 1.0;
+        // W3 — extra fill lights beyond the sun (empty = sun only).
+        [DataMember] public List<Sw2gzLightConfig> Lights { get; set; } = new List<Sw2gzLightConfig>();
         // Geo
         [DataMember] public bool UseGeo { get; set; } = false;
         [DataMember] public double Latitude { get; set; } = 0.0;
@@ -59,10 +82,40 @@ namespace SW2GZ.URDFExport
             BgR = 0.8; BgG = 0.85; BgB = 0.9;
             GravityZ = -9.8; WindX = 0.0; WindY = 0.0; WindZ = 0.0;
             Friction = 1.0;
+            Lights = new List<Sw2gzLightConfig>();
             UseGeo = false; Latitude = 0.0; Longitude = 0.0; Elevation = 0.0; HeadingDeg = 0.0;
         }
 
-        public Sw2gzWorldSceneConfig Clone() => (Sw2gzWorldSceneConfig)MemberwiseClone();
+        // Deep clone — the Lights list must NOT be shared by reference, or a PMP
+        // cancel/rollback would leak edits into the snapshot (MemberwiseClone is
+        // shallow). All other members are value types, so a memberwise base copy
+        // plus a fresh list of cloned lights is sufficient.
+        public Sw2gzWorldSceneConfig Clone()
+        {
+            var c = (Sw2gzWorldSceneConfig)MemberwiseClone();
+            c.Lights = Lights == null
+                ? new List<Sw2gzLightConfig>()
+                : Lights.Select(l => l.Clone()).ToList();
+            return c;
+        }
+
+        // Map the persisted lights → pure writer records consumed by WriteScene.
+        public List<SdfLight> ToExtraLights()
+        {
+            var list = new List<SdfLight>();
+            if (Lights == null) return list;
+            int n = 0;
+            foreach (Sw2gzLightConfig l in Lights)
+            {
+                if (l == null) continue;
+                n++;
+                list.Add(new SdfLight(
+                    Name: "light" + n, Type: l.Type,
+                    X: l.X, Y: l.Y, Z: l.Z, R: l.R, G: l.G, B: l.B,
+                    Intensity: l.Intensity, Range: l.Range, CastShadows: l.CastShadows));
+            }
+            return list;
+        }
 
         // Map to the pure writer record consumed by SdfWorldWriter.WriteScene.
         public SdfSceneSettings ToSceneSettings() => new SdfSceneSettings(

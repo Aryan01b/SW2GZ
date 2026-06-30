@@ -284,6 +284,27 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void Export_WorldLights_EmittedAsExtraLights()
+        {
+            var c = Cfg("floor-1");
+            c.WorldScene = new Sw2gzWorldSceneConfig();
+            c.WorldScene.Lights.Add(new Sw2gzLightConfig { Type = "point", X = 1, Y = 2, Z = 3 });
+            Sw2gzWorldExporter.Export(new FakeTess("floor-1"), c, _dir, 0, 0, 0);
+            string sdf = Sdf();
+            Assert.Contains("name=\"light1\" type=\"point\"", sdf);
+            Assert.Contains("<pose>1 2 3 0 0 0</pose>", sdf);
+            // sun is still present too.
+            Assert.Contains("name=\"sun\"", sdf);
+        }
+
+        [Fact]
+        public void Export_NoWorldLights_OnlySun()
+        {
+            Sw2gzWorldExporter.Export(new FakeTess("floor-1"), Cfg("floor-1"), _dir, 0, 0, 0);
+            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(Sdf(), "<light ").Count);
+        }
+
+        [Fact]
         public void Export_PhysicsAndRotationFlowThrough()
         {
             var c = Cfg("floor-1");

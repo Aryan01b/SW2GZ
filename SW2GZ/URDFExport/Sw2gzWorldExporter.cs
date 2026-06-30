@@ -112,7 +112,8 @@ namespace SW2GZ.URDFExport
                 Camera: camera,
                 Settings: (config.WorldScene ?? new Sw2gzWorldSceneConfig()).ToSceneSettings(),
                 Plugins: ToWorldPlugins(config.WorldSensorPlugins),
-                FrictionMu: config.WorldFriction);
+                FrictionMu: config.WorldFriction,
+                ExtraLights: (config.WorldScene ?? new Sw2gzWorldSceneConfig()).ToExtraLights());
 
             string worldFile = pkg + ".sdf";
             File.WriteAllText(Path.Combine(root, worldFile), SdfWorldWriter.WriteScene(scene));

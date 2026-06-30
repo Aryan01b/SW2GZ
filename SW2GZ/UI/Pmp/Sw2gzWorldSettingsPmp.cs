@@ -48,6 +48,16 @@ namespace SW2GZ.UI.Pmp
         private NumericUpDown _gravity, _windX, _windY, _windZ, _lat, _lon, _elev, _heading;
         private NumericUpDown _friction;
 
+        // W3 — up to two optional extra fill lights (beyond the sun).
+        private const int LightSlots = 2;
+        private static readonly string[] LightTypes = { "point", "spot", "directional" };
+        private readonly CheckBox[] _lightOn = new CheckBox[LightSlots];
+        private readonly ComboBox[] _lightType = new ComboBox[LightSlots];
+        private readonly NumericUpDown[] _lightX = new NumericUpDown[LightSlots];
+        private readonly NumericUpDown[] _lightY = new NumericUpDown[LightSlots];
+        private readonly NumericUpDown[] _lightZ = new NumericUpDown[LightSlots];
+        private readonly NumericUpDown[] _lightInt = new NumericUpDown[LightSlots];
+
         public Sw2gzWorldSettingsPmp(SldWorks swApp, Sw2gzDoc liveDoc, Action<Sw2gzDoc> onCommit)
         {
             _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
@@ -120,6 +130,19 @@ namespace SW2GZ.UI.Pmp
             _windX   = Num("Wind X (m/s)",     -50, 50, 0.1m, 2, (decimal)s.WindX, ref y);
             _windY   = Num("Wind Y (m/s)",     -50, 50, 0.1m, 2, (decimal)s.WindY, ref y);
             _windZ   = Num("Wind Z (m/s)",     -50, 50, 0.1m, 2, (decimal)s.WindZ, ref y);
+
+            Header("Lights (extra fill, beyond the sun)", ref y);
+            for (int i = 0; i < LightSlots; i++)
+            {
+                Sw2gzLightConfig lc = (s.Lights != null && i < s.Lights.Count) ? s.Lights[i] : null;
+                _lightOn[i]   = Check("Light " + (i + 1) + " enabled", lc != null, ref y);
+                _lightType[i] = Combo("  Type", new[] { "Point", "Spot", "Directional" },
+                                      LightTypeIndex(lc?.Type), ref y);
+                _lightX[i]    = Num("  X (m)", -100, 100, 0.1m, 2, (decimal)(lc?.X ?? 0.0), ref y);
+                _lightY[i]    = Num("  Y (m)", -100, 100, 0.1m, 2, (decimal)(lc?.Y ?? 0.0), ref y);
+                _lightZ[i]    = Num("  Z (m)", -100, 100, 0.1m, 2, (decimal)(lc?.Z ?? 2.0), ref y);
+                _lightInt[i]  = Num("  Intensity", 0, 5, 0.1m, 2, (decimal)(lc?.Intensity ?? 1.0), ref y);
+            }
 
             Header("Geo (spherical coordinates)", ref y);
             _useGeo = Check("Use spherical coordinates", s.UseGeo, ref y);
@@ -203,6 +226,31 @@ namespace SW2GZ.UI.Pmp
             if (_lon != null)     s.Longitude = (double)_lon.Value;
             if (_elev != null)    s.Elevation = (double)_elev.Value;
             if (_heading != null) s.HeadingDeg = (double)_heading.Value;
+
+            // W3 — rebuild the lights list from the enabled slots.
+            var lights = new System.Collections.Generic.List<Sw2gzLightConfig>();
+            for (int i = 0; i < LightSlots; i++)
+            {
+                if (_lightOn[i] == null || !_lightOn[i].Checked) continue;
+                int ti = _lightType[i] != null && _lightType[i].SelectedIndex >= 0 ? _lightType[i].SelectedIndex : 0;
+                lights.Add(new Sw2gzLightConfig
+                {
+                    Type = LightTypes[ti],
+                    X = (double)_lightX[i].Value, Y = (double)_lightY[i].Value, Z = (double)_lightZ[i].Value,
+                    Intensity = (double)_lightInt[i].Value,
+                });
+            }
+            s.Lights = lights;
+        }
+
+        private static int LightTypeIndex(string t)
+        {
+            switch ((t ?? "point").Trim().ToLowerInvariant())
+            {
+                case "spot": return 1;
+                case "directional": return 2;
+                default: return 0;
+            }
         }
 
         private static int ViewIndex(string v)

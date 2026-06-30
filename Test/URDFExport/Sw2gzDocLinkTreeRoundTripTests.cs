@@ -150,6 +150,37 @@ namespace SW2GZ.Test.URDFExport
 
         [Fact]
         [Trait("Category", "Unit")]
+        public void WorldLights_RoundTripAndMapToSdfLights()
+        {
+            var src = new Sw2gzDoc { Mode = Sw2gzMode.World };
+            src.World.Scene.Lights.Add(new Sw2gzLightConfig
+            { Type = "point", X = 1, Y = 2, Z = 3, Intensity = 0.7, Range = 8 });
+            src.World.Scene.Lights.Add(new Sw2gzLightConfig { Type = "spot" });
+
+            Sw2gzDoc dst = Sw2gzDocCodec.FromXmlString(Sw2gzDocCodec.ToXmlString(src));
+            Assert.Equal(2, dst.World.Scene.Lights.Count);
+            Assert.Equal("point", dst.World.Scene.Lights[0].Type);
+            Assert.Equal(3.0, dst.World.Scene.Lights[0].Z);
+
+            var sdf = dst.World.Scene.ToExtraLights();
+            Assert.Equal(2, sdf.Count);
+            Assert.Equal("light1", sdf[0].Name);
+            Assert.Equal("spot", sdf[1].Type);
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
+        public void WorldSceneClone_DeepCopiesLights()
+        {
+            var src = new Sw2gzWorldSceneConfig();
+            src.Lights.Add(new Sw2gzLightConfig { Type = "point", Intensity = 1.0 });
+            var clone = src.Clone();
+            clone.Lights[0].Intensity = 0.1;   // mutate the clone
+            Assert.Equal(1.0, src.Lights[0].Intensity);   // original unchanged
+        }
+
+        [Fact]
+        [Trait("Category", "Unit")]
         public void LegacyDoc_WithoutSceneElement_DeserializesWithDefaults()
         {
             // Simulate a checkpoint saved before World.Scene existed: strip the
