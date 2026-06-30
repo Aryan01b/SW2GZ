@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -44,23 +44,13 @@
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzExportScopePlanner.cs" Link="Sources\URDFExport\Sw2gzExportScopePlanner.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzDocToExportConfig.cs"  Link="Sources\URDFExport\Sw2gzDocToExportConfig.cs" />
     <Compile Include="..\SW2GZ\Build\Model\LinkDef.cs"          Link="Sources\Build\Model\LinkDef.cs" />
-    <Compile Include="..\SW2GZ\Build\LinkDefValidator.cs"       Link="Sources\Build\LinkDefValidator.cs" />
     <Compile Include="..\SW2GZ\Build\LinkHierarchy.cs"          Link="Sources\Build\LinkHierarchy.cs" />
-    <Compile Include="..\SW2GZ\Ros2\PackageXmlV3Writer.cs"   Link="Sources\Ros2\PackageXmlV3Writer.cs" />
-    <Compile Include="..\SW2GZ\Ros2\AmentCMakeWriter.cs"     Link="Sources\Ros2\AmentCMakeWriter.cs" />
-    <Compile Include="..\SW2GZ\Ros2\LaunchPyWriter.cs"       Link="Sources\Ros2\LaunchPyWriter.cs" />
     <Compile Include="..\SW2GZ\Ros2\WorldLaunchPyWriter.cs"  Link="Sources\Ros2\WorldLaunchPyWriter.cs" />
-    <Compile Include="..\SW2GZ\Ros2\XacroWriter.cs"          Link="Sources\Ros2\XacroWriter.cs" />
-    <Compile Include="..\SW2GZ\Ros2\Ros2ControlWriter.cs"    Link="Sources\Ros2\Ros2ControlWriter.cs" />
-    <Compile Include="..\SW2GZ\Ros2\ControllersYaml.cs"      Link="Sources\Ros2\ControllersYaml.cs" />
-    <Compile Include="..\SW2GZ\Ros2\RvizConfigWriter.cs"     Link="Sources\Ros2\RvizConfigWriter.cs" />
-    <Compile Include="..\SW2GZ\Ros2\ReadmeWriter.cs"         Link="Sources\Ros2\ReadmeWriter.cs" />
     <Compile Include="..\SW2GZ\Exceptions\Sw2gzExportException.cs" Link="Sources\Exceptions\Sw2gzExportException.cs" />
     <Compile Include="..\SW2GZ\Math\Matrix3.cs"               Link="Sources\Math\Matrix3.cs" />
     <Compile Include="..\SW2GZ\Math\Pose.cs"                  Link="Sources\Math\Pose.cs" />
     <Compile Include="..\SW2GZ\Math\MathTransformPose.cs"     Link="Sources\Math\MathTransformPose.cs" />
     <Compile Include="..\SW2GZ\Math\CylinderTransform.cs"     Link="Sources\Math\CylinderTransform.cs" />
-    <Compile Include="..\SW2GZ\SwSurface\AutoJointResolved.cs" Link="Sources\SwSurface\AutoJointResolved.cs" />
     <Compile Include="..\SW2GZ\Build\PackageNameSanitizer.cs" Link="Sources\Build\PackageNameSanitizer.cs" />
     <Compile Include="..\SW2GZ\Build\RosNameSanitizer.cs"     Link="Sources\Build\RosNameSanitizer.cs" />
     <Compile Include="..\SW2GZ\Build\MassProps.cs"            Link="Sources\Build\MassProps.cs" />
@@ -88,13 +78,9 @@
     <Compile Include="..\SW2GZ\Build\Model\TfTreeFormatter.cs"      Link="Sources\Build\Model\TfTreeFormatter.cs" />
     <Compile Include="..\SW2GZ\Build\Model\StlBinaryParser.cs"      Link="Sources\Build\Model\StlBinaryParser.cs" />
     <Compile Include="..\SW2GZ\Build\Model\UrdfTransforms.cs"       Link="Sources\Build\Model\UrdfTransforms.cs" />
-    <Compile Include="..\SW2GZ\Build\Model\LinkAnchorMap.cs"        Link="Sources\Build\Model\LinkAnchorMap.cs" />
-    <Compile Include="..\SW2GZ\Build\Model\MeshRebase.cs"           Link="Sources\Build\Model\MeshRebase.cs" />
-    <Compile Include="..\SW2GZ\Build\Model\JointOriginResolver.cs"  Link="Sources\Build\Model\JointOriginResolver.cs" />
     <Compile Include="..\SW2GZ\Build\Model\SwingTwist.cs"           Link="Sources\Build\Model\SwingTwist.cs" />
     <Compile Include="..\SW2GZ\Build\Model\CoordinateConvention.cs" Link="Sources\Build\Model\CoordinateConvention.cs" />
     <Compile Include="..\SW2GZ\Math\PoseMath.cs"                    Link="Sources\Math\PoseMath.cs" />
-    <Compile Include="..\SW2GZ\SwSurface\SwJointPoseReader.cs"      Link="Sources\SwSurface\SwJointPoseReader.cs" />
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\IComponentPoseSource.cs" Link="Sources\SwSurface\Abstractions\IComponentPoseSource.cs" />
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\IComponentRawTransformSource.cs" Link="Sources\SwSurface\Abstractions\IComponentRawTransformSource.cs" />
     <Compile Include="..\SW2GZ\Build\Model\PoseDumpWriter.cs" Link="Sources\Build\Model\PoseDumpWriter.cs" />
@@ -103,21 +89,12 @@
     <Compile Include="..\SW2GZ\Build\Model\ModelLink.cs"          Link="Sources\Build\Model\ModelLink.cs" />
     <Compile Include="..\SW2GZ\Build\Model\RobotModel.cs"         Link="Sources\Build\Model\RobotModel.cs" />
     <Compile Include="..\SW2GZ\Build\Model\GeometryAssignment.cs" Link="Sources\Build\Model\GeometryAssignment.cs" />
-    <Compile Include="..\SW2GZ\Build\RobotModelBuilder.cs"        Link="Sources\Build\RobotModelBuilder.cs" />
-    <Compile Include="..\SW2GZ\Write\Urdf\XacroGenerator.cs"      Link="Sources\Write\Urdf\XacroGenerator.cs" />
-    <Compile Include="..\SW2GZ\Build\LinkBuilder.cs"          Link="Sources\Build\LinkBuilder.cs" />
     <Compile Include="..\SW2GZ\Build\MateSpec.cs"             Link="Sources\Build\MateSpec.cs" />
-    <Compile Include="..\SW2GZ\Build\JointBuilder.cs"         Link="Sources\Build\JointBuilder.cs" />
-    <Compile Include="..\SW2GZ\Build\JointGraphBuilder.cs"    Link="Sources\Build\JointGraphBuilder.cs" />
     <Compile Include="..\SW2GZ\Build\Model\JointDef.cs"       Link="Sources\Build\Model\JointDef.cs" />
     <Compile Include="..\SW2GZ\Build\MateInfo.cs"            Link="Sources\Build\MateInfo.cs" />
-    <Compile Include="..\SW2GZ\Build\JointSeeder.cs"          Link="Sources\Build\JointSeeder.cs" />
-    <Compile Include="..\SW2GZ\Build\JointDefConverter.cs"    Link="Sources\Build\JointDefConverter.cs" />
-    <Compile Include="..\SW2GZ\Build\JointDefValidator.cs"    Link="Sources\Build\JointDefValidator.cs" />
     <Compile Include="..\SW2GZ\Write\Mesh\StlWriter.cs"        Link="Sources\Write\Mesh\StlWriter.cs" />
     <Compile Include="..\SW2GZ\Write\Mesh\DaeWriter.cs"        Link="Sources\Write\Mesh\DaeWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\ModelConfigWriter.cs"      Link="Sources\Gz\ModelConfigWriter.cs" />
-    <Compile Include="..\SW2GZ\Gz\GzPluginTags.cs"           Link="Sources\Gz\GzPluginTags.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfGuiBlock.cs"            Link="Sources\Gz\SdfGuiBlock.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfSceneSettings.cs"       Link="Sources\Gz\SdfSceneSettings.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfPhysicsBlock.cs"        Link="Sources\Gz\SdfPhysicsBlock.cs" />
@@ -126,9 +103,7 @@
     <Compile Include="..\SW2GZ\Gz\SdfSensorBlocks.cs"        Link="Sources\Gz\SdfSensorBlocks.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfSensorPlugins.cs"       Link="Sources\Gz\SdfSensorPlugins.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfWorldPluginsWriter.cs"  Link="Sources\Gz\SdfWorldPluginsWriter.cs" />
-    <Compile Include="..\SW2GZ\Gz\RosGzBridgeYaml.cs"        Link="Sources\Gz\RosGzBridgeYaml.cs" />
     <Compile Include="..\SW2GZ\Gz\WorldBridgeYaml.cs"        Link="Sources\Gz\WorldBridgeYaml.cs" />
-    <Compile Include="..\SW2GZ\URDFExport\Ros2Package.cs"    Link="Sources\URDFExport\Ros2Package.cs" />
     <Compile Include="..\SW2GZ\URDFExport\OutputValidator.cs" Link="Sources\URDFExport\OutputValidator.cs" />
     <Compile Include="..\SW2GZ\URDFExport\PreExportReport.cs" Link="Sources\URDFExport\PreExportReport.cs" />
     <Compile Include="..\SW2GZ\Validate\ValidationIssue.cs"  Link="Sources\Validate\ValidationIssue.cs" />
@@ -138,7 +113,6 @@
     <Compile Include="..\SW2GZ\Validate\PluginNameChecker.cs" Link="Sources\Validate\PluginNameChecker.cs" />
     <Compile Include="..\SW2GZ\Validate\MeshFileChecker.cs" Link="Sources\Validate\MeshFileChecker.cs" />
     <Compile Include="..\SW2GZ\Validate\OutputValidator.cs" Link="Sources\Validate\OutputValidator.cs" />
-    <Compile Include="..\SW2GZ\Validate\RobotModelValidator.cs" Link="Sources\Validate\RobotModelValidator.cs" />
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\IMassProperties.cs" Link="Sources\SwSurface\Abstractions\IMassProperties.cs" />
     <Compile Include="..\SW2GZ\SwSurface\SolidWorksMassProperties.cs" Link="Sources\SwSurface\SolidWorksMassProperties.cs" />
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\LinkSpec.cs" Link="Sources\SwSurface\Abstractions\LinkSpec.cs" />
@@ -148,8 +122,7 @@
     <Compile Include="..\SW2GZ\SwSurface\SolidWorksMeshTessellator.cs" Link="Sources\SwSurface\SolidWorksMeshTessellator.cs" />
     <Compile Include="..\SW2GZ\SwSurface\Abstractions\IAppearanceSource.cs" Link="Sources\SwSurface\Abstractions\IAppearanceSource.cs" />
     <Compile Include="..\SW2GZ\SwSurface\DefaultAppearanceSource.cs" Link="Sources\SwSurface\DefaultAppearanceSource.cs" />
-    <Compile Include="..\SW2GZ\URDFExport\Sw2gzPipeline.cs"            Link="Sources\URDFExport\Sw2gzPipeline.cs" />
-    <!-- P8 — pure-C# MVVM layer (proves net-portability of the VM/services). -->
+    <!-- P8 â€” pure-C# MVVM layer (proves net-portability of the VM/services). -->
     <Compile Include="..\SW2GZ\UI\Mvvm\ObservableObject.cs"           Link="Sources\UI\Mvvm\ObservableObject.cs" />
     <Compile Include="..\SW2GZ\UI\Mvvm\RelayCommand.cs"               Link="Sources\UI\Mvvm\RelayCommand.cs" />
     <Compile Include="..\SW2GZ\UI\Services\IFolderBrowserService.cs"  Link="Sources\UI\Services\IFolderBrowserService.cs" />
@@ -161,26 +134,10 @@
     <Compile Include="..\SW2GZ\UI\Services\NullThemeService.cs"       Link="Sources\UI\Services\NullThemeService.cs" />
     <Compile Include="..\SW2GZ\UI\Services\NullExportRunner.cs"       Link="Sources\UI\Services\NullExportRunner.cs" />
     <Compile Include="..\SW2GZ\UI\ViewModels\Ros2Distro.cs"          Link="Sources\UI\ViewModels\Ros2Distro.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\LinkDto.cs"             Link="Sources\UI\ViewModels\LinkDto.cs" />
     <Compile Include="..\SW2GZ\UI\ViewModels\StepViewModelBase.cs"   Link="Sources\UI\ViewModels\StepViewModelBase.cs" />
     <Compile Include="..\SW2GZ\UI\ViewModels\ModeStepViewModel.cs"   Link="Sources\UI\ViewModels\ModeStepViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\TargetsStepViewModel.cs" Link="Sources\UI\ViewModels\TargetsStepViewModel.cs" />
     <Compile Include="..\SW2GZ\UI\ViewModels\OutputStepViewModel.cs" Link="Sources\UI\ViewModels\OutputStepViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\LinkViewModel.cs"       Link="Sources\UI\ViewModels\LinkViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\LinksStepViewModel.cs"  Link="Sources\UI\ViewModels\LinksStepViewModel.cs" />
     <Compile Include="..\SW2GZ\UI\ViewModels\PoseMath.cs"            Link="Sources\UI\ViewModels\PoseMath.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\JointDto.cs"            Link="Sources\UI\ViewModels\JointDto.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\JointEditViewModel.cs"  Link="Sources\UI\ViewModels\JointEditViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\JointsStepViewModel.cs" Link="Sources\UI\ViewModels\JointsStepViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\CollisionStepViewModel.cs" Link="Sources\UI\ViewModels\CollisionStepViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\LinkMaterialViewModel.cs" Link="Sources\UI\ViewModels\LinkMaterialViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\MaterialsStepViewModel.cs" Link="Sources\UI\ViewModels\MaterialsStepViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\SensorEditViewModel.cs" Link="Sources\UI\ViewModels\SensorEditViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\SensorsStepViewModel.cs" Link="Sources\UI\ViewModels\SensorsStepViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\ControllersStepViewModel.cs" Link="Sources\UI\ViewModels\ControllersStepViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\ReviewStepViewModel.cs" Link="Sources\UI\ViewModels\ReviewStepViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\WizardViewModel.cs"     Link="Sources\UI\ViewModels\WizardViewModel.cs" />
-    <Compile Include="..\SW2GZ\UI\ViewModels\WizardStepPlan.cs"      Link="Sources\UI\ViewModels\WizardStepPlan.cs" />
     <Compile Include="..\SW2GZ\UI\Ribbon\ClusterVisibility.cs"       Link="Sources\UI\Ribbon\ClusterVisibility.cs" />
   </ItemGroup>
 
