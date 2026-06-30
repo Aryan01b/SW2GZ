@@ -53,12 +53,7 @@ namespace SW2GZ.URDFExport
         // Resume position — 0-based wizard step index reached at last save.
         [DataMember] public int LastStep { get; set; }
 
-        // Step 3 — link definitions (name + assigned component ids + base flag).
-        [DataMember] public List<LinkDef> Links { get; set; } = new List<LinkDef>();
-
-        // Step 4 — joint definitions, one per non-root link edge. Seeded from the
-        // link tree (JointSeeder) and editable in the Joints step.
-        [DataMember] public List<JointDef> Joints { get; set; } = new List<JointDef>();
+        // Robot link/joint definitions removed for the v2 rebuild.
 
         // World mode — picked components + physics from the Create-World wizard.
         // Flat schema mirroring Sw2gzWorldConfig (the v2.1.0 in-memory model);
@@ -118,7 +113,7 @@ namespace SW2GZ.URDFExport
         // initializer: DataContractSerializer builds instances via
         // GetUninitializedObject and never runs initializers. The initializer
         // here only covers the `new Sw2gzExportConfig()` constructor path.
-        [DataMember] public StackProfile Stacks { get; set; } = StackProfile.Default();
+        // Robot StackProfile (actuation/sensors/bridge selection) removed for v2 rebuild.
 
         // DataContractSerializer constructs instances via GetUninitializedObject,
         // which skips field/property initializers. Without this hook a config
@@ -131,9 +126,6 @@ namespace SW2GZ.URDFExport
         [OnDeserializing]
         private void OnDeserializing(StreamingContext context)
         {
-            Stacks = StackProfile.Default();
-            Links = new List<LinkDef>();
-            Joints = new List<JointDef>();
             // World-mode defaults for checkpoints saved before these fields existed.
             WorldGround = string.Empty;
             WorldAssets = new List<string>();
@@ -181,9 +173,6 @@ namespace SW2GZ.URDFExport
                 Email         = this.Email,
                 License       = this.License,
                 LastStep      = this.LastStep,
-                Links         = this.Links,
-                Joints        = this.Joints,
-                Stacks        = this.Stacks,
                 WorldGround        = this.WorldGround,
                 WorldAssets        = this.WorldAssets,
                 WorldPhysicsEngine = this.WorldPhysicsEngine,

@@ -907,9 +907,7 @@ namespace SW2GZ.SW
                     OutputFolder = System.IO.Path.GetTempPath(),
                 };
                 Sw2gzExportConfig config = SW2GZ.URDFExport.Sw2gzDocToExportConfig.Bridge(doc, meta);
-                logger.Info("LaunchPreview: doc v1 loaded — mode=" + doc.Mode + ", pkg=" + config.PackageName +
-                            ", links=" + (config.Links?.Count ?? 0) +
-                            ", joints=" + (config.Joints?.Count ?? 0));
+                logger.Info("LaunchPreview: doc v1 loaded — mode=" + doc.Mode + ", pkg=" + config.PackageName);
 
                 Sw2gzModelPreviewer.PreviewResult result =
                     isWorld ? Sw2gzModelPreviewer.RunWorldPreview((SldWorks)SwApp, modeldoc, config)

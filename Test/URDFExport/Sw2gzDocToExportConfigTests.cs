@@ -47,14 +47,6 @@ namespace SW2GZ.Tests.URDFExport
             Assert.Equal("Aryan", cfg.Author);
             Assert.Equal("a@b", cfg.Email);
             Assert.Equal("MIT", cfg.License);
-            Assert.Single(cfg.Links);
-            Assert.Equal("base", cfg.Links[0].Name);
-            Assert.Single(cfg.Joints);
-            Assert.Equal(UrdfJointType.Revolute, cfg.Joints[0].Type);
-            Assert.Equal(-1.0, cfg.Joints[0].LimitLower);
-            // Defensive clone — mutating source must not change bridged copy.
-            doc.Robot.Links[0].ComponentIds.Add("late<1>");
-            Assert.DoesNotContain("late<1>", cfg.Links[0].ComponentIds);
         }
 
         [Fact]
@@ -63,7 +55,6 @@ namespace SW2GZ.Tests.URDFExport
             var doc = new Sw2gzDoc();
             var cfg = Sw2gzDocToExportConfig.Bridge(doc, null);
             Assert.Equal("", cfg.OutputFolder);
-            Assert.Empty(cfg.Links);
         }
     }
 }

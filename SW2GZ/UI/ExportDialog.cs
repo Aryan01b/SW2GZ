@@ -49,8 +49,8 @@ namespace SW2GZ.UI
             string seedEmail  = !string.IsNullOrEmpty(config.Email)        ? config.Email        : defaults.Email;
             string seedLic    = !string.IsNullOrEmpty(config.License)      ? config.License      : defaults.License;
 
-            int links = config.Links != null ? config.Links.Count : 0;
-            int joints = config.Joints != null ? config.Joints.Count : 0;
+            int links = 0;   // robot link/joint counts removed for v2 rebuild
+            int joints = 0;
             Controls.Add(new Label
             {
                 Left = 12, Top = 12, Width = 432, Height = 86,
@@ -159,12 +159,10 @@ namespace SW2GZ.UI
         // with "+N more" so the dialog stays a fixed size even for big assemblies.
         private static string SummaryText(Sw2gzExportConfig config, int linkCount, int jointCount)
         {
-            string linkLine = "  Links:    " + FormatLinkNames(config.Links);
-            string jointLine = "  Joints:   " + FormatJointEdges(config.Joints);
-            return "Implemented:  " + linkCount + " link(s), " + jointCount + " joint(s).\r\n" +
-                   linkLine + "\r\n" +
-                   jointLine + "\r\n" +
-                   "Export type:  bare robot model — no control, no Gazebo plugins.";
+            // Robot link/joint summary removed for the v2 rebuild.
+            return "Mode:     " + config.Mode + "\r\n" +
+                   "Package:  " + config.PackageName + "\r\n" +
+                   "Export type:  World / Asset (robot mode rebuilding).";
         }
 
         private static string FormatLinkNames(List<LinkDef> links)

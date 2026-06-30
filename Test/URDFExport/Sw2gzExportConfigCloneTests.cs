@@ -32,9 +32,6 @@ namespace SW2GZ.Test.URDFExport
                 Email         = "test@example.com",
                 License       = "MIT",
                 LastStep      = 3,
-                Links         = new List<LinkDef>  { new LinkDef  { Name = "base_link" } },
-                Joints        = new List<JointDef> { new JointDef { Name = "j1" } },
-                Stacks        = StackProfile.Default(),
             };
         }
 
@@ -57,10 +54,6 @@ namespace SW2GZ.Test.URDFExport
             Assert.Equal(src.Email,         clone.Email);
             Assert.Equal(src.License,       clone.License);
             Assert.Equal(src.LastStep,      clone.LastStep);
-            // Shallow share of lists is intentional — see WithEmitWorldLink doc.
-            Assert.Same(src.Links,  clone.Links);
-            Assert.Same(src.Joints, clone.Joints);
-            Assert.Same(src.Stacks, clone.Stacks);
         }
 
         [Fact]

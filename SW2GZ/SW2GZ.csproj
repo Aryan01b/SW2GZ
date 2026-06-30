@@ -429,7 +429,6 @@
     <Compile Include="Ros2\TargetProfile.cs" />
     <Compile Include="Ros2\StackProfile.cs" />
     <Compile Include="Ros2\StackConfigMap.cs" />
-    <Compile Include="Ros2\StackRibbonGate.cs" />
     <Compile Include="Ros2\WorldLaunchPyWriter.cs" />
     <Compile Include="Exceptions\Sw2gzExportException.cs" />
     <Compile Include="Math\Matrix3.cs" />

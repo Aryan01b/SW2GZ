@@ -39,9 +39,6 @@ namespace SW2GZ.URDFExport
                 Author       = meta?.Author       ?? string.Empty,
                 Email        = meta?.Email        ?? string.Empty,
                 License      = meta?.License      ?? string.Empty,
-                Links  = CloneLinks(doc?.Robot?.Links),
-                Joints = CloneJoints(doc?.Robot?.Joints),
-                Stacks = StackProfile.Default(),
             };
 
             // World mode — carry the Create-World picks through to the exporter.

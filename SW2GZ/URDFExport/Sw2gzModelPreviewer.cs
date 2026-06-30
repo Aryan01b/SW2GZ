@@ -146,14 +146,9 @@ namespace SW2GZ.URDFExport
             // Build the live joint sampler so the PreviewServer's /joint_states
             // endpoint streams real SW mate angles to the browser. Failures here
             // are non-fatal: the preview just renders with all joints at zero.
+            // Robot live joint sync removed for the v2 rebuild — preview renders
+            // with all joints at zero (World/Asset are static anyway).
             Func<IReadOnlyDictionary<string, double>> sampler = () => new Dictionary<string, double>();
-            try
-            {
-                var swSampler = SwJointStateSampler.Build(
-                    (AssemblyDoc)model, config.Links, config.Joints);
-                sampler = swSampler.ReadAll;
-            }
-            catch { /* swallow — preview without live sync still useful */ }
 
             return new PreviewResult(tempBase, workspace, meshesDir, config.Mode,
                 urdfText, urdfOrSdfRel, launchText, launchRel, logText, summary, tfTree, report,
@@ -306,8 +301,6 @@ namespace SW2GZ.URDFExport
             sb.AppendLine("Package:        " + config.PackageName);
             sb.AppendLine("Author:         " + (string.IsNullOrEmpty(config.Author) ? "(unset)" : config.Author));
             sb.AppendLine("License:        " + (string.IsNullOrEmpty(config.License) ? "(unset)" : config.License));
-            sb.AppendLine("Links:          " + (config.Links?.Count ?? 0));
-            sb.AppendLine("Joints:         " + (config.Joints?.Count ?? 0));
             sb.AppendLine("SW up axis:     " + config.SwUpAxis);
             sb.AppendLine("SW fwd axis:    " + config.SwForwardAxis);
             sb.AppendLine();

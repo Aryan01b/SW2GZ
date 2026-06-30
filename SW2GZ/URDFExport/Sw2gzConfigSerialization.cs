@@ -57,8 +57,7 @@ namespace SW2GZ.URDFExport
                 }
                 else
                 {
-                    logger.Info($"Save readback: Mode={back.Mode} LastStep={back.LastStep} " +
-                        $"Links={back.Links?.Count ?? 0} Joints={back.Joints?.Count ?? 0}");
+                    logger.Info($"Save readback: Mode={back.Mode} LastStep={back.LastStep}");
                 }
             }
             catch (Exception e)
@@ -80,8 +79,7 @@ namespace SW2GZ.URDFExport
                 logger.Info("Load: no checkpoint found — returning fresh default config.");
                 return new Sw2gzExportConfig();
             }
-            logger.Info($"Load: Mode={config.Mode} LastStep={config.LastStep} " +
-                $"Links={config.Links?.Count ?? 0} Joints={config.Joints?.Count ?? 0}");
+            logger.Info($"Load: Mode={config.Mode} LastStep={config.LastStep}");
             return config;
         }
 
