@@ -84,7 +84,13 @@ mesh (no zero-size box). +5 tests (**842 green**); add-in compiles clean.
   Friction not in that export (no ground/asset picked → default ground_plane
   only; backend-tested). Found + FIXED stale export-dialog text (was showing
   Robot `_ws`/colcon for World). Deployed DLL **08:21:26**.
-- **✅ TAGGED v2.6.0** (849 green, live-tested, deployed). Not pushed.
+- **Closed open issue:** default `ground_plane` collision had no friction, so the
+  μ knob was inert when no ground asset was picked (the live-export case). Added
+  `SdfPhysicsBlock.GroundPlane(mu)`; `WriteScene` passes `FrictionMu` to it.
+  no-arg byte-identical (robot goldens). +4 tests.
+- **✅ TAGGED v2.6.0** (now **853 green**, live-tested, deployed **08:37:24**).
+  Tag moved to include the ground-friction fix (unpushed → safe). NOT pushed.
+- KeyPublisher/TriggeredPublisher live-toggle = UI hit-precision, not a code bug.
 
 ### ✅ World+Asset ➕ matrix set BACKEND-COMPLETE (this session, branch `feat/world-sensors`)
 W1 launch+bridge · W2 friction · W3 lights(writer) · A1 articulated asset ·
