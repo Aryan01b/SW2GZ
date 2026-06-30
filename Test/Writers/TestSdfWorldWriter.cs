@@ -237,6 +237,32 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void GroundPlane_NoArg_HasNoFrictionSurface()
+        {
+            Assert.DoesNotContain("<surface>", SdfPhysicsBlock.GroundPlane());
+        }
+
+        [Fact]
+        public void GroundPlane_WithFriction_InjectsSurface()
+        {
+            string g = SdfPhysicsBlock.GroundPlane(0.7);
+            Assert.Contains("<surface><friction><ode>", g);
+            Assert.Contains("<mu>0.7</mu><mu2>0.7</mu2>", g);
+            Assert.Contains("ground_plane", g);
+        }
+
+        [Fact]
+        public void WriteScene_DefaultGroundPlane_GetsFrictionWhenSet()
+        {
+            // No models picked → default ground_plane; friction set → the plane
+            // a robot drives on must carry the friction surface too.
+            var sdf = SdfWorldWriter.WriteScene(new SdfSceneInput("env",
+                System.Array.Empty<SdfSceneModel>(), IncludeGroundPlane: true, FrictionMu: 0.5));
+            Assert.Contains("ground_plane", sdf);
+            Assert.Contains("<mu>0.5</mu><mu2>0.5</mu2>", sdf);
+        }
+
+        [Fact]
         public void WriteScene_WithFriction_EmitsSurfacePerCollision()
         {
             var sdf = SdfWorldWriter.WriteScene(new SdfSceneInput("env",

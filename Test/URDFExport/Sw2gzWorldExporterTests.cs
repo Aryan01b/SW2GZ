@@ -284,6 +284,17 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void Export_NoGroundPicked_DefaultGroundPlaneGetsFriction()
+        {
+            // No ground/asset picked → default ground_plane; default friction 1.0
+            // must still apply to it so a spawned robot doesn't slide.
+            Sw2gzWorldExporter.Export(new FakeTess("rack-1"), Cfg("", "rack-1"), _dir, 0, 0, 0);
+            string sdf = Sdf();
+            Assert.Contains("ground_plane", sdf);
+            Assert.Contains("<mu>1</mu><mu2>1</mu2>", sdf);
+        }
+
+        [Fact]
         public void Export_WorldLights_EmittedAsExtraLights()
         {
             var c = Cfg("floor-1");

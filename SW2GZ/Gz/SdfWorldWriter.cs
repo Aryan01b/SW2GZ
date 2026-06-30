@@ -142,7 +142,9 @@ namespace SW2GZ.Gz
                 foreach (SdfLight light in input.ExtraLights)
                     if (light != null) sb.Append(SdfPhysicsBlock.Light(light));
             if (input.IncludeGroundPlane)
-                sb.Append(SdfPhysicsBlock.GroundPlane());
+                sb.Append(input.FrictionMu.HasValue
+                    ? SdfPhysicsBlock.GroundPlane(input.FrictionMu.Value)
+                    : SdfPhysicsBlock.GroundPlane());
 
             string rpy = input.Roll.ToString("0.######", ci) + " " +
                          input.Pitch.ToString("0.######", ci) + " " +

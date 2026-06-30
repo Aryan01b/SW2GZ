@@ -121,6 +121,21 @@ namespace SW2GZ.Gz
             return sb.ToString();
         }
 
+        // Friction overload — inject a friction surface into the default ground
+        // plane so a robot spawned into a world with no picked ground still grips
+        // the floor. No-arg GroundPlane() stays byte-identical (robot goldens).
+        public static string GroundPlane(double frictionMu)
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            string mu = frictionMu.ToString("0.######", ci);
+            string surface =
+                "          <surface><friction><ode>\n" +
+                "            <mu>" + mu + "</mu><mu2>" + mu + "</mu2>\n" +
+                "          </ode></friction></surface>\n";
+            return GroundPlane().Replace(
+                "        </collision>", surface + "        </collision>");
+        }
+
         public static string GroundPlane()
         {
             return
