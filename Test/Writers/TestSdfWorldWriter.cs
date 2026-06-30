@@ -430,6 +430,54 @@ namespace SW2GZ.Writers.Tests
             Assert.DoesNotContain("gz-sim-scene-broadcaster-system", sdf);
         }
 
+        // ── W3: extra fill lights ─────────────────────────────────────────────
+        [Fact]
+        public void WriteScene_NoExtraLights_OnlyTheSun()
+        {
+            var sdf = SdfWorldWriter.WriteScene(Scene(new SdfSceneModel("floor", "floor.dae")));
+            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(sdf, "<light ").Count);
+            Assert.Contains("name=\"sun\"", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_WithExtraLights_EmitsEachAfterTheSun()
+        {
+            var sdf = SdfWorldWriter.WriteScene(new SdfSceneInput("env",
+                new[] { new SdfSceneModel("floor", "floor.dae") },
+                ExtraLights: new[]
+                {
+                    new SdfLight("fill1", "point", X: 1, Y: 2, Z: 3, Range: 8),
+                    new SdfLight("spot1", "spot", DirZ: -1),
+                }));
+            Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(sdf, "<light ").Count);
+            Assert.Contains("name=\"fill1\" type=\"point\"", sdf);
+            Assert.Contains("<pose>1 2 3 0 0 0</pose>", sdf);
+            Assert.Contains("<range>8</range>", sdf);
+            Assert.Contains("name=\"spot1\" type=\"spot\"", sdf);
+        }
+
+        [Fact]
+        public void Light_Point_HasAttenuationNoDirection()
+        {
+            string xml = SdfPhysicsBlock.Light(new SdfLight("p", "point"));
+            Assert.Contains("<attenuation>", xml);
+            Assert.DoesNotContain("<direction>", xml);
+        }
+
+        [Fact]
+        public void Light_Directional_HasDirectionNoAttenuation()
+        {
+            string xml = SdfPhysicsBlock.Light(new SdfLight("d", "directional", DirX: 0, DirY: 0, DirZ: -1));
+            Assert.Contains("<direction>0 0 -1</direction>", xml);
+            Assert.DoesNotContain("<attenuation>", xml);
+        }
+
+        [Fact]
+        public void Light_NullName_Throws()
+        {
+            Assert.Throws<System.ArgumentException>(() => SdfPhysicsBlock.Light(new SdfLight("  ")));
+        }
+
         [Fact]
         public void Sun_FromAzimuthElevation_PointsDownAndScalesIntensity()
         {

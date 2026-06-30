@@ -12,20 +12,34 @@ from [`docs/mode-feature-matrix.md`](../docs/mode-feature-matrix.md), commit eac
 green increment as a safe retreat. Sequenced plan: **W1 ✔ → W2 → W3 → A1 → A2 →
 A3** (see matrix "Summary — what to add").
 
-**W1 DONE (this session) — World launch + ros_gz bridge (standalone, no-ament).**
-Spec: [`docs/superpowers/specs/2026-06-30-world-launch-bridge-design.md`](../docs/superpowers/specs/2026-06-30-world-launch-bridge-design.md).
-World export now also writes `<pkg>/launch_world.py` + `<pkg>/ros_gz_bridge.yaml`
-so the world runs via `ros2 launch <pkg>/launch_world.py` (no colcon). Paths
-resolve relative to the launch file (`__file__`), not ament. Bridge = `/clock`
-always + `/cmd_vel` (ROS→GZ) only when teleop on.
-- NEW `Ros2/WorldLaunchPyWriter.cs` (pure), NEW `Gz/WorldBridgeYaml.cs` (pure).
-- `Sw2gzWorldExporter.Export` writes both after the `.sdf`; teleop flag =
-  KeyPublisher||TriggeredPublisher. Existing `.sdf`/mesh output byte-identical.
-- +14 tests (**815 green**); add-in compiles clean (MSB3216 regasm non-fatal).
-- NOT deployed (pure-writer cut, no COM change → live deploy not required for W1).
+**W1+W2+W3 DONE (this session). 824 tests green, add-in compiles clean.**
+Spec (W1): [`docs/superpowers/specs/2026-06-30-world-launch-bridge-design.md`](../docs/superpowers/specs/2026-06-30-world-launch-bridge-design.md).
 
-**Next (W2):** friction on world collisions — `<surface><friction>` on each
-world model's `<collision>` (reuse the Asset μ pattern). Then W3 (extra lights).
+- **W1 — World launch + ros_gz bridge (standalone, no-ament).** Export writes
+  `<pkg>/launch_world.py` + `<pkg>/ros_gz_bridge.yaml` → run via
+  `ros2 launch <pkg>/launch_world.py` (no colcon). Paths resolve relative to the
+  launch file (`__file__`). Bridge = `/clock` always + `/cmd_vel` (ROS→GZ) when
+  teleop on. NEW `Ros2/WorldLaunchPyWriter.cs`, `Gz/WorldBridgeYaml.cs` (pure).
+- **W2 — collision friction.** Every world model `<collision>` gets
+  `<surface><friction><ode>` (mu=mu2). Tunable `Sw2gzExportConfig.WorldFriction`
+  (default 1.0, persisted+cloned). `SdfSceneInput.FrictionMu` opt-in (null =
+  byte-identical); exporter always passes it.
+- **W3 — extra fill lights (writer block).** NEW `SdfLight` record +
+  `SdfPhysicsBlock.Light()` (point/spot/directional) + `SdfSceneInput.ExtraLights`
+  (null/empty = byte-identical, only the sun). Writer-first, like SdfCamera was.
+- All three are **value-by-default for W1/W2** (every world export gains
+  launch+bridge+friction). W3 is the writer building block; the lights LIST
+  config + Settings-panel UI is **deferred** (no UI knob yet → exporter passes
+  none, worlds unchanged).
+- NOT deployed (pure-writer/config cut, no COM-surface change → live deploy not
+  required for correctness; world-sensors UI still needs the user's live test
+  before a v2.6.0 tag).
+
+**Next (Asset column):** A1 dynamic/articulated asset (one `<joint>` + dynamic
+toggle) — bigger structural change, **needs a design pass** (brainstorm→spec)
+before coding. Then A2 sensor-bearing asset (depends on A1's non-static model
+plumbing), A3 primitive collision override. W3's lights-list persistence + a
+World Settings "Lights" UI ride along when that panel is next touched.
 
 ## Done — World sensors = plugin toggles + left-dock PMPs (branch `feat/world-sensors`)
 

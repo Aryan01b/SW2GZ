@@ -45,7 +45,8 @@ namespace SW2GZ.Gz
         SdfCamera Camera = null,
         SdfSceneSettings Settings = null,
         SdfWorldPlugins Plugins = null,
-        double? FrictionMu = null);
+        double? FrictionMu = null,
+        IReadOnlyList<SdfLight> ExtraLights = null);
 
     public static class SdfWorldWriter
     {
@@ -136,6 +137,10 @@ namespace SW2GZ.Gz
             sb.Append(s == null
                 ? SdfPhysicsBlock.Sun()
                 : SdfPhysicsBlock.Sun(s.SunAzimuthDeg, s.SunElevationDeg, s.SunIntensity, s.CastShadows));
+            // Extra fill lights beyond the sun (null/empty → byte-identical).
+            if (input.ExtraLights != null)
+                foreach (SdfLight light in input.ExtraLights)
+                    if (light != null) sb.Append(SdfPhysicsBlock.Light(light));
             if (input.IncludeGroundPlane)
                 sb.Append(SdfPhysicsBlock.GroundPlane());
 
