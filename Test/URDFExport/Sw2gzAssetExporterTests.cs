@@ -233,5 +233,56 @@ namespace SW2GZ.Writers.Tests
             var s = SdfAssetModelWriter.Write(new SdfAssetModelInput("a", "a.dae"));   // Sensor defaults null
             Assert.DoesNotContain("<sensor", s);
         }
+
+        // ── A3: primitive collision override ──────────────────────────────────
+
+        [Fact]
+        public void Export_DefaultCollisionMesh_UsesMeshCollider()
+        {
+            Sw2gzAssetExporter.Export(new FakeTess(), Cfg(), _dir, Matrix3.Identity);
+            // Both visual and collision reference the mesh (2 occurrences).
+            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(Sdf(), "<mesh>").Count);
+            Assert.DoesNotContain("<box>", Sdf());
+        }
+
+        [Fact]
+        public void Export_BoxCollision_VisualMeshCollisionBox()
+        {
+            var c = Cfg();
+            c.AssetCollision = "box";
+            Sw2gzAssetExporter.Export(new FakeTess(), c, _dir, Matrix3.Identity);
+            string sdf = Sdf();
+            // Visual still mesh; collision is a box (only 1 <mesh> left = visual).
+            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(sdf, "<mesh>").Count);
+            Assert.Contains("<box><size>", sdf);
+            // FakeTess triangle spans x[0,1] y[0,1] → box size 1 x 1 in X/Y.
+            Assert.Contains("<collision name=\"collision\">", sdf);
+        }
+
+        [Fact]
+        public void Write_SphereCollision_EmitsSphereRadius()
+        {
+            var s = SdfAssetModelWriter.Write(new SdfAssetModelInput("a", "a.dae",
+                CollisionShape: "sphere", ColSizeX: 2, ColSizeY: 2, ColSizeZ: 4));
+            Assert.Contains("<sphere><radius>2</radius></sphere>", s);   // max extent 4 / 2
+        }
+
+        [Fact]
+        public void Write_CylinderCollision_EmitsRadiusAndLength()
+        {
+            var s = SdfAssetModelWriter.Write(new SdfAssetModelInput("a", "a.dae",
+                CollisionShape: "cylinder", ColSizeX: 2, ColSizeY: 2, ColSizeZ: 5));
+            Assert.Contains("<cylinder><radius>1</radius><length>5</length></cylinder>", s);
+        }
+
+        [Fact]
+        public void Write_PrimitiveZeroSize_FallsBackToMesh()
+        {
+            // A degenerate asset (zero AABB) must not emit a zero-size box.
+            var s = SdfAssetModelWriter.Write(new SdfAssetModelInput("a", "a.dae",
+                CollisionShape: "box"));   // all Col sizes default 0
+            Assert.DoesNotContain("<box>", s);
+            Assert.Contains("<mesh>", s);
+        }
     }
 }

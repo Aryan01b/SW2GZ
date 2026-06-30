@@ -60,11 +60,27 @@ An asset can now anchor its link to the `world` frame via one joint
 - Combines with A1 (e.g. revolute door + camera). +6 tests (**837 green**);
   add-in compiles clean. Doc/codec + Asset-wizard sensor step deferred.
 
-**Next:** A3 primitive collision override (box/sphere/cyl from mesh AABB) — the
-last matrix ➕. Then the whole World+Asset ➕ set is backend-complete; remaining
-work is the deferred-UI backlog (Asset-wizard articulation+sensor steps, World
-Settings "Lights" panel, doc/codec persistence for the new Asset/World fields)
-and the user's live-test → tag gate.
+**A3 DONE — primitive collision override.** Asset collision can be a primitive
+(box/sphere/cylinder) fit to the mesh AABB instead of the full mesh; visual
+always stays mesh. `Sw2gzExportConfig.AssetCollision` ("mesh" default).
+`SdfAssetModelInput` gained `CollisionShape` + AABB centre/size; the exporter
+computes the AABB of the grounded mesh and passes it. Zero AABB → falls back to
+mesh (no zero-size box). +5 tests (**842 green**); add-in compiles clean.
+
+### ✅ World+Asset ➕ matrix set BACKEND-COMPLETE (this session, branch `feat/world-sensors`)
+W1 launch+bridge · W2 friction · W3 lights(writer) · A1 articulated asset ·
+A2 sensor asset · A3 primitive collision. 801→842 tests. Every feature is
+opt-in/default-safe (unset = byte-identical) and committed as its own green
+safe-retreat point.
+
+**Remaining = deferred-UI backlog + the tag gate (NOT backend):**
+- Wizard/UI: World Settings "Lights" panel (W3 list), Asset-wizard
+  Articulation+Sensor+Collision steps (A1/A2/A3 config knobs), doc/codec
+  persistence for the new Asset/World config fields (currently config-level only;
+  set programmatically, not yet round-tripped through `Sw2gzDoc`).
+- **Tag gate (user):** world-sensors UI still needs a live SOLIDWORKS test before
+  tagging **v2.6.0**; the W1-W3/A1-A3 cuts are pure writer/config (no COM-surface
+  change) so they don't need redeploy to be correct, but they ride the same tag.
 
 ## Done — World sensors = plugin toggles + left-dock PMPs (branch `feat/world-sensors`)
 

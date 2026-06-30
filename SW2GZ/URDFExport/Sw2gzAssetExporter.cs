@@ -46,6 +46,13 @@ namespace SW2GZ.URDFExport
             MeshData mesh = tess.Tessellate(config.AssetBodyPart, TessellationLod.Fine);
             mesh = RotateAndGround(mesh, swToRos);
 
+            // A3 — AABB of the grounded mesh, for an optional primitive collider.
+            Aabb(mesh, out Vector3 bbMin, out Vector3 bbMax);
+            Vector3 bbC = (bbMin + bbMax) * 0.5f;
+            Vector3 bbS = bbMax - bbMin;
+            string colShape = string.IsNullOrWhiteSpace(config.AssetCollision)
+                ? "mesh" : config.AssetCollision.Trim().ToLowerInvariant();
+
             Directory.CreateDirectory(meshesDir);
             DaeWriter.Write(mesh, Path.Combine(meshesDir, daeFile), withNormals: true);
 
@@ -75,7 +82,10 @@ namespace SW2GZ.URDFExport
                 JointAxisZ: config.AssetJointAxisZ,
                 JointLower: config.AssetJointLower,
                 JointUpper: config.AssetJointUpper,
-                Sensor: BuildSensor(config.AssetSensorKind, config.AssetSensorTopic));
+                Sensor: BuildSensor(config.AssetSensorKind, config.AssetSensorTopic),
+                CollisionShape: colShape,
+                ColCenterX: bbC.X, ColCenterY: bbC.Y, ColCenterZ: bbC.Z,
+                ColSizeX: bbS.X, ColSizeY: bbS.Y, ColSizeZ: bbS.Z);
             File.WriteAllText(Path.Combine(root, "model.sdf"), SdfAssetModelWriter.Write(modelInput));
 
             return new ValidationReport(Array.Empty<ValidationIssue>());
@@ -111,6 +121,17 @@ namespace SW2GZ.URDFExport
         {
             if (c == null) return new[] { 0.8, 0.8, 0.8, 1.0 };
             return new[] { c.Value.R / 255.0, c.Value.G / 255.0, c.Value.B / 255.0, c.Value.A / 255.0 };
+        }
+
+        // Axis-aligned bounds of the mesh verts (post rotate+ground). Empty mesh
+        // → zero box, which the writer treats as "no primitive" (keeps the mesh
+        // collider) so a degenerate asset never emits a zero-size box.
+        private static void Aabb(MeshData mesh, out Vector3 min, out Vector3 max)
+        {
+            min = Vector3.Zero; max = Vector3.Zero;
+            if (mesh?.Vertices == null || mesh.Vertices.Length == 0) return;
+            min = new Vector3(float.MaxValue); max = new Vector3(float.MinValue);
+            foreach (Vector3 v in mesh.Vertices) { min = Vector3.Min(min, v); max = Vector3.Max(max, v); }
         }
 
         // A2 — build a default-parameterised sensor mounted on the asset link.

@@ -35,7 +35,13 @@ namespace SW2GZ.Gz
         // Null emits no sensor. The host world must run the matching sensor system
         // (gz-sim-sensors / -imu) for it to produce data — World mode's "Sensors"
         // panel enables exactly those.
-        SensorDef Sensor = null);
+        SensorDef Sensor = null,
+        // A3 — collision geometry: "mesh" (default, exact, slow) or a primitive
+        // ("box"|"sphere"|"cylinder") fit to the mesh AABB for a cheaper collider.
+        // The exporter computes the AABB centre + size; visual always stays mesh.
+        string CollisionShape = "mesh",
+        double ColCenterX = 0, double ColCenterY = 0, double ColCenterZ = 0,
+        double ColSizeX = 0, double ColSizeY = 0, double ColSizeZ = 0);
 
     public static class SdfAssetModelWriter
     {
@@ -85,7 +91,26 @@ namespace SW2GZ.Gz
             sb.AppendLine("      </visual>");
 
             sb.AppendLine("      <collision name=\"collision\">");
-            sb.AppendLine($"        <geometry><mesh><uri>meshes/{meshEsc}</uri></mesh></geometry>");
+            string shape = string.IsNullOrWhiteSpace(input.CollisionShape)
+                ? "mesh" : input.CollisionShape.Trim().ToLowerInvariant();
+            bool hasSize = input.ColSizeX > 0 || input.ColSizeY > 0 || input.ColSizeZ > 0;
+            if (shape != "mesh" && hasSize)
+            {
+                // Primitive collider fit to the mesh AABB; pose centres it on the
+                // AABB so it overlaps the (mesh) visual. Visual stays the mesh.
+                sb.AppendLine($"        <pose>{F(input.ColCenterX)} {F(input.ColCenterY)} {F(input.ColCenterZ)} 0 0 0</pose>");
+                double sx = input.ColSizeX, sy = input.ColSizeY, sz = input.ColSizeZ;
+                if (shape == "sphere")
+                    sb.AppendLine($"        <geometry><sphere><radius>{F(System.Math.Max(sx, System.Math.Max(sy, sz)) / 2.0)}</radius></sphere></geometry>");
+                else if (shape == "cylinder")
+                    sb.AppendLine($"        <geometry><cylinder><radius>{F(System.Math.Max(sx, sy) / 2.0)}</radius><length>{F(sz)}</length></cylinder></geometry>");
+                else // box
+                    sb.AppendLine($"        <geometry><box><size>{F(sx)} {F(sy)} {F(sz)}</size></box></geometry>");
+            }
+            else
+            {
+                sb.AppendLine($"        <geometry><mesh><uri>meshes/{meshEsc}</uri></mesh></geometry>");
+            }
             sb.AppendLine("        <surface><friction><ode>");
             sb.AppendLine($"          <mu>{F(input.FrictionMu)}</mu><mu2>{F(input.FrictionMu)}</mu2>");
             sb.AppendLine("        </ode></friction></surface>");

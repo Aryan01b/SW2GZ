@@ -107,6 +107,10 @@ namespace SW2GZ.URDFExport
         // "Sensors" panel) for the sensor to publish.
         [DataMember] public string AssetSensorKind  { get; set; } = "none";   // none|camera|gpu_lidar|imu
         [DataMember] public string AssetSensorTopic { get; set; } = "/asset/sensor";
+        // A3 — collision geometry: "mesh" (exact) or a primitive fit to the mesh
+        // AABB ("box"|"sphere"|"cylinder") for a cheaper collider. Visual always
+        // stays the mesh.
+        [DataMember] public string AssetCollision { get; set; } = "mesh";   // mesh|box|sphere|cylinder
 
         // Stacks — à-la-carte ROS 2 / Gazebo stack selection for this assembly.
         // The full-stack default for legacy configs (saved before this field
@@ -147,6 +151,7 @@ namespace SW2GZ.URDFExport
             AssetJointAxisX = 0.0; AssetJointAxisY = 0.0; AssetJointAxisZ = 1.0;
             AssetJointLower = -1.5708; AssetJointUpper = 1.5708;
             AssetSensorKind = "none"; AssetSensorTopic = "/asset/sensor";
+            AssetCollision = "mesh";
             // Field-not-present defaults: legacy checkpoints saved before the
             // coordinate-convention fields existed deserialize them to the
             // enum default (PlusX = 0), which is the wrong "up". Seed the
@@ -199,6 +204,7 @@ namespace SW2GZ.URDFExport
                 AssetJointUpper = this.AssetJointUpper,
                 AssetSensorKind  = this.AssetSensorKind,
                 AssetSensorTopic = this.AssetSensorTopic,
+                AssetCollision   = this.AssetCollision,
             };
         }
     }
