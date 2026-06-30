@@ -39,6 +39,7 @@ namespace SW2GZ.UI.Pmp
         private readonly Sw2gzDoc _liveDoc;
         private readonly Sw2gzDoc _snapshot;
         private readonly Action<Sw2gzDoc> _onCommit;
+        private readonly Action _onClosed;
         private readonly PropertyManagerPage2 _page;
 
         private const int StepScene   = 0;
@@ -119,12 +120,13 @@ namespace SW2GZ.UI.Pmp
 
         private static readonly string[] EngineOptions = { "ode", "bullet", "dart" };
 
-        public Sw2gzCreateWorldPmp(SldWorks swApp, ModelDoc2 modelDoc, Sw2gzDoc liveDoc, Action<Sw2gzDoc> onCommit)
+        public Sw2gzCreateWorldPmp(SldWorks swApp, ModelDoc2 modelDoc, Sw2gzDoc liveDoc, Action<Sw2gzDoc> onCommit, Action onClosed = null)
         {
             _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
             _modelDoc = modelDoc ?? throw new ArgumentNullException(nameof(modelDoc));
             _liveDoc = liveDoc ?? throw new ArgumentNullException(nameof(liveDoc));
             _onCommit = onCommit ?? (d => { });
+            _onClosed = onClosed;
 
             _snapshot = Sw2gzDocSnapshot.Clone(liveDoc);
 
@@ -593,7 +595,7 @@ namespace SW2GZ.UI.Pmp
             }
         }
 
-        void IPropertyManagerPage2Handler9.AfterClose() { if (_okay && _liveDoc != null) _onCommit(_liveDoc); }
+        void IPropertyManagerPage2Handler9.AfterClose() { if (_okay && _liveDoc != null) _onCommit(_liveDoc); _onClosed?.Invoke(); }
 
         void IPropertyManagerPage2Handler9.OnButtonPress(int Id) { }
         void IPropertyManagerPage2Handler9.OnGainedFocus(int Id) { }

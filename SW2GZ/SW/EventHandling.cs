@@ -196,8 +196,14 @@ namespace SW2GZ.SW
             return 0;
         }
 
-        public static int OnNewSelection()
+        // Re-sync the ribbon Create/Edit label to the current saved-state. Cheap:
+        // SyncRibbonToActiveDoc (via OnDocChange) is edge-guarded, so it only
+        // rebuilds the tab when HasSaved/mode actually changed — e.g. right after
+        // the user deletes the "SW2GZ Doc (v1)" attribute (no doc-change event
+        // fires for that, so the label would otherwise stay stale on "Edit").
+        public int OnNewSelection()
         {
+            try { swAddin?.OnDocChange(); } catch { }
             return 0;
         }
 

@@ -428,6 +428,11 @@ namespace SW2GZ.SW
         // Robot mode v2 — robot Create wizard removed; OpenCreateRobot is a stub.
         private SW2GZ.UI.Pmp.Sw2gzCreateWorldPmp _createWorldPmp;
         private SW2GZ.UI.Pmp.Sw2gzCreateAssetPmp _createAssetPmp;
+        // True while a Create wizard PMP is open. The mode pills read this and
+        // disable, so the user cannot switch mode mid-wizard (which left the
+        // ribbon Create button on a different mode than the open panel after a
+        // Cancel). Reset when the wizard closes (OK or Cancel).
+        private bool _wizardOpen;
         private SW2GZ.UI.Pmp.Sw2gzWorldSettingsPmp _worldSettingsPmp;
         private SW2GZ.UI.Pmp.Sw2gzWorldSensorsPmp _worldSensorsPmp;
 
@@ -444,6 +449,10 @@ namespace SW2GZ.SW
         {
             try
             {
+                // Clear any stale wizard-open flag (e.g. a prior wizard whose PMP
+                // failed to create never fired its close callback) so re-opening
+                // Create always starts from unlocked pills.
+                _wizardOpen = false;
                 if (!TryGetActiveModelDoc(out ModelDoc2 modeldoc)) return;
 
                 // A standalone part document can only be an Asset — force the
@@ -518,29 +527,44 @@ namespace SW2GZ.SW
         {
             try
             {
+                _wizardOpen = true;
                 _createWorldPmp = new SW2GZ.UI.Pmp.Sw2gzCreateWorldPmp(
                     (SldWorks)SwApp, modelDoc, doc,
-                    d => PersistDoc(modelDoc, d));
+                    d => PersistDoc(modelDoc, d), OnWizardClosed);
                 _createWorldPmp.Show();
             }
             catch (Exception e)
             {
+                _wizardOpen = false;
                 logger.Error("OpenCreateWorld failed", e);
                 MessageBox.Show("Could not open Create World: " + e.Message);
             }
+        }
+
+        // Fired when a Create wizard PMP closes (OK or Cancel). Unlocks the mode
+        // pills and re-syncs the ribbon Create/Edit label to the doc's actual
+        // mode + saved-state (on Cancel the doc's mode is restored from snapshot,
+        // so this corrects any label the user's mid-wizard pill click left behind).
+        private void OnWizardClosed()
+        {
+            _wizardOpen = false;
+            try { SyncRibbonToActiveDoc(); }
+            catch (Exception e) { logger.Warn("OnWizardClosed: SyncRibbonToActiveDoc threw", e); }
         }
 
         private void OpenCreateAsset(ModelDoc2 modelDoc, SW2GZ.URDFExport.Sw2gzDoc doc, string wholePartName = null)
         {
             try
             {
+                _wizardOpen = true;
                 _createAssetPmp = new SW2GZ.UI.Pmp.Sw2gzCreateAssetPmp(
                     (SldWorks)SwApp, modelDoc, doc,
-                    d => PersistDoc(modelDoc, d), wholePartName);
+                    d => PersistDoc(modelDoc, d), wholePartName, OnWizardClosed);
                 _createAssetPmp.Show();
             }
             catch (Exception e)
             {
+                _wizardOpen = false;
                 logger.Error("OpenCreateAsset failed", e);
                 MessageBox.Show("Could not open Create Asset: " + e.Message);
             }
@@ -648,6 +672,10 @@ namespace SW2GZ.SW
         {
             try
             {
+                // A Create wizard is open — freeze the pills so the user can't
+                // switch mode out from under the open panel (bug: switching mid-
+                // wizard then Cancel left the Create button on the wrong mode).
+                if (_wizardOpen) return 0;
                 if (AssemblyEnable() == 0) return 0;
                 if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
                 var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);

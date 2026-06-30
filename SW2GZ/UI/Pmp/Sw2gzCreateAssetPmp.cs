@@ -33,6 +33,7 @@ namespace SW2GZ.UI.Pmp
         private readonly Sw2gzDoc _liveDoc;
         private readonly Sw2gzDoc _snapshot;
         private readonly Action<Sw2gzDoc> _onCommit;
+        private readonly Action _onClosed;
         private readonly PropertyManagerPage2 _page;
 
         private const int StepPart    = 0;
@@ -112,12 +113,13 @@ namespace SW2GZ.UI.Pmp
         private PropertyManagerPageLabel _reviewSurfLabel;
 
         public Sw2gzCreateAssetPmp(SldWorks swApp, ModelDoc2 modelDoc, Sw2gzDoc liveDoc,
-            Action<Sw2gzDoc> onCommit, string wholePartName = null)
+            Action<Sw2gzDoc> onCommit, string wholePartName = null, Action onClosed = null)
         {
             _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
             _modelDoc = modelDoc ?? throw new ArgumentNullException(nameof(modelDoc));
             _liveDoc = liveDoc ?? throw new ArgumentNullException(nameof(liveDoc));
             _onCommit = onCommit ?? (d => { });
+            _onClosed = onClosed;
 
             // Standalone part doc: there's nothing to pick — the whole part is
             // the asset. Preset the body so the Part step is informational.
@@ -504,7 +506,7 @@ namespace SW2GZ.UI.Pmp
             else { CommitSurfaceFromControls(); }
         }
 
-        void IPropertyManagerPage2Handler9.AfterClose() { if (_okay && _liveDoc != null) _onCommit(_liveDoc); }
+        void IPropertyManagerPage2Handler9.AfterClose() { if (_okay && _liveDoc != null) _onCommit(_liveDoc); _onClosed?.Invoke(); }
 
         void IPropertyManagerPage2Handler9.OnButtonPress(int Id) { }
         void IPropertyManagerPage2Handler9.OnGainedFocus(int Id) { }
