@@ -64,6 +64,20 @@ namespace SW2GZ.UI.Pmp
         private const int IdSurfaceDescr   = 21;
         private const int IdStaticCheck    = 22;
         private const int IdFrictionBox    = 23;
+        private const int IdCollisionCombo = 24;
+        private const int IdJointTypeCombo = 25;
+        private const int IdJointAxisCombo = 26;
+        private const int IdJointLowerBox  = 27;
+        private const int IdJointUpperBox  = 28;
+        private const int IdSensorKindCombo = 29;
+        private const int IdSensorTopicText = 36;
+
+        // Combobox value maps (index ↔ persisted string). Order must match the
+        // AddItems order below; the commit reads CurrentSelection as the index.
+        private static readonly string[] CollisionValues = { "mesh", "box", "sphere", "cylinder" };
+        private static readonly string[] JointValues = { "none", "fixed", "revolute", "continuous", "prismatic" };
+        private static readonly string[] AxisValues = { "x", "y", "z" };
+        private static readonly string[] SensorValues = { "none", "camera", "gpu_lidar", "imu" };
 
         private const int IdReviewGroup  = 30;
         private const int IdReviewDescr  = 31;
@@ -87,6 +101,13 @@ namespace SW2GZ.UI.Pmp
         private PropertyManagerPageLabel _bodyLabel;
         private PropertyManagerPageCheckbox _staticCheck;
         private PropertyManagerPageNumberbox _frictionBox;
+        private PropertyManagerPageCombobox _collisionCombo;
+        private PropertyManagerPageCombobox _jointTypeCombo;
+        private PropertyManagerPageCombobox _jointAxisCombo;
+        private PropertyManagerPageNumberbox _jointLowerBox;
+        private PropertyManagerPageNumberbox _jointUpperBox;
+        private PropertyManagerPageCombobox _sensorKindCombo;
+        private PropertyManagerPageTextbox _sensorTopicText;
         private PropertyManagerPageLabel _reviewBodyLabel;
         private PropertyManagerPageLabel _reviewSurfLabel;
 
@@ -275,7 +296,69 @@ namespace SW2GZ.UI.Pmp
             _frictionBox.SetRange2((int)swNumberboxUnitType_e.swNumberBox_UnitlessDouble,
                 0.0, 2.0, true, 0.8, 0.05, 0.05);
             _frictionBox.Value = _liveDoc.Asset.FrictionMu;
+
+            // A3 — collision geometry (mesh = exact; primitive = cheaper).
+            _collisionCombo = NewCombo(grp, IdCollisionCombo, "Collision", leftEdge, visibleEnabled,
+                CollisionValues, _liveDoc.Asset.Collision, "Collision shape (visual stays the mesh)");
+
+            // A1 — 1-DOF joint to the world (door/lift/wheel/lever). "none" = plain.
+            _jointTypeCombo = NewCombo(grp, IdJointTypeCombo, "Joint", leftEdge, visibleEnabled,
+                JointValues, _liveDoc.Asset.JointType, "Anchor the asset to the world via one joint");
+            _jointAxisCombo = NewCombo(grp, IdJointAxisCombo, "Joint axis", leftEdge, visibleEnabled,
+                AxisValues, AxisFromVec(_liveDoc.Asset), "Axis of motion (revolute/prismatic)");
+
+            _jointLowerBox = (PropertyManagerPageNumberbox)grp.AddControl2(
+                IdJointLowerBox, (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
+                "Joint lower", (short)leftEdge, visibleEnabled, "Lower limit (rad or m)");
+            _jointLowerBox.SetRange2((int)swNumberboxUnitType_e.swNumberBox_UnitlessDouble,
+                -100.0, 100.0, true, -1.5708, 0.1, 0.1);
+            _jointLowerBox.Value = _liveDoc.Asset.JointLower;
+
+            _jointUpperBox = (PropertyManagerPageNumberbox)grp.AddControl2(
+                IdJointUpperBox, (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
+                "Joint upper", (short)leftEdge, visibleEnabled, "Upper limit (rad or m)");
+            _jointUpperBox.SetRange2((int)swNumberboxUnitType_e.swNumberBox_UnitlessDouble,
+                -100.0, 100.0, true, 1.5708, 0.1, 0.1);
+            _jointUpperBox.Value = _liveDoc.Asset.JointUpper;
+
+            // A2 — optional sensor mounted on the asset link.
+            _sensorKindCombo = NewCombo(grp, IdSensorKindCombo, "Sensor", leftEdge, visibleEnabled,
+                SensorValues, _liveDoc.Asset.SensorKind, "Mount a sensor on the asset link");
+            _sensorTopicText = (PropertyManagerPageTextbox)grp.AddControl2(
+                IdSensorTopicText, (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "Sensor topic", (short)leftEdge, visibleEnabled, "ROS/Gz topic for the sensor");
+            _sensorTopicText.Text = _liveDoc.Asset.SensorTopic ?? "/asset/sensor";
             return grp;
+        }
+
+        // Build a read-on-commit dropdown combobox seeded to `current`.
+        private PropertyManagerPageCombobox NewCombo(
+            PropertyManagerPageGroup grp, int id, string caption, int leftEdge, int visibleEnabled,
+            string[] values, string current, string tip)
+        {
+            var combo = (PropertyManagerPageCombobox)grp.AddControl2(
+                id, (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
+                caption, (short)leftEdge, visibleEnabled, tip);
+            combo.Height = 14;
+            combo.Style = (int)swPropMgrPageComboBoxStyle_e.swPropMgrPageComboBoxStyle_EditBoxReadOnly;
+            foreach (string item in values) combo.AddItems(item);
+            combo.CurrentSelection = (short)System.Math.Max(0, IndexOf(values, current));
+            return combo;
+        }
+
+        private static int IndexOf(string[] values, string v)
+        {
+            string s = string.IsNullOrWhiteSpace(v) ? "" : v.Trim().ToLowerInvariant();
+            for (int i = 0; i < values.Length; i++) if (values[i] == s) return i;
+            return 0;
+        }
+
+        // Map the stored axis vector → an X/Y/Z combo index (defaults to Z).
+        private static string AxisFromVec(Sw2gzAssetConfig a)
+        {
+            if (a.JointAxisX != 0) return "x";
+            if (a.JointAxisY != 0) return "y";
+            return "z";
         }
 
         private PropertyManagerPageGroup BuildReviewGroup(int grpOptions, int leftEdge, int visibleEnabled)
@@ -327,9 +410,27 @@ namespace SW2GZ.UI.Pmp
 
         private void CommitSurfaceFromControls()
         {
-            if (_staticCheck != null) _liveDoc.Asset.IsStatic = _staticCheck.Checked;
-            if (_frictionBox != null) _liveDoc.Asset.FrictionMu = _frictionBox.Value;
+            var a = _liveDoc.Asset;
+            if (_staticCheck != null) a.IsStatic = _staticCheck.Checked;
+            if (_frictionBox != null) a.FrictionMu = _frictionBox.Value;
+            if (_collisionCombo != null) a.Collision = Pick(CollisionValues, _collisionCombo.CurrentSelection);
+            if (_jointTypeCombo != null) a.JointType = Pick(JointValues, _jointTypeCombo.CurrentSelection);
+            if (_jointAxisCombo != null)
+            {
+                string ax = Pick(AxisValues, _jointAxisCombo.CurrentSelection);
+                a.JointAxisX = ax == "x" ? 1 : 0;
+                a.JointAxisY = ax == "y" ? 1 : 0;
+                a.JointAxisZ = ax == "z" ? 1 : 0;
+            }
+            if (_jointLowerBox != null) a.JointLower = _jointLowerBox.Value;
+            if (_jointUpperBox != null) a.JointUpper = _jointUpperBox.Value;
+            if (_sensorKindCombo != null) a.SensorKind = Pick(SensorValues, _sensorKindCombo.CurrentSelection);
+            if (_sensorTopicText != null && !string.IsNullOrWhiteSpace(_sensorTopicText.Text))
+                a.SensorTopic = _sensorTopicText.Text.Trim();
         }
+
+        private static string Pick(string[] values, short idx) =>
+            (idx >= 0 && idx < values.Length) ? values[idx] : values[0];
 
         private void RefreshReviewLabels()
         {
@@ -338,8 +439,14 @@ namespace SW2GZ.UI.Pmp
                 _reviewBodyLabel.Caption = "Part: " +
                     (string.IsNullOrEmpty(_liveDoc.Asset.BodyPart) ? "(not set)" : _liveDoc.Asset.BodyPart);
             if (_reviewSurfLabel != null)
-                _reviewSurfLabel.Caption = (_liveDoc.Asset.IsStatic ? "Static" : "Dynamic") +
-                    "  μ=" + _liveDoc.Asset.FrictionMu;
+            {
+                var a = _liveDoc.Asset;
+                bool dyn = !a.IsStatic || (a.JointType != null && a.JointType != "none");
+                string s = (dyn ? "Dynamic" : "Static") + "  μ=" + a.FrictionMu + "  col=" + a.Collision;
+                if (a.JointType != null && a.JointType != "none") s += "  joint=" + a.JointType;
+                if (a.SensorKind != null && a.SensorKind != "none") s += "  sensor=" + a.SensorKind;
+                _reviewSurfLabel.Caption = s;
+            }
         }
 
         private void ShowStep(int step)
