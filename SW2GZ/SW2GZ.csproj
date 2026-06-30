@@ -379,7 +379,6 @@
     <Compile Include="Build\LinkHierarchy.cs" />
     <Compile Include="UI\LinkTreeView.cs" />
     <Compile Include="URDFExport\ExportHelper.cs" />
-    <Compile Include="URDFExport\Sw2gzPipeline.cs" />
     <Compile Include="URDFExport\ExportHelperExtension.cs" />
     <Compile Include="UI\AssemblyExportFormExtension.cs">
       <SubType>Form</SubType>
@@ -436,9 +435,6 @@
     <Compile Include="Ros2\AmentCMakeWriter.cs" />
     <Compile Include="Ros2\LaunchPyWriter.cs" />
     <Compile Include="Ros2\WorldLaunchPyWriter.cs" />
-    <Compile Include="Ros2\XacroWriter.cs" />
-    <Compile Include="Ros2\Ros2ControlWriter.cs" />
-    <Compile Include="Ros2\ControllersYaml.cs" />
     <Compile Include="Ros2\RvizConfigWriter.cs" />
     <Compile Include="Ros2\ReadmeWriter.cs" />
     <Compile Include="Exceptions\Sw2gzExportException.cs" />
@@ -488,7 +484,6 @@
     <Compile Include="Build\Model\RobotModel.cs" />
     <Compile Include="Build\Model\GeometryAssignment.cs" />
     <Compile Include="Build\RobotModelBuilder.cs" />
-    <Compile Include="Write\Urdf\XacroGenerator.cs" />
     <Compile Include="Build\LinkBuilder.cs" />
     <Compile Include="Build\MateSpec.cs" />
     <Compile Include="Build\JointBuilder.cs" />
@@ -501,7 +496,6 @@
     <Compile Include="Write\Mesh\StlWriter.cs" />
     <Compile Include="Write\Mesh\DaeWriter.cs" />
     <Compile Include="Gz\ModelConfigWriter.cs" />
-    <Compile Include="Gz\GzPluginTags.cs" />
     <Compile Include="Gz\SdfGuiBlock.cs" />
     <Compile Include="Gz\SdfSceneSettings.cs" />
     <Compile Include="Gz\SdfPhysicsBlock.cs" />
@@ -513,7 +507,6 @@
     <Compile Include="Gz\SdfWorldPluginsWriter.cs" />
     <Compile Include="Gz\RosGzBridgeYaml.cs" />
     <Compile Include="Gz\WorldBridgeYaml.cs" />
-    <Compile Include="URDFExport\Ros2Package.cs" />
     <Compile Include="URDFExport\OutputValidator.cs" />
     <Compile Include="URDFExport\PreExportReport.cs" />
     <Compile Include="UI\AssemblyExportFormSw2gz.cs" />
@@ -594,7 +587,6 @@
     <Compile Include="UI\Ribbon\Sw2gzRibbonRegistrar.cs" />
     <Compile Include="UI\Ribbon\Sw2gzModeChangeOverlay.cs" />
     <Compile Include="UI\Pmp\Sw2gzStubPmp.cs" />
-    <Compile Include="UI\Pmp\Sw2gzCreateRobotPmp.cs" />
     <Compile Include="UI\Pmp\Sw2gzCreateWorldPmp.cs" />
     <Compile Include="UI\Pmp\Sw2gzCreateAssetPmp.cs" />
     <Compile Include="UI\Pmp\Sw2gzWorldSettingsPmp.cs" />

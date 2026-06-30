@@ -59,29 +59,10 @@ namespace SW2GZ.UI.Services.Sw
             if (string.IsNullOrWhiteSpace(outputDir))
                 throw new ArgumentException("Output directory is required.", nameof(outputDir));
 
-#if SW_INTEROP
-            if (_mass == null || _walker == null || _tess == null || _appearances == null)
-            {
-                throw new InvalidOperationException(
-                    "Sw2gzPipelineExportRunner requires SW boundary services — use the 4-arg ctor.");
-            }
-
-            RobotMeta meta = model.Meta;
-            var pipeline = new Sw2gzPipeline(_mass, _walker, _tess, _appearances);
-            // Thread the wizard's selected ExportMode into the pipeline so the
-            // chosen artifact (Robot Package / gz asset / gz world) is emitted.
-            // StackProfile.Default() = full stack for Robot Package; gz modes
-            // ignore the actuation backend.
-            SW2GZ.Validate.ValidationReport report = pipeline.Run(
-                outputDir, meta.PackageName, meta.Author, meta.Email, meta.License,
-                model.Sensors, StackProfile.Default(), mode, meta.Frame);
-
-            var messages = report.Issues.Select(i => i.Message).ToList();
-            return new ExportResult(!report.HasErrors, report.Errors.Count(), messages);
-#else
-            throw new NotImplementedException(
-                "Sw2gzPipelineExportRunner.Run() requires the SolidWorks COM build (SW_INTEROP).");
-#endif
+            // Robot mode v2 — the robot export pipeline was removed for a clean
+            // rebuild. This runner only ever drove the Robot Package path.
+            throw new NotSupportedException(
+                "Robot mode export is not implemented yet (removed for the v2 rebuild).");
         }
     }
 }

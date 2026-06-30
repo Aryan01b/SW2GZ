@@ -169,32 +169,13 @@ namespace SW2GZ.URDFExport
                     throw new InvalidOperationException("SavePath is not set.");
 
 #if SW_INTEROP
-                // All export modes flow through the SwSurface → Build → Write → Validate
-                // pipeline. The artifact dimension (RobotPackage / SdfModel / SdfWorld) is
-                // selected by Profile.Mode; the pipeline branches its write stage on it.
+                // Robot mode v2 — the robot export pipeline was removed for a clean
+                // rebuild. This legacy form path only ever drove Robot Package
+                // exports (World/Asset route through Sw2gzModelExporter.RunCore).
                 if (Profile != null)
                 {
-                    var pipeline = new Sw2gzPipeline(
-                        new SolidWorksMassProperties((SldWorks)iSwApp, (AssemblyDoc)ActiveSWModel),
-                        new SolidWorksAssemblyWalker((AssemblyDoc)ActiveSWModel),
-                        new SolidWorksMeshTessellator((SldWorks)iSwApp, (AssemblyDoc)ActiveSWModel));
-
-                    string pkgName = PackageName ?? ActiveSWModel?.GetTitle() ?? "robot";
-                    var report = pipeline.Run(SavePath, pkgName,
-                                              Profile_Author, Profile_Email, Profile_License,
-                                              System.Array.Empty<SensorDef>(),
-                                              SW2GZ.Ros2.StackProfile.Default(), Profile.Mode);
-
-                    if (report.HasErrors)
-                    {
-                        var msg = string.Join("\n", report.Errors.Select(e => $"{e.Code}: {e.Message} ({e.Location})"));
-                        System.Windows.Forms.MessageBox.Show("SW2GZ export validation failed:\n\n" + msg,
-                            "SW2GZ Export", System.Windows.Forms.MessageBoxButtons.OK,
-                            System.Windows.Forms.MessageBoxIcon.Warning);
-                    }
-
-                    logger.Info("SW2GZ pipeline export complete. Output: " + SavePath);
-                    return;
+                    throw new NotSupportedException(
+                        "Robot mode export is not implemented yet (removed for the v2 rebuild).");
                 }
 #endif
 
