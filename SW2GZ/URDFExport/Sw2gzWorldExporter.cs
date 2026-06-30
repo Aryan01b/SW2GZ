@@ -111,7 +111,8 @@ namespace SW2GZ.URDFExport
                 Roll: roll, Pitch: pitch, Yaw: yaw,
                 Camera: camera,
                 Settings: (config.WorldScene ?? new Sw2gzWorldSceneConfig()).ToSceneSettings(),
-                Plugins: ToWorldPlugins(config.WorldSensorPlugins));
+                Plugins: ToWorldPlugins(config.WorldSensorPlugins),
+                FrictionMu: config.WorldFriction);
 
             string worldFile = pkg + ".sdf";
             File.WriteAllText(Path.Combine(root, worldFile), SdfWorldWriter.WriteScene(scene));

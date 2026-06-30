@@ -227,6 +227,27 @@ namespace SW2GZ.Writers.Tests
             Assert.DoesNotContain("<material>", sdf);
         }
 
+        // ── W2: collision friction surface ────────────────────────────────────
+        [Fact]
+        public void WriteScene_NullFriction_OmitsSurface()
+        {
+            var sdf = SdfWorldWriter.WriteScene(Scene(new SdfSceneModel("floor", "floor.dae")));
+            Assert.DoesNotContain("<surface>", sdf);
+            Assert.DoesNotContain("<friction>", sdf);
+        }
+
+        [Fact]
+        public void WriteScene_WithFriction_EmitsSurfacePerCollision()
+        {
+            var sdf = SdfWorldWriter.WriteScene(new SdfSceneInput("env",
+                new[] { new SdfSceneModel("floor", "floor.dae"), new SdfSceneModel("rack", "rack.dae") },
+                FrictionMu: 0.9));
+            Assert.Contains("<surface><friction><ode>", sdf);
+            Assert.Contains("<mu>0.9</mu><mu2>0.9</mu2>", sdf);
+            // one friction surface per model collision.
+            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(sdf, "<friction>").Count);
+        }
+
         [Fact]
         public void WriteScene_NullWorldName_Throws()
         {

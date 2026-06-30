@@ -44,7 +44,8 @@ namespace SW2GZ.Gz
         double Yaw = 0.0,
         SdfCamera Camera = null,
         SdfSceneSettings Settings = null,
-        SdfWorldPlugins Plugins = null);
+        SdfWorldPlugins Plugins = null,
+        double? FrictionMu = null);
 
     public static class SdfWorldWriter
     {
@@ -172,6 +173,16 @@ namespace SW2GZ.Gz
                     sb.AppendLine("        </visual>");
                     sb.AppendLine("        <collision name=\"collision\">");
                     sb.AppendLine($"          <geometry><mesh><uri>meshes/{meshEsc}</uri></mesh></geometry>");
+                    // Explicit friction surface so a robot spawned into this world
+                    // doesn't slide on the floor. Null FrictionMu → no surface
+                    // (legacy world output byte-identical).
+                    if (input.FrictionMu.HasValue)
+                    {
+                        string mu = input.FrictionMu.Value.ToString("0.######", ci);
+                        sb.AppendLine("          <surface><friction><ode>");
+                        sb.AppendLine($"            <mu>{mu}</mu><mu2>{mu}</mu2>");
+                        sb.AppendLine("          </ode></friction></surface>");
+                    }
                     sb.AppendLine("        </collision>");
                     sb.AppendLine("      </link>");
                     sb.AppendLine("    </model>");

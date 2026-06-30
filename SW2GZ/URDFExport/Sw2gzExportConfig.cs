@@ -70,6 +70,12 @@ namespace SW2GZ.URDFExport
         [DataMember] public string WorldPhysicsEngine { get; set; } = "ode";
         [DataMember] public double WorldMaxStepSize { get; set; } = 0.001;
         [DataMember] public double WorldRealTimeFactor { get; set; } = 1.0;
+        // Coulomb friction coefficient (mu = mu2) emitted on every world model's
+        // <collision> so a robot spawned into the world grips the floor instead
+        // of sliding. 1.0 matches the Gz/ODE default but makes it explicit and
+        // tunable; the exporter always passes it, so exported worlds carry a
+        // friction surface.
+        [DataMember] public double WorldFriction { get; set; } = 1.0;
         // Initial GUI camera framing: "iso" (default) | "top" | "front". The
         // exporter computes the actual camera pose from the scene bounds; this
         // only picks the viewing direction.
@@ -115,6 +121,7 @@ namespace SW2GZ.URDFExport
             WorldPhysicsEngine = "ode";
             WorldMaxStepSize = 0.001;
             WorldRealTimeFactor = 1.0;
+            WorldFriction = 1.0;
             WorldInitialView = "iso";
             WorldScene = new Sw2gzWorldSceneConfig();
             WorldSensorPlugins = new Sw2gzWorldSensorsConfig();
@@ -158,6 +165,7 @@ namespace SW2GZ.URDFExport
                 WorldPhysicsEngine = this.WorldPhysicsEngine,
                 WorldMaxStepSize   = this.WorldMaxStepSize,
                 WorldRealTimeFactor = this.WorldRealTimeFactor,
+                WorldFriction      = this.WorldFriction,
                 WorldInitialView   = this.WorldInitialView,
                 WorldScene         = this.WorldScene,
                 WorldSensorPlugins = this.WorldSensorPlugins,

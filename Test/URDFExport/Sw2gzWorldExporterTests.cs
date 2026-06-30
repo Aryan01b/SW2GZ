@@ -264,6 +264,26 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void Export_EmitsCollisionFrictionByDefault()
+        {
+            // Default WorldFriction (1.0) → every world collision gets an explicit
+            // friction surface so spawned robots don't slide.
+            Sw2gzWorldExporter.Export(new FakeTess("floor-1"), Cfg("floor-1"), _dir, 0, 0, 0);
+            string sdf = Sdf();
+            Assert.Contains("<surface><friction><ode>", sdf);
+            Assert.Contains("<mu>1</mu><mu2>1</mu2>", sdf);
+        }
+
+        [Fact]
+        public void Export_TunedFriction_FlowsThrough()
+        {
+            var c = Cfg("floor-1");
+            c.WorldFriction = 0.3;
+            Sw2gzWorldExporter.Export(new FakeTess("floor-1"), c, _dir, 0, 0, 0);
+            Assert.Contains("<mu>0.3</mu><mu2>0.3</mu2>", Sdf());
+        }
+
+        [Fact]
         public void Export_PhysicsAndRotationFlowThrough()
         {
             var c = Cfg("floor-1");
