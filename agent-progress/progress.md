@@ -5,7 +5,53 @@ Current: world mode + asset mode + World GUI/camera (v2.4.0) + World Settings
 Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
-## ▶ CONTINUE HERE — Mode×feature gap fill (branch `feat/world-sensors`)
+## ▶ CONTINUE HERE — Robot mode GUTTED for clean rebuild (branch `feat/robot-mode-v2`, pushed)
+
+Robot mode's inherited implementation was buggy (coordinate tilt the Option-A
+fix on `feat/robot-mode` didn't resolve live — that branch was reset, work in
+reflog). Decision: SCRAP robot mode, rebuild clean. World + Asset modes kept
+fully working; add-in compiles clean + deployed (DLL ~704 KB, was 872 KB).
+See memory `robot-mode-dev`.
+
+**REMOVED (~8000 lines, each a green commit on `feat/robot-mode-v2`):**
+- Robot export engine: `Sw2gzPipeline`, `Ros2Package`, `XacroGenerator`,
+  `XacroWriter`, `Ros2ControlWriter`, `ControllersYaml`, `GzPluginTags`.
+- Robot Create wizard PMP (`Sw2gzCreateRobotPmp`); `OpenCreateRobot` → no-op
+  "Robot mode not implemented yet" message. Mode pills + Create/Edit Robot
+  button stay.
+- Robot ribbon cluster (Inertia/Sensors/Actuation/Stack) + ids + handlers.
+  World Sensors/Settings + Asset buttons untouched.
+- Robot wizard MVVM view-models (Links/Joints/Collision/Materials/Sensors/
+  Controllers/Targets/Review steps + DTOs + edit VMs + WizardViewModel/
+  WizardStepPlan/WizardModelComposer).
+- Robot builders/walkers/writers: JointGraphBuilder, JointBuilder/Seeder/
+  DefConverter/DefValidator, LinkBuilder/DefValidator, RobotModelBuilder,
+  JointOriginResolver, LinkAnchorMap, MeshRebase, RobotModelValidator,
+  WizardAssemblyWalker, AutoJointResolver(+Resolved), SwRefAxisCreator,
+  SwRefGeometryEnumerator, SwJointPoseReader, PackageXmlV3Writer,
+  AmentCMakeWriter, LaunchPyWriter, RvizConfigWriter, ReadmeWriter,
+  RosGzBridgeYaml, Sw2gzPipelineExportRunner. Two pipeline-construction sites
+  (ExportHelper, runner) stubbed to throw NotSupported.
+
+**STILL PRESENT (fused with shared code — a follow-up refactor, NOT done):**
+- Robot DATA TYPES the shared export layer references: `RobotModel`, `RobotMeta`,
+  `ModelLink`, `LinkDef`, `JointDef`, `UrdfLink`/`UrdfJoint`, `ControlSpec`,
+  `StackProfile`, `MateSpec`/`MateInfo`, `GazeboLinkProps`, `GeometryAssignment`,
+  `LinkHierarchy`, `Sw2gzExportScopePlanner`, `LinkTreeView`,
+  `Sw2gzExportWizardForm`, `SwJointStateSampler`, `SW2GZ\URDF\*`. These are
+  referenced by `Sw2gzExportConfig` (carries Links/Joints/Stacks), `IExportRunner`,
+  and the shared export wizard form/link-tree — can't be deleted without
+  refactoring the shared export config/UI to be robot-free.
+- Orphaned-but-kept shared MVVM: ModeStep/OutputStep view-models, StepViewModelBase.
+- **TEST PROJECT does not compile** — many tests reference the deleted engine/
+  builders. Robot test files + their source-link csproj entries need removing
+  for `dotnet test` to run (add-in build is unaffected). NOT done.
+
+**Next for the v2 rebuild:** with a clean slate, rebuild robot export fixing
+coordinates on the path the user actually exports (not a side path) and verify
+upright in jsp_gui/RViz BEFORE building anything on top.
+
+## Done — Mode×feature gap fill (branch `feat/world-sensors`)
 
 Autonomous /loop (hourly, session cron `5734e4b3`): work the World/Asset ➕ items
 from [`docs/mode-feature-matrix.md`](../docs/mode-feature-matrix.md), commit each
