@@ -435,6 +435,7 @@
     <Compile Include="Ros2\PackageXmlV3Writer.cs" />
     <Compile Include="Ros2\AmentCMakeWriter.cs" />
     <Compile Include="Ros2\LaunchPyWriter.cs" />
+    <Compile Include="Ros2\WorldLaunchPyWriter.cs" />
     <Compile Include="Ros2\XacroWriter.cs" />
     <Compile Include="Ros2\Ros2ControlWriter.cs" />
     <Compile Include="Ros2\ControllersYaml.cs" />
@@ -511,6 +512,7 @@
     <Compile Include="Gz\SdfSensorPlugins.cs" />
     <Compile Include="Gz\SdfWorldPluginsWriter.cs" />
     <Compile Include="Gz\RosGzBridgeYaml.cs" />
+    <Compile Include="Gz\WorldBridgeYaml.cs" />
     <Compile Include="URDFExport\Ros2Package.cs" />
     <Compile Include="URDFExport\OutputValidator.cs" />
     <Compile Include="URDFExport\PreExportReport.cs" />

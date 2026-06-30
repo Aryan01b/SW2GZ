@@ -5,7 +5,29 @@ Current: world mode + asset mode + World GUI/camera (v2.4.0) + World Settings
 Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
-## ▶ CONTINUE HERE — World sensors = plugin toggles + left-dock PMPs (branch `feat/world-sensors`)
+## ▶ CONTINUE HERE — Mode×feature gap fill (branch `feat/world-sensors`)
+
+Autonomous /loop (hourly, session cron `5734e4b3`): work the World/Asset ➕ items
+from [`docs/mode-feature-matrix.md`](../docs/mode-feature-matrix.md), commit each
+green increment as a safe retreat. Sequenced plan: **W1 ✔ → W2 → W3 → A1 → A2 →
+A3** (see matrix "Summary — what to add").
+
+**W1 DONE (this session) — World launch + ros_gz bridge (standalone, no-ament).**
+Spec: [`docs/superpowers/specs/2026-06-30-world-launch-bridge-design.md`](../docs/superpowers/specs/2026-06-30-world-launch-bridge-design.md).
+World export now also writes `<pkg>/launch_world.py` + `<pkg>/ros_gz_bridge.yaml`
+so the world runs via `ros2 launch <pkg>/launch_world.py` (no colcon). Paths
+resolve relative to the launch file (`__file__`), not ament. Bridge = `/clock`
+always + `/cmd_vel` (ROS→GZ) only when teleop on.
+- NEW `Ros2/WorldLaunchPyWriter.cs` (pure), NEW `Gz/WorldBridgeYaml.cs` (pure).
+- `Sw2gzWorldExporter.Export` writes both after the `.sdf`; teleop flag =
+  KeyPublisher||TriggeredPublisher. Existing `.sdf`/mesh output byte-identical.
+- +14 tests (**815 green**); add-in compiles clean (MSB3216 regasm non-fatal).
+- NOT deployed (pure-writer cut, no COM change → live deploy not required for W1).
+
+**Next (W2):** friction on world collisions — `<surface><friction>` on each
+world model's `<collision>` (reuse the Asset μ pattern). Then W3 (extra lights).
+
+## Done — World sensors = plugin toggles + left-dock PMPs (branch `feat/world-sensors`)
 
 **State:** code COMPLETE + green (**801 tests**), add-in compiles clean, NOT
 deployed, NOT committed. Pivoted away from the earlier per-model sensor S1.

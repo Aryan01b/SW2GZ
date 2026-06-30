@@ -113,7 +113,18 @@ namespace SW2GZ.URDFExport
                 Settings: (config.WorldScene ?? new Sw2gzWorldSceneConfig()).ToSceneSettings(),
                 Plugins: ToWorldPlugins(config.WorldSensorPlugins));
 
-            File.WriteAllText(Path.Combine(root, pkg + ".sdf"), SdfWorldWriter.WriteScene(scene));
+            string worldFile = pkg + ".sdf";
+            File.WriteAllText(Path.Combine(root, worldFile), SdfWorldWriter.WriteScene(scene));
+
+            // W1 — standalone (no-ament) launch + ros_gz bridge so the exported
+            // world runs from ROS 2: `ros2 launch <pkg>/launch_world.py`. Teleop
+            // (KeyPublisher / TriggeredPublisher) adds the /cmd_vel bridge entry.
+            Sw2gzWorldSensorsConfig sp = config.WorldSensorPlugins;
+            bool teleop = sp != null && (sp.KeyPublisher || sp.TriggeredPublisher);
+            File.WriteAllText(Path.Combine(root, "ros_gz_bridge.yaml"), WorldBridgeYaml.Write(teleop));
+            File.WriteAllText(Path.Combine(root, "launch_world.py"),
+                SW2GZ.Ros2.WorldLaunchPyWriter.Write(worldFile, teleop));
+
             return new ValidationReport(issues);
         }
 

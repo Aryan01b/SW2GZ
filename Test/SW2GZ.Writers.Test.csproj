@@ -49,6 +49,7 @@
     <Compile Include="..\SW2GZ\Ros2\PackageXmlV3Writer.cs"   Link="Sources\Ros2\PackageXmlV3Writer.cs" />
     <Compile Include="..\SW2GZ\Ros2\AmentCMakeWriter.cs"     Link="Sources\Ros2\AmentCMakeWriter.cs" />
     <Compile Include="..\SW2GZ\Ros2\LaunchPyWriter.cs"       Link="Sources\Ros2\LaunchPyWriter.cs" />
+    <Compile Include="..\SW2GZ\Ros2\WorldLaunchPyWriter.cs"  Link="Sources\Ros2\WorldLaunchPyWriter.cs" />
     <Compile Include="..\SW2GZ\Ros2\XacroWriter.cs"          Link="Sources\Ros2\XacroWriter.cs" />
     <Compile Include="..\SW2GZ\Ros2\Ros2ControlWriter.cs"    Link="Sources\Ros2\Ros2ControlWriter.cs" />
     <Compile Include="..\SW2GZ\Ros2\ControllersYaml.cs"      Link="Sources\Ros2\ControllersYaml.cs" />
@@ -126,6 +127,7 @@
     <Compile Include="..\SW2GZ\Gz\SdfSensorPlugins.cs"       Link="Sources\Gz\SdfSensorPlugins.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfWorldPluginsWriter.cs"  Link="Sources\Gz\SdfWorldPluginsWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\RosGzBridgeYaml.cs"        Link="Sources\Gz\RosGzBridgeYaml.cs" />
+    <Compile Include="..\SW2GZ\Gz\WorldBridgeYaml.cs"        Link="Sources\Gz\WorldBridgeYaml.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Ros2Package.cs"    Link="Sources\URDFExport\Ros2Package.cs" />
     <Compile Include="..\SW2GZ\URDFExport\OutputValidator.cs" Link="Sources\URDFExport\OutputValidator.cs" />
     <Compile Include="..\SW2GZ\URDFExport\PreExportReport.cs" Link="Sources\URDFExport\PreExportReport.cs" />
