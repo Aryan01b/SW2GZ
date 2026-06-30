@@ -54,13 +54,27 @@ namespace SW2GZ.URDFExport
                 Name = name, Author = config.Author, Email = config.Email,
             }).Write(root);
 
+            // A1 — a joint anchors the link to the world, which is invalid on a
+            // static model, so any joint forces the asset dynamic (with a
+            // placeholder inertial). No joint → honour the user's static choice.
+            string jointType = string.IsNullOrWhiteSpace(config.AssetJointType)
+                ? "none" : config.AssetJointType.Trim().ToLowerInvariant();
+            bool hasJoint = jointType != "none";
+            bool isStatic = config.AssetIsStatic && !hasJoint;
+
             var modelInput = new SdfAssetModelInput(
                 ModelName: name,
                 MeshFile: daeFile,
-                IsStatic: config.AssetIsStatic,
+                IsStatic: isStatic,
                 FrictionMu: config.AssetFrictionMu,
                 Rgba: ToRgba(mesh.MaterialColor),
-                Mass: config.AssetIsStatic ? 0.0 : 1.0);   // placeholder mass for dynamic
+                Mass: isStatic ? 0.0 : 1.0,   // placeholder mass for dynamic
+                JointType: jointType,
+                JointAxisX: config.AssetJointAxisX,
+                JointAxisY: config.AssetJointAxisY,
+                JointAxisZ: config.AssetJointAxisZ,
+                JointLower: config.AssetJointLower,
+                JointUpper: config.AssetJointUpper);
             File.WriteAllText(Path.Combine(root, "model.sdf"), SdfAssetModelWriter.Write(modelInput));
 
             return new ValidationReport(Array.Empty<ValidationIssue>());

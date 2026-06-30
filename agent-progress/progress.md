@@ -35,11 +35,25 @@ Spec (W1): [`docs/superpowers/specs/2026-06-30-world-launch-bridge-design.md`](.
   required for correctness; world-sensors UI still needs the user's live test
   before a v2.6.0 tag).
 
-**Next (Asset column):** A1 dynamic/articulated asset (one `<joint>` + dynamic
-toggle) — bigger structural change, **needs a design pass** (brainstorm→spec)
-before coding. Then A2 sensor-bearing asset (depends on A1's non-static model
-plumbing), A3 primitive collision override. W3's lights-list persistence + a
-World Settings "Lights" UI ride along when that panel is next touched.
+**A1 DONE — articulated asset (1-DOF joint to world).** Spec:
+[`docs/superpowers/specs/2026-06-30-articulated-asset-design.md`](../docs/superpowers/specs/2026-06-30-articulated-asset-design.md).
+An asset can now anchor its link to the `world` frame via one joint
+(none|fixed|revolute|continuous|prismatic) → door/lift/wheel/lever props.
+- `SdfAssetModelInput` gained `JointType`/`JointAxisX-Z`/`JointLower`/`JointUpper`;
+  writer emits `<joint><parent>world</parent><child>link</child>…` after `</link>`.
+  continuous = revolute w/ no `<limit>`; fixed = no axis. `none` (default) =
+  byte-identical.
+- `Sw2gzExportConfig.AssetJoint*` (DataMember + OnDeserializing + clone).
+- `Sw2gzAssetExporter`: a joint forces the model dynamic (joint-to-world is
+  invalid on a static model) + placeholder inertial.
+- +7 tests (**831 green**); add-in compiles clean. Doc/codec persistence + Asset
+  wizard "Articulation" step **deferred** (like W3 lights) — config-driven for now.
+
+**Next (Asset column):** A2 sensor-bearing asset — place a `<sensor>` (camera/
+lidar/imu) on the asset link (reuse robot-side `SdfSensorBlocks`); depends on the
+non-static plumbing A1 added. Then A3 primitive collision override (box/sphere/
+cyl from mesh AABB). Deferred-UI backlog: Asset-wizard articulation step, W3
+lights-list + World Settings "Lights" panel.
 
 ## Done — World sensors = plugin toggles + left-dock PMPs (branch `feat/world-sensors`)
 

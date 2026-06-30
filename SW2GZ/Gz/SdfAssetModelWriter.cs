@@ -22,7 +22,14 @@ namespace SW2GZ.Gz
         bool IsStatic = true,
         double FrictionMu = 0.8,
         double[] Rgba = null,
-        double Mass = 0.0);   // >0 emits an <inertial> (dynamic assets only)
+        double Mass = 0.0,    // >0 emits an <inertial> (dynamic assets only)
+        // A1 — optional 1-DOF joint anchoring the link to the world frame.
+        // "none" (default) emits no joint. Any other type makes the model an
+        // articulated prop (door/lift/wheel/lever). A joint to world is invalid
+        // on a static model, so callers pass IsStatic=false alongside.
+        string JointType = "none",   // none | fixed | revolute | continuous | prismatic
+        double JointAxisX = 0, double JointAxisY = 0, double JointAxisZ = 1,
+        double JointLower = -1.5708, double JointUpper = 1.5708);
 
     public static class SdfAssetModelWriter
     {
@@ -79,6 +86,33 @@ namespace SW2GZ.Gz
             sb.AppendLine("      </collision>");
 
             sb.AppendLine("    </link>");
+
+            // A1 — optional joint anchoring the link to the world frame.
+            string jt = string.IsNullOrWhiteSpace(input.JointType)
+                ? "none" : input.JointType.Trim().ToLowerInvariant();
+            if (jt != "none")
+            {
+                // SDF has no "continuous"; it's a revolute with no <limit>.
+                string sdfType = jt == "continuous" ? "revolute" : jt;
+                sb.AppendLine($"    <joint name=\"joint\" type=\"{sdfType}\">");
+                sb.AppendLine("      <parent>world</parent>");
+                sb.AppendLine("      <child>link</child>");
+                if (jt == "revolute" || jt == "continuous" || jt == "prismatic")
+                {
+                    sb.AppendLine("      <axis>");
+                    sb.AppendLine($"        <xyz>{F(input.JointAxisX)} {F(input.JointAxisY)} {F(input.JointAxisZ)}</xyz>");
+                    // continuous = free spin → omit the limit.
+                    if (jt != "continuous")
+                    {
+                        sb.AppendLine("        <limit>");
+                        sb.AppendLine($"          <lower>{F(input.JointLower)}</lower><upper>{F(input.JointUpper)}</upper>");
+                        sb.AppendLine("        </limit>");
+                    }
+                    sb.AppendLine("      </axis>");
+                }
+                sb.AppendLine("    </joint>");
+            }
+
             sb.AppendLine("  </model>");
             sb.AppendLine("</sdf>");
             return sb.ToString();

@@ -98,5 +98,77 @@ namespace SW2GZ.Writers.Tests
             Assert.DoesNotContain("<static>", s);
             Assert.Contains("<inertial>", s);
         }
+
+        // ── A1: articulated asset (1-DOF joint to world) ──────────────────────
+
+        [Fact]
+        public void Write_JointNone_EmitsNoJoint()
+        {
+            var s = SdfAssetModelWriter.Write(new SdfAssetModelInput("a", "a.dae"));   // default none
+            Assert.DoesNotContain("<joint", s);
+        }
+
+        [Fact]
+        public void Write_Revolute_EmitsJointToWorldWithAxisAndLimit()
+        {
+            var s = SdfAssetModelWriter.Write(new SdfAssetModelInput("a", "a.dae",
+                IsStatic: false, Mass: 1.0, JointType: "revolute",
+                JointAxisX: 0, JointAxisY: 0, JointAxisZ: 1, JointLower: -1, JointUpper: 1));
+            Assert.Contains("<joint name=\"joint\" type=\"revolute\">", s);
+            Assert.Contains("<parent>world</parent>", s);
+            Assert.Contains("<child>link</child>", s);
+            Assert.Contains("<xyz>0 0 1</xyz>", s);
+            Assert.Contains("<lower>-1</lower><upper>1</upper>", s);
+        }
+
+        [Fact]
+        public void Write_Continuous_IsRevoluteWithNoLimit()
+        {
+            var s = SdfAssetModelWriter.Write(new SdfAssetModelInput("a", "a.dae",
+                IsStatic: false, Mass: 1.0, JointType: "continuous"));
+            Assert.Contains("type=\"revolute\"", s);   // SDF has no "continuous"
+            Assert.Contains("<axis>", s);
+            Assert.DoesNotContain("<limit>", s);
+        }
+
+        [Fact]
+        public void Write_Prismatic_EmitsPrismaticWithLimit()
+        {
+            var s = SdfAssetModelWriter.Write(new SdfAssetModelInput("a", "a.dae",
+                IsStatic: false, Mass: 1.0, JointType: "prismatic", JointLower: 0, JointUpper: 0.5));
+            Assert.Contains("type=\"prismatic\"", s);
+            Assert.Contains("<lower>0</lower><upper>0.5</upper>", s);
+        }
+
+        [Fact]
+        public void Write_Fixed_EmitsFixedJointNoAxis()
+        {
+            var s = SdfAssetModelWriter.Write(new SdfAssetModelInput("a", "a.dae",
+                IsStatic: false, Mass: 1.0, JointType: "fixed"));
+            Assert.Contains("type=\"fixed\"", s);
+            Assert.DoesNotContain("<axis>", s);
+        }
+
+        [Fact]
+        public void Export_JointForcesDynamicEvenIfStaticChecked()
+        {
+            // User left IsStatic=true but picked a joint → exporter must make the
+            // model dynamic (a joint to world is invalid on a static model).
+            var c = Cfg();
+            c.AssetIsStatic = true;
+            c.AssetJointType = "revolute";
+            Sw2gzAssetExporter.Export(new FakeTess(), c, _dir, Matrix3.Identity);
+            Assert.DoesNotContain("<static>true</static>", Sdf());
+            Assert.Contains("<joint name=\"joint\" type=\"revolute\">", Sdf());
+            Assert.Contains("<inertial>", Sdf());
+        }
+
+        [Fact]
+        public void Export_DefaultJointNone_ByteIdenticalNoJoint()
+        {
+            Sw2gzAssetExporter.Export(new FakeTess(), Cfg(), _dir, Matrix3.Identity);
+            Assert.DoesNotContain("<joint", Sdf());
+            Assert.Contains("<static>true</static>", Sdf());
+        }
     }
 }

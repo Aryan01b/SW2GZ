@@ -92,6 +92,16 @@ namespace SW2GZ.URDFExport
         [DataMember] public string AssetBodyPart   { get; set; } = string.Empty;
         [DataMember] public double AssetFrictionMu { get; set; } = 0.8;
         [DataMember] public bool   AssetIsStatic   { get; set; } = true;
+        // A1 — optional 1-DOF joint anchoring the asset link to the world frame
+        // (door/lift/wheel/lever). "none" = a plain model (no joint). Any other
+        // type makes the asset an articulated, dynamic prop. Axis defaults to +Z;
+        // limits are radians (revolute) or metres (prismatic).
+        [DataMember] public string AssetJointType  { get; set; } = "none";   // none|fixed|revolute|continuous|prismatic
+        [DataMember] public double AssetJointAxisX { get; set; } = 0.0;
+        [DataMember] public double AssetJointAxisY { get; set; } = 0.0;
+        [DataMember] public double AssetJointAxisZ { get; set; } = 1.0;
+        [DataMember] public double AssetJointLower { get; set; } = -1.5708;
+        [DataMember] public double AssetJointUpper { get; set; } = 1.5708;
 
         // Stacks — à-la-carte ROS 2 / Gazebo stack selection for this assembly.
         // The full-stack default for legacy configs (saved before this field
@@ -128,6 +138,9 @@ namespace SW2GZ.URDFExport
             AssetBodyPart = string.Empty;
             AssetFrictionMu = 0.8;
             AssetIsStatic = true;
+            AssetJointType = "none";
+            AssetJointAxisX = 0.0; AssetJointAxisY = 0.0; AssetJointAxisZ = 1.0;
+            AssetJointLower = -1.5708; AssetJointUpper = 1.5708;
             // Field-not-present defaults: legacy checkpoints saved before the
             // coordinate-convention fields existed deserialize them to the
             // enum default (PlusX = 0), which is the wrong "up". Seed the
@@ -172,6 +185,12 @@ namespace SW2GZ.URDFExport
                 AssetBodyPart   = this.AssetBodyPart,
                 AssetFrictionMu = this.AssetFrictionMu,
                 AssetIsStatic   = this.AssetIsStatic,
+                AssetJointType  = this.AssetJointType,
+                AssetJointAxisX = this.AssetJointAxisX,
+                AssetJointAxisY = this.AssetJointAxisY,
+                AssetJointAxisZ = this.AssetJointAxisZ,
+                AssetJointLower = this.AssetJointLower,
+                AssetJointUpper = this.AssetJointUpper,
             };
         }
     }
