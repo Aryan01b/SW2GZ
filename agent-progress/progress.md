@@ -76,9 +76,15 @@ mesh (no zero-size box). +5 tests (**842 green**); add-in compiles clean.
   `ToExtraLights()`; exporter passes `ExtraLights`; World Settings PMP "Lights"
   section, 2 fill-light slots. **849 tests green.**
 - Deployed `C:\Program Files\SW2GZ\SW2GZ.dll` **07:28:45** (fresh).
-- **WP3 PENDING (user live-test → tag v2.6.0):** test World Settings (friction +
-  lights) + the world-sensors Settings/Sensors PMPs; export a World; verify the
-  world `.sdf` (friction/lights) + `launch_world.py` + `ros_gz_bridge.yaml`.
+- **WP3 DONE — live-tested in SW 2025 (ASM_MAIN).** Settings PMP friction + 2
+  light slots render/edit/persist, no crash; Sensors PMP toggles OK. Exported
+  World → verified on disk: `asm_main.sdf` has `<light name="light1">` (Z=3,
+  diffuse 1.2 = 0.8×1.5 intensity) + `gz-sim-imu-system` + KeyPublisher GUI;
+  `launch_world.py` (standalone) + `ros_gz_bridge.yaml` (/clock + /cmd_vel).
+  Friction not in that export (no ground/asset picked → default ground_plane
+  only; backend-tested). Found + FIXED stale export-dialog text (was showing
+  Robot `_ws`/colcon for World). Deployed DLL **08:21:26**.
+- **✅ TAGGED v2.6.0** (849 green, live-tested, deployed). Not pushed.
 
 ### ✅ World+Asset ➕ matrix set BACKEND-COMPLETE (this session, branch `feat/world-sensors`)
 W1 launch+bridge · W2 friction · W3 lights(writer) · A1 articulated asset ·
