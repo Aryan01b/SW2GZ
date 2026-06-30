@@ -58,30 +58,11 @@ namespace SW2GZ.URDFExport
                 return Sw2gzAssetExporter.Export(tess, config, outputDirOverride, rot);
             }
 
-            var mass = new SolidWorksMassProperties(swApp, (AssemblyDoc)model);
-            var walker = new WizardAssemblyWalker((AssemblyDoc)model, config.Links, config.Joints);
-            var appearances = new DefaultAppearanceSource();
-
-            // Drive the export from the assembly's persisted stack selection
-            // (Stacks). Defensive default: an older config that somehow carries a
-            // null profile falls back to the full stack rather than throwing.
-            SW2GZ.Ros2.StackProfile profile = config.Stacks ?? SW2GZ.Ros2.StackProfile.Default();
-
-            // ExportMode (config.Mode) selects the artifact — Robot Package vs
-            // gz asset/world; the StackProfile selects which stacks emit. gz
-            // modes ignore the actuation backend (no ros2_control).
-            //
-            // CoordinateConvention rotates the robot at the world anchor so
-            // SW's "up" lands on ROS Z and the robot faces +ROS X. Built from
-            // the user-selected SwUpAxis / SwForwardAxis (defaults: +Y up,
-            // +Z forward — the stock SW template).
-            var coord = new CoordinateConvention(
-                SwToRosRotation.Build(config.SwUpAxis, config.SwForwardAxis),
-                LengthScale: 1.0);
-
-            return new Sw2gzPipeline(mass, walker, tess, appearances).Run(
-                outputDirOverride, config.PackageName, config.Author, config.Email, config.License,
-                System.Array.Empty<SensorDef>(), profile, config.Mode, coord, config.EmitWorldLink);
+            // Robot mode v2 — the inherited robot export pipeline was removed for
+            // a clean rebuild. World and Asset returned above; reaching here means
+            // a Robot-mode assembly doc, which is not implemented yet.
+            throw new System.NotSupportedException(
+                "Robot mode export is not implemented yet (removed for the v2 rebuild).");
         }
 
         public static string WorkspacePath(string outputFolder, string packageName) =>

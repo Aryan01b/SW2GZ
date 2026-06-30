@@ -425,7 +425,7 @@ namespace SW2GZ.SW
         // Sw2gzCreateWorldPmp / Sw2gzCreateAssetPmp). Held as fields — same
         // COM-handler-rooting reason as _openPanel (the SW PMP handler
         // interface is freed on AfterClose).
-        private SW2GZ.UI.Pmp.Sw2gzCreateRobotPmp _createRobotPmp;
+        // Robot mode v2 — robot Create wizard removed; OpenCreateRobot is a stub.
         private SW2GZ.UI.Pmp.Sw2gzCreateWorldPmp _createWorldPmp;
         private SW2GZ.UI.Pmp.Sw2gzCreateAssetPmp _createAssetPmp;
         private SW2GZ.UI.Pmp.Sw2gzWorldSettingsPmp _worldSettingsPmp;
@@ -507,18 +507,11 @@ namespace SW2GZ.SW
 
         private void OpenCreateRobot(ModelDoc2 modelDoc, SW2GZ.URDFExport.Sw2gzDoc doc)
         {
-            try
-            {
-                _createRobotPmp = new SW2GZ.UI.Pmp.Sw2gzCreateRobotPmp(
-                    (SldWorks)SwApp, modelDoc, doc,
-                    d => PersistDoc(modelDoc, d));
-                _createRobotPmp.Show();
-            }
-            catch (Exception e)
-            {
-                logger.Error("OpenCreateRobot failed", e);
-                MessageBox.Show("Could not open Create Robot: " + e.Message);
-            }
+            // Robot mode v2 — the inherited robot implementation was removed for a
+            // clean rebuild. The mode pill + Create/Edit Robot button stay; this
+            // is a deliberate no-op stub. World and Asset modes are unaffected.
+            MessageBox.Show("Robot mode is not implemented yet — coming in a future build.",
+                "SW2GZ");
         }
 
         private void OpenCreateWorld(ModelDoc2 modelDoc, SW2GZ.URDFExport.Sw2gzDoc doc)
