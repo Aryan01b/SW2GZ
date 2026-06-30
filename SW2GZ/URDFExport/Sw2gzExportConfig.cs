@@ -102,6 +102,11 @@ namespace SW2GZ.URDFExport
         [DataMember] public double AssetJointAxisZ { get; set; } = 1.0;
         [DataMember] public double AssetJointLower { get; set; } = -1.5708;
         [DataMember] public double AssetJointUpper { get; set; } = 1.5708;
+        // A2 — optional sensor mounted on the asset link. "none" = no sensor.
+        // The host world needs the matching sensor system enabled (World mode's
+        // "Sensors" panel) for the sensor to publish.
+        [DataMember] public string AssetSensorKind  { get; set; } = "none";   // none|camera|gpu_lidar|imu
+        [DataMember] public string AssetSensorTopic { get; set; } = "/asset/sensor";
 
         // Stacks — à-la-carte ROS 2 / Gazebo stack selection for this assembly.
         // The full-stack default for legacy configs (saved before this field
@@ -141,6 +146,7 @@ namespace SW2GZ.URDFExport
             AssetJointType = "none";
             AssetJointAxisX = 0.0; AssetJointAxisY = 0.0; AssetJointAxisZ = 1.0;
             AssetJointLower = -1.5708; AssetJointUpper = 1.5708;
+            AssetSensorKind = "none"; AssetSensorTopic = "/asset/sensor";
             // Field-not-present defaults: legacy checkpoints saved before the
             // coordinate-convention fields existed deserialize them to the
             // enum default (PlusX = 0), which is the wrong "up". Seed the
@@ -191,6 +197,8 @@ namespace SW2GZ.URDFExport
                 AssetJointAxisZ = this.AssetJointAxisZ,
                 AssetJointLower = this.AssetJointLower,
                 AssetJointUpper = this.AssetJointUpper,
+                AssetSensorKind  = this.AssetSensorKind,
+                AssetSensorTopic = this.AssetSensorTopic,
             };
         }
     }

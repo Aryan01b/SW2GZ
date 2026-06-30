@@ -170,5 +170,68 @@ namespace SW2GZ.Writers.Tests
             Assert.DoesNotContain("<joint", Sdf());
             Assert.Contains("<static>true</static>", Sdf());
         }
+
+        // ── A2: sensor-bearing asset ──────────────────────────────────────────
+
+        [Fact]
+        public void Export_DefaultSensorNone_NoSensorBlock()
+        {
+            Sw2gzAssetExporter.Export(new FakeTess(), Cfg(), _dir, Matrix3.Identity);
+            Assert.DoesNotContain("<sensor", Sdf());
+        }
+
+        [Fact]
+        public void Export_CameraSensor_EmitsCameraOnLinkBeforeClose()
+        {
+            var c = Cfg();
+            c.AssetSensorKind = "camera";
+            c.AssetSensorTopic = "/asset/cam";
+            Sw2gzAssetExporter.Export(new FakeTess(), c, _dir, Matrix3.Identity);
+            string sdf = Sdf();
+            Assert.Contains("<sensor name=\"sensor\" type=\"camera\">", sdf);
+            Assert.Contains("<topic>/asset/cam</topic>", sdf);
+            // sensor sits inside the link (before </link>).
+            Assert.True(sdf.IndexOf("<sensor", StringComparison.Ordinal)
+                      < sdf.IndexOf("</link>", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void Export_LidarSensor_EmitsGpuLidar()
+        {
+            var c = Cfg();
+            c.AssetSensorKind = "gpu_lidar";
+            Sw2gzAssetExporter.Export(new FakeTess(), c, _dir, Matrix3.Identity);
+            Assert.Contains("type=\"gpu_lidar\"", Sdf());
+        }
+
+        [Fact]
+        public void Export_ImuSensor_EmitsImu()
+        {
+            var c = Cfg();
+            c.AssetSensorKind = "imu";
+            Sw2gzAssetExporter.Export(new FakeTess(), c, _dir, Matrix3.Identity);
+            Assert.Contains("type=\"imu\"", Sdf());
+        }
+
+        [Fact]
+        public void Export_SensorAndJointCombine_ArticulatedSensorProp()
+        {
+            // A door with a camera: revolute joint + a camera sensor, dynamic.
+            var c = Cfg();
+            c.AssetJointType = "revolute";
+            c.AssetSensorKind = "camera";
+            Sw2gzAssetExporter.Export(new FakeTess(), c, _dir, Matrix3.Identity);
+            string sdf = Sdf();
+            Assert.Contains("type=\"revolute\"", sdf);
+            Assert.Contains("type=\"camera\"", sdf);
+            Assert.DoesNotContain("<static>true</static>", sdf);
+        }
+
+        [Fact]
+        public void Write_NullSensor_OmitsSensorBlock()
+        {
+            var s = SdfAssetModelWriter.Write(new SdfAssetModelInput("a", "a.dae"));   // Sensor defaults null
+            Assert.DoesNotContain("<sensor", s);
+        }
     }
 }

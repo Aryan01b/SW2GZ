@@ -13,6 +13,7 @@ using System;
 using System.Globalization;
 using System.Security;
 using System.Text;
+using SW2GZ.Build.Model;
 
 namespace SW2GZ.Gz
 {
@@ -29,7 +30,12 @@ namespace SW2GZ.Gz
         // on a static model, so callers pass IsStatic=false alongside.
         string JointType = "none",   // none | fixed | revolute | continuous | prismatic
         double JointAxisX = 0, double JointAxisY = 0, double JointAxisZ = 1,
-        double JointLower = -1.5708, double JointUpper = 1.5708);
+        double JointLower = -1.5708, double JointUpper = 1.5708,
+        // A2 — optional sensor mounted on the asset link (camera/lidar/imu, etc.).
+        // Null emits no sensor. The host world must run the matching sensor system
+        // (gz-sim-sensors / -imu) for it to produce data — World mode's "Sensors"
+        // panel enables exactly those.
+        SensorDef Sensor = null);
 
     public static class SdfAssetModelWriter
     {
@@ -84,6 +90,10 @@ namespace SW2GZ.Gz
             sb.AppendLine($"          <mu>{F(input.FrictionMu)}</mu><mu2>{F(input.FrictionMu)}</mu2>");
             sb.AppendLine("        </ode></friction></surface>");
             sb.AppendLine("      </collision>");
+
+            // A2 — sensor mounted on the link (link children indent = 6 spaces).
+            if (input.Sensor != null)
+                sb.Append(SdfSensorBlocks.Write(input.Sensor, 6));
 
             sb.AppendLine("    </link>");
 

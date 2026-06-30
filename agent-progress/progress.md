@@ -49,11 +49,22 @@ An asset can now anchor its link to the `world` frame via one joint
 - +7 tests (**831 green**); add-in compiles clean. Doc/codec persistence + Asset
   wizard "Articulation" step **deferred** (like W3 lights) — config-driven for now.
 
-**Next (Asset column):** A2 sensor-bearing asset — place a `<sensor>` (camera/
-lidar/imu) on the asset link (reuse robot-side `SdfSensorBlocks`); depends on the
-non-static plumbing A1 added. Then A3 primitive collision override (box/sphere/
-cyl from mesh AABB). Deferred-UI backlog: Asset-wizard articulation step, W3
-lights-list + World Settings "Lights" panel.
+**A2 DONE — sensor-bearing asset.** Optional `<sensor>` on the asset link
+(camera/gpu_lidar/imu) reusing robot-side `SdfSensorBlocks.Write`.
+- `SdfAssetModelInput.Sensor` (SensorDef, null = none); writer splices the block
+  inside `<link>` (indent 6) before `</link>`.
+- `Sw2gzExportConfig.AssetSensorKind`/`AssetSensorTopic` (+deser+clone);
+  `Sw2gzAssetExporter.BuildSensor` builds a default-parameterised camera/lidar/imu
+  on "link" at origin. Host world supplies the sensor system (World "Sensors"
+  panel) — nice synergy with the world track.
+- Combines with A1 (e.g. revolute door + camera). +6 tests (**837 green**);
+  add-in compiles clean. Doc/codec + Asset-wizard sensor step deferred.
+
+**Next:** A3 primitive collision override (box/sphere/cyl from mesh AABB) — the
+last matrix ➕. Then the whole World+Asset ➕ set is backend-complete; remaining
+work is the deferred-UI backlog (Asset-wizard articulation+sensor steps, World
+Settings "Lights" panel, doc/codec persistence for the new Asset/World fields)
+and the user's live-test → tag gate.
 
 ## Done — World sensors = plugin toggles + left-dock PMPs (branch `feat/world-sensors`)
 

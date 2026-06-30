@@ -74,7 +74,8 @@ namespace SW2GZ.URDFExport
                 JointAxisY: config.AssetJointAxisY,
                 JointAxisZ: config.AssetJointAxisZ,
                 JointLower: config.AssetJointLower,
-                JointUpper: config.AssetJointUpper);
+                JointUpper: config.AssetJointUpper,
+                Sensor: BuildSensor(config.AssetSensorKind, config.AssetSensorTopic));
             File.WriteAllText(Path.Combine(root, "model.sdf"), SdfAssetModelWriter.Write(modelInput));
 
             return new ValidationReport(Array.Empty<ValidationIssue>());
@@ -110,6 +111,34 @@ namespace SW2GZ.URDFExport
         {
             if (c == null) return new[] { 0.8, 0.8, 0.8, 1.0 };
             return new[] { c.Value.R / 255.0, c.Value.G / 255.0, c.Value.B / 255.0, c.Value.A / 255.0 };
+        }
+
+        // A2 — build a default-parameterised sensor mounted on the asset link.
+        // "none"/unknown → null (no sensor). The sensor attaches to "link" (the
+        // asset's only link) at its origin; the host world supplies the sensor
+        // system. Update rates / intrinsics are sensible defaults; a future Asset
+        // wizard step can expose them.
+        private static SW2GZ.Build.Model.SensorDef BuildSensor(string kind, string topic)
+        {
+            string k = string.IsNullOrWhiteSpace(kind) ? "none" : kind.Trim().ToLowerInvariant();
+            if (k == "none") return null;
+            string t = string.IsNullOrWhiteSpace(topic) ? "/asset/sensor" : topic.Trim();
+            Pose origin = Pose.Identity;
+            switch (k)
+            {
+                case "camera":
+                    return new SW2GZ.Build.Model.CameraSensor(
+                        "sensor", "link", origin, t, "link", 30, 640, 480, 1.047, 0.1, 100.0);
+                case "gpu_lidar":
+                case "lidar":
+                    return new SW2GZ.Build.Model.GpuLidarSensor(
+                        "sensor", "link", origin, t, "link", 10, 640, -3.141593, 3.141593, 0.1, 30.0);
+                case "imu":
+                    return new SW2GZ.Build.Model.ImuSensor(
+                        "sensor", "link", origin, t, "link", 100, 0.0);
+                default:
+                    return null;   // unknown kind → no sensor (safe).
+            }
         }
     }
 }
