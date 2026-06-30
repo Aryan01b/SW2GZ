@@ -681,12 +681,8 @@ namespace SW2GZ.SW
         public void OpenExportPmp()  => LaunchExport();               // existing method
 
         // ─── Robot cluster ────────────────────────────────────────────
-        // Links and Joints used to be ribbon buttons but have moved into the
-        // Create-Robot wizard PMP (face-click of the split button).
-        public void OpenRobotInertiaPmp()   => OpenStub("Inertia");
-        public void OpenRobotSensorsPmp()   => OpenStub("Sensors");
-        public void OpenRobotActuationPmp() => OpenStub("Actuation");
-        public void OpenRobotStackPmp()     => OpenStub("Stack");
+        // Robot cluster ribbon buttons (Inertia/Sensors/Actuation/Stack) removed
+        // for the v2 rebuild — robot mode is a stub.
 
         // ─── World cluster ────────────────────────────────────────────
         public void OpenWorldGroundPmp()  => OpenStub("Ground");
@@ -813,7 +809,6 @@ namespace SW2GZ.SW
             catch (Exception e) { logger.Warn("ExportEnable failed", e); return 0; }
         }
 
-        public int RobotClusterEnable() => ClusterEnable(SW2GZ.UI.Ribbon.RibbonCluster.Robot);
         public int WorldClusterEnable() => ClusterEnable(SW2GZ.UI.Ribbon.RibbonCluster.World);
         public int AssetClusterEnable() => ClusterEnable(SW2GZ.UI.Ribbon.RibbonCluster.Asset);
 

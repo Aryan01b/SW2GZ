@@ -83,13 +83,9 @@ namespace SW2GZ.UI.Ribbon
         public const int ModeEditWorld = 18;
         public const int ModeEditAsset = 19;
 
-        // Robot cluster — RobotLinks (was 20) and RobotJoints (was 21) moved
-        // into the Create-Robot wizard PMP. IDs left as gaps so the others
-        // keep their stable values across the upgrade.
-        public const int RobotInertia    = 22;
-        public const int RobotSensors    = 23;
-        public const int RobotActuation  = 24;
-        public const int RobotStack      = 25;
+        // Robot cluster (22..25: Inertia/Sensors/Actuation/Stack) removed for the
+        // v2 rebuild — robot mode is a stub with no cluster buttons. IDs 22..25
+        // left as gaps so World/Asset ids keep their stable values.
 
         // World cluster
         public const int WorldGround     = 30;
@@ -114,7 +110,6 @@ namespace SW2GZ.UI.Ribbon
             ModeCreateRobot, ModeCreateWorld, ModeCreateAsset,
             ModeEditRobot, ModeEditWorld, ModeEditAsset,
             PreviewPmp, ExportPmp,
-            RobotInertia, RobotSensors, RobotActuation, RobotStack,
             WorldGround, WorldAssets, WorldPhysics, WorldScene,
             AssetBody, AssetSurface,
         };
