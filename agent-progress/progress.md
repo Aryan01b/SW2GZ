@@ -33,19 +33,23 @@ See memory `robot-mode-dev`.
   RosGzBridgeYaml, Sw2gzPipelineExportRunner. Two pipeline-construction sites
   (ExportHelper, runner) stubbed to throw NotSupported.
 
-**STILL PRESENT (fused with shared code — a follow-up refactor, NOT done):**
-- Robot DATA TYPES the shared export layer references: `RobotModel`, `RobotMeta`,
-  `ModelLink`, `LinkDef`, `JointDef`, `UrdfLink`/`UrdfJoint`, `ControlSpec`,
-  `StackProfile`, `MateSpec`/`MateInfo`, `GazeboLinkProps`, `GeometryAssignment`,
-  `LinkHierarchy`, `Sw2gzExportScopePlanner`, `LinkTreeView`,
-  `Sw2gzExportWizardForm`, `SwJointStateSampler`, `SW2GZ\URDF\*`. These are
-  referenced by `Sw2gzExportConfig` (carries Links/Joints/Stacks), `IExportRunner`,
-  and the shared export wizard form/link-tree — can't be deleted without
-  refactoring the shared export config/UI to be robot-free.
-- Orphaned-but-kept shared MVVM: ModeStep/OutputStep view-models, StepViewModelBase.
-- **TEST PROJECT does not compile** — many tests reference the deleted engine/
-  builders. Robot test files + their source-link csproj entries need removing
-  for `dotnet test` to run (add-in build is unaffected). NOT done.
+**ALSO DONE (this session):**
+- **Shared export config is robot-free.** Stripped `Links`/`Joints`/`Stacks`
+  from `Sw2gzExportConfig` + fixed every reader (`Sw2gzDocToExportConfig`,
+  `Sw2gzModelPreviewer` live-joint sampler, `ExportDialog`, SwAddin/serialization
+  logs, self-clone); deleted dead `StackRibbonGate`.
+- **Test project GREEN again** — removed ~50 robot test files + 44 dangling
+  source-link csproj entries; pruned invalid config tests. `dotnet test` = **464
+  passed**. Add-in compiles clean; deployed (~704 KB).
+
+**STILL PRESENT (inert robot DATA TYPES — the v2 rebuild foundation, intentionally
+kept):** `RobotModel`/`RobotMeta`/`ModelLink`/`LinkDef`/`JointDef`/`UrdfLink`/
+`UrdfJoint`/`ControlSpec`/`StackProfile`/`MateSpec`/`GazeboLinkProps`/
+`GeometryAssignment`/`LinkHierarchy`/`Sw2gzExportScopePlanner`/`LinkTreeView`/
+`Sw2gzExportWizardForm`/`SwJointStateSampler`/`SW2GZ\URDF\*`. Still referenced by
+`Sw2gzDoc.Robot` + the shared export form/helpers; they're plain data with no
+robot logic, so they're the natural data model to build v2 on rather than delete
++ recreate. (ModeStep/OutputStep VMs + StepViewModelBase also kept.)
 
 **Next for the v2 rebuild:** with a clean slate, rebuild robot export fixing
 coordinates on the path the user actually exports (not a side path) and verify
