@@ -453,7 +453,6 @@ namespace SW2GZ.UI.Forms
             });
 
             string pkgSan = PackageNameSanitizer.Sanitize(meta.PackageName).Value;
-            string ws = Path.Combine(meta.OutputFolder, pkgSan + "_ws");
 
             SW2GZ.Validate.ValidationReport report = null;
             string errMsg = null;
@@ -484,15 +483,44 @@ namespace SW2GZ.UI.Forms
             }
 
             _resultOk = true;
-            _resultWorkspace = ws;
-            _resultLaunchCmd = "cd \"" + ws + "\" && colcon build && source install/setup.bash && " +
-                "ros2 launch " + pkgSan + " gz_sim.launch.py";
+            // Run instructions depend on the mode's output layout: Robot emits an
+            // ament workspace (<pkg>_ws, colcon build); World/Asset emit a
+            // self-contained <pkg>/ folder that runs with no build.
+            string nl = System.Environment.NewLine;
+            Sw2gzMode mode = _doc?.Mode ?? Sw2gzMode.Robot;
+            if (mode == Sw2gzMode.World)
+            {
+                string dir = Path.Combine(meta.OutputFolder, pkgSan);
+                _resultWorkspace = dir;
+                _resultLaunchCmd = "ros2 launch \"" + Path.Combine(dir, "launch_world.py") + "\"";
+                _runDetail.Text =
+                    "Output folder (self-contained, no build):" + nl + "  " + dir + nl + nl +
+                    "Run (ROS 2 Jazzy + Gz Harmonic):" + nl + "  " + _resultLaunchCmd + nl + nl +
+                    "Or open the world directly in Gz:" + nl +
+                    "  gz sim \"" + Path.Combine(dir, pkgSan + ".sdf") + "\"";
+            }
+            else if (mode == Sw2gzMode.Asset)
+            {
+                string dir = Path.Combine(meta.OutputFolder, pkgSan);
+                _resultWorkspace = dir;
+                _resultLaunchCmd = "export GZ_SIM_RESOURCE_PATH=\"" + meta.OutputFolder + "\"";
+                _runDetail.Text =
+                    "Output model (drop-in Gz model):" + nl + "  " + dir + nl + nl +
+                    "Use it: point Gz at the parent folder, then include the model:" + nl +
+                    "  " + _resultLaunchCmd + nl +
+                    "  <include><uri>model://" + pkgSan + "</uri></include>";
+            }
+            else // Robot — ament workspace
+            {
+                string ws = Path.Combine(meta.OutputFolder, pkgSan + "_ws");
+                _resultWorkspace = ws;
+                _resultLaunchCmd = "cd \"" + ws + "\" && colcon build && source install/setup.bash && " +
+                    "ros2 launch " + pkgSan + " gz_sim.launch.py";
+                _runDetail.Text =
+                    "Output workspace:" + nl + "  " + ws + nl + nl +
+                    "Build and launch (ROS 2 Jazzy + Gz Harmonic):" + nl + "  " + _resultLaunchCmd;
+            }
             _runStatus.Text = "Export complete";
-            _runDetail.Text =
-                "Output workspace:" + System.Environment.NewLine +
-                "  " + ws + System.Environment.NewLine + System.Environment.NewLine +
-                "Build and launch (ROS 2 Jazzy + Gz Harmonic):" + System.Environment.NewLine +
-                "  " + _resultLaunchCmd;
             _btnOpenFolder.Visible = _btnCopyCmd.Visible = true;
             _btnNext.Enabled = true;
             _btnNext.Text = "Close";
