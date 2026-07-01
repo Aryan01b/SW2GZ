@@ -1,11 +1,67 @@
 # Progress
 
 Current: world mode + asset mode + World GUI/camera (v2.4.0) + World Settings
-(v2.5.0) shipped on `main`. Tests: **797 green**.
+(v2.5.0) shipped on `main`. Tests: **797 green** (on `main`; the v3 rebuild
+branch below is on an older base, 470 green there).
 Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
-## ▶ CONTINUE HERE — Robot mode GUTTED for clean rebuild (branch `feat/robot-mode-v2`, pushed)
+## ▶ CONTINUE HERE — Robot mode v3: minimal Create Robot wizard + exporter live (branch `feat/robot-mode-v3`, pushed, commit 185bd84)
+
+**Working now, live-tested against FULL_ARM.SLDASM:** Create Robot → Links
+step (seeded from top-level components, first = base_link, rest Fixed to
+it) → Finish → Preview / Export both produce a real URDF package with
+correct mesh geometry, orientation, and per-link placement. Joint TYPE is
+hardcoded Fixed for every link (mate-driven type detection was attempted and
+reverted — see below); the joint origin/rpy is real relative pose math, not
+a placeholder.
+
+**Big finding this session — a real, pre-existing, live bug, not a Robot-only
+issue:** `Component2.Transform2.ArrayData`'s 3x3 rotation block is
+**column-major**, not row-major as every existing call site assumed
+(verified empirically against `Component2.GetBox`, since a from-VBA
+`IMathPoint.MultiplyTransform` check turned out to silently no-op instead of
+throwing — see memory `sw-mathtransform-column-major`). This was silently
+inverting rotation for any non-identity-rotated component in
+`SolidWorksMeshTessellator` (mesh baking — used by **World and Asset export
+too**) and `SolidWorksAssemblyWalker` (`TransformByComponent`/
+`RotateByComponent`). **Both fixed.** Worth a live re-check of World/Asset
+exports containing rotated components next time either is touched, since
+this shipped wrong for an unknown amount of time before today.
+
+**New files:** `SW2GZ/UI/Pmp/Sw2gzCreateRobotPmp.cs` (wizard, mirrors
+`Sw2gzCreateWorldPmp`'s WinForms-nav-in-PMP chrome), `SW2GZ/URDFExport/
+Sw2gzRobotExporter.cs` (writes `<pkg>_ws/src/<pkg>/urdf/<pkg>.urdf.xacro` +
+`meshes/*.dae`, reuses `SolidWorksMeshTessellator`/`SolidWorksMassProperties`),
+`SW2GZ/SwSurface/Abstractions/IComponentPoses.cs` +
+`SolidWorksComponentPoses.cs` (exact per-component rotation+translation —
+lets the exporter un-bake each link's mesh into its own native part-local
+frame instead of an AABB-center approximation, so joint origin/rpy carry the
+real relative pose between parent and child).
+
+**Tried and reverted — mate-driven joint type/axis/limit auto-detection.**
+Built `SolidWorksMateJointDetector` (ported the pre-gut `AutoJointResolver`'s
+model from git history), wired into the wizard + exporter. Live-tested by
+the user: still showed Fixed-only / wrong behavior even after two fix
+passes, so fully reverted (file deleted, wiring removed) rather than ship
+something unverified. Data model (`JointDef.Type`/`AxisX-Z`/
+`LimitLower/Upper`) still holds the fields for whenever this is retried —
+full postmortem + what to do differently next time (build against a live
+SW test loop from the start, don't port old logic blind) is in memory
+`robot-mode-dev`.
+
+**Also unresolved, not root-caused:** user reported a stale Create/Edit
+ribbon label after deleting the saved Robot doc attribute — same symptom
+class as an old, already-fixed World-mode bug. Code audit of the whole sync
+chain (`SyncRibbonToActiveDoc`/`PillUpdate`/`RefreshTabForMode`) found it
+fully mode-generic with no Robot-specific gap; could not reproduce or
+isolate a concrete defect from static reading. Needs a live repro with the
+exact symptom (button text stuck, wrong wizard data, or a crash) before
+attempting a fix.
+
+**Test count:** 464 (this branch's baseline) → 470 green.
+
+## Done — Robot mode GUTTED for clean rebuild (branch `feat/robot-mode-v2`, pushed)
 
 Robot mode's inherited implementation was buggy (coordinate tilt the Option-A
 fix on `feat/robot-mode` didn't resolve live — that branch was reset, work in
