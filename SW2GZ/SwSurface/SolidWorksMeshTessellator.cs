@@ -104,8 +104,12 @@ namespace SW2GZ.SwSurface
                         if (bodyObjs == null || bodyObjs.Length == 0) continue;
 
                         // Per-leaf assembly-frame transform. ArrayData layout:
-                        // [0..8] rotation 3x3 row-major, [9..11] translation,
-                        // [12] scale, [13..15] padding.
+                        // [0..8] rotation 3x3 COLUMN-major, [9..11] translation,
+                        // [12] scale, [13..15] padding. Verified against
+                        // Component2.GetBox ground truth (see memory
+                        // sw-mathtransform-column-major) — the naive row-major
+                        // read silently inverts rotation for any non-identity
+                        // component orientation.
                         MathTransform xform = leaf.Transform2;
                         double[] d = xform?.ArrayData as double[];
                         bool hasXf = d != null && d.Length >= 12;
@@ -147,9 +151,9 @@ namespace SW2GZ.SwSurface
                                     // (GetVertexPoint returns part-local coords).
                                     if (hasXf)
                                     {
-                                        double rx = d[0] * x + d[1] * y + d[2] * z;
-                                        double ry = d[3] * x + d[4] * y + d[5] * z;
-                                        double rz = d[6] * x + d[7] * y + d[8] * z;
+                                        double rx = d[0] * x + d[3] * y + d[6] * z;
+                                        double ry = d[1] * x + d[4] * y + d[7] * z;
+                                        double rz = d[2] * x + d[5] * y + d[8] * z;
                                         x = rx * sc + d[9]; y = ry * sc + d[10]; z = rz * sc + d[11];
                                     }
                                     verts.Add(new System.Numerics.Vector3((float)x, (float)y, (float)z));

@@ -41,6 +41,14 @@ namespace SW2GZ.URDFExport
                 License      = meta?.License      ?? string.Empty,
             };
 
+            // Robot mode — carry the Create-Robot link/joint list through.
+            var robot = doc?.Robot;
+            if (robot != null)
+            {
+                cfg.RobotLinks  = CloneLinks(robot.Links);
+                cfg.RobotJoints = CloneJoints(robot.Joints);
+            }
+
             // World mode — carry the Create-World picks through to the exporter.
             // (memory world-mode-dev: the first attempt failed here — Bridge
             // dropped World config so the exporter saw empty picks.)

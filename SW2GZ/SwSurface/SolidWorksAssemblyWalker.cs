@@ -583,14 +583,18 @@ namespace SW2GZ.SwSurface
         // PART-LOCAL point, returning the corresponding ASSEMBLY-frame point.
         // Different from RotateByComponent above (which is for direction
         // vectors and ignores translation).
+        // ArrayData's 3x3 rotation block is COLUMN-major (verified against
+        // Component2.GetBox ground truth — see memory
+        // sw-mathtransform-column-major); the naive row-major read silently
+        // inverts rotation for any non-identity component orientation.
         private static Vector3 TransformByComponent(Component2 comp, Vector3 v)
         {
             MathTransform xform = comp.Transform2;
             if (xform == null) return v;
             if (!(xform.ArrayData is double[] d) || d.Length < 12) return v;
-            float x = (float)(d[0] * v.X + d[1] * v.Y + d[2] * v.Z + d[9]);
-            float y = (float)(d[3] * v.X + d[4] * v.Y + d[5] * v.Z + d[10]);
-            float z = (float)(d[6] * v.X + d[7] * v.Y + d[8] * v.Z + d[11]);
+            float x = (float)(d[0] * v.X + d[3] * v.Y + d[6] * v.Z + d[9]);
+            float y = (float)(d[1] * v.X + d[4] * v.Y + d[7] * v.Z + d[10]);
+            float z = (float)(d[2] * v.X + d[5] * v.Y + d[8] * v.Z + d[11]);
             return new Vector3(x, y, z);
         }
 
@@ -601,9 +605,9 @@ namespace SW2GZ.SwSurface
             MathTransform xform = comp.Transform2;
             if (xform == null) return v;
             if (!(xform.ArrayData is double[] d) || d.Length < 9) return v;
-            float x = (float)(d[0] * v.X + d[1] * v.Y + d[2] * v.Z);
-            float y = (float)(d[3] * v.X + d[4] * v.Y + d[5] * v.Z);
-            float z = (float)(d[6] * v.X + d[7] * v.Y + d[8] * v.Z);
+            float x = (float)(d[0] * v.X + d[3] * v.Y + d[6] * v.Z);
+            float y = (float)(d[1] * v.X + d[4] * v.Y + d[7] * v.Z);
+            float z = (float)(d[2] * v.X + d[5] * v.Y + d[8] * v.Z);
             return new Vector3(x, y, z);
         }
 
