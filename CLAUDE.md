@@ -26,6 +26,19 @@ is just an at-a-glance cache.
 See memory `sw2gz-build-deploy` (MSBuild path, `SolutionDir` param, regasm +
 SolidWorks-lock gotchas).
 
+## SolidWorks API reference
+
+[`docs/reference/solidworks-api.md`](docs/reference/solidworks-api.md) —
+every SolidWorks COM API member this codebase calls, grouped by category
+(app/doc lifecycle, ribbon, PropertyManagerPage UI, assembly/component,
+mates, geometry/tessellation, mass properties, coordinate systems,
+selection, events, color, persistence), each with file provenance,
+usage context, and an **[active]**/**[legacy]** flag (legacy = inherited-
+upstream export pipeline, may not run on the current gutted robot-mode
+path). Read this before adding any new SW COM call — check whether the
+member is already used elsewhere first. Local offline API browser:
+`C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\api\apihelp.chm`.
+
 ## Conventions
 
 - **PowerShell + git.** git writes normal status (e.g. `Switched to branch`)
