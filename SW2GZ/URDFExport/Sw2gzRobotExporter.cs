@@ -38,7 +38,6 @@ unit-testable with fakes.
 */
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -196,7 +195,7 @@ namespace SW2GZ.URDFExport
         {
             var verts = new List<Vector3>();
             var tris = new List<int>();
-            Color? color = null;
+            System.Drawing.Color? color = null;
             Matrix3 refRInv = refR.Transpose();
 
             foreach (string compName in componentIds ?? (IReadOnlyList<string>)Array.Empty<string>())
