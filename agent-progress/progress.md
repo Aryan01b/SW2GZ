@@ -6,7 +6,154 @@ branch below is on an older base, 470 green there).
 Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
-## ▶ CONTINUE HERE — Robot mode v3: minimal Create Robot wizard + exporter live (branch `feat/robot-mode-v3`, pushed, commit 185bd84)
+## Done — Robot mode v3: joint/link relative pose + multi-mesh links, live-tested (branch `feat/robot-mode-v3`)
+
+**2026-07-02, closing out this session's robot-mode work.** Two pieces,
+both live-tested working on `FULL_ARM.SLDASM`:
+
+**1. Links step UI rebuilt** (`Sw2gzCreateRobotPmp.cs` + `SW2GZ.UI.LinkTreeView`):
+manual mesh-picker + name box + drag-to-reparent tree (reused, not
+rewritten — `LinkTreeView`/`LinkHierarchy` were pre-existing, previously
+unwired). No more auto-seed; user builds the link tree explicitly, first
+Add is always forced to `base_link`, every later Add's parent is whichever
+tree node is currently selected. First mesh component picked for a link is
+its "primary" (drives the link's whole frame) — marked `(primary)` in the
+selected-info label and the tree's hover tooltip.
+
+**2. Exporter math fixed to match: parent-relative joints + multi-mesh
+union** (`Sw2gzRobotExporter.cs`, `InertialAggregator.cs`) — spec/plan:
+[`docs/superpowers/specs/2026-07-02-robot-joint-relative-pose-design.md`](../docs/superpowers/specs/2026-07-02-robot-joint-relative-pose-design.md) /
+[`docs/superpowers/plans/2026-07-02-robot-joint-relative-pose-plan.md`](../docs/superpowers/plans/2026-07-02-robot-joint-relative-pose-plan.md).
+Built via subagent-driven-development, 6 tasks, each independently
+implemented + spec-compliance reviewed + code-quality reviewed (two tasks
+needed a fix-and-reverify round: Task 2 got a missing warning for
+dangling parent references, Task 3 hit a real `System.Drawing.Color` vs
+`SW2GZ.URDF.Color` namespace collision that broke the real add-in build
+even though the test project stayed green — caught only because a
+reviewer built the actual `SW2GZ.csproj`, not just `dotnet test`). A final
+holistic review across all 6 tasks combined traced the "first component
+defines the link's frame" invariant by hand across mesh union / joint
+origin / mass rebase / UI labels and found it consistent everywhere.
+- Joint origin is now relative to each link's own `ParentName`, not always
+  root (`Sw2gzRobotExporter.cs` two-pass: pass 1 reads every link's own
+  reference pose by name, pass 2 looks up the declared parent's pose —
+  needed since a child can sit before its parent in `Robot.Links` after a
+  drag-drop reparent).
+- Root detected via `LinkHierarchy.Roots` (tree structure), not
+  `links[0]` (list position) — needed because "Set as base link" re-roots
+  by flipping `ParentName` pointers without reordering the list.
+- Mesh and mass are now a union of every `ComponentIds` entry on a link
+  (was silently first-component-only), both combined into the link's
+  shared reference frame — `UnionMeshInLocalFrame` new helper for mesh;
+  `CombineMass` + `InertialAggregator`'s new `Matrix3`-parameterized
+  `Combine` overload for mass (added instead of writing a
+  `Matrix3`→`Quaternion` converter — that category of new coordinate-
+  conversion code has produced two real bugs in this codebase already;
+  see memory `sw-mathtransform-column-major`, `robot-mode-dev`).
+- Root link keeps its identity-orientation mesh convention (mesh only
+  translated, not un-rotated); mass combination does NOT get the same
+  treatment (rebases into the root's real pose) — documented asymmetry,
+  only matters for a multi-component root with non-identity native
+  rotation, not yet exercised.
+- Joint TYPE still hardcoded Fixed (unchanged, separate future increment).
+- 481 tests green (was 470 at session start), both `SW2GZ.csproj` and
+  `Test/SW2GZ.Writers.Test.csproj` build clean, deployed, **live-tested
+  by the user 2026-07-02: 3-level chain (grandchild joint relative to its
+  real non-root parent, not root) + multi-mesh link (both parts positioned
+  correctly, not just the first) — confirmed working.**
+
+## Prior — Robot mode v3: Links step now uses LinkTreeView, high-risk-flagged before live test
+
+**Swapped the flat listbox for `LinkTreeView` (2026-07-02, 4 more user fixes).**
+`Sw2gzCreateRobotPmp.cs`'s Links step now embeds the pre-existing
+`SW2GZ.UI.LinkTreeView` (WinForms `TreeView`, `WindowFromHandle`-embedded
+like the nav/button bars) instead of the flat `PropertyManagerPageListbox` +
+hand-rolled DFS renderer from the last two entries. Reused, not rewritten:
+`LinkHierarchy.cs` (pure, already unit-tested) for roots/children/cycle
+checks, `LinkTreeView.cs` (WinForms, already had drag-to-reparent +
+F2-rename + right-click "Set as base") for the widget itself — both were
+sitting unwired since the 2026-07-02 revert (see memory `robot-mode-dev`).
+Changes: drag a node onto another to reparent (cycle-guarded); clicking a
+node is now how you pick the next Add's parent (`_linkTree.ActiveLink`,
+replacing last session's click-a-listbox-row approach) and drives a new
+"Selected: name   Mesh: a, b" info label; `_linkTree.LinksChanged` triggers
+`RebuildJoints()` so drag/rename/reroot edits stay joint-consistent same as
+Add/Remove. Link-name box got a fake placeholder ("e.g. wheel_link",
+swapped for real empty text on focus/blur via `OnGainedFocus`/
+`OnLostFocus`) since PMP-native Textbox has no real cue banner. 470 green,
+clean build, deployed 09:55:00.
+
+**⚠ Explicit risk flag, not just the usual boilerplate warning:** this is
+literally the same `LinkTreeView` drag-and-drop widget from the **2026-07-02
+FULLY REVERTED** link-hierarchy attempt earlier this same day — it passed
+every automated gate then too and still broke live in SW with no captured
+symptom. `LinkTreeView.cs`/`LinkHierarchy.cs` themselves were untouched by
+that attempt (only called into, never modified), so they're unchanged from
+what's in git history either way — but "unchanged" isn't "proven," it was
+never isolated and live-tested on its own, only ever shipped bundled with
+the mesh-funnel work that also broke. This is the **smallest possible
+wiring step** for that widget (just swap the list for the tree, nothing
+else piled on) — do the live check on THIS step alone before adding
+anything more to the Links UI. Test: open Create Robot, add base_link, add
+a child, drag the child onto nothing/itself (should reject), drag a second
+child onto the first child (should reparent + tree redraws), remove
+base_link while it has children (should block, same as before).
+
+**Polish pass on the manual link builder (2026-07-02, after user screenshot).**
+7 UI fixes on `Sw2gzCreateRobotPmp.cs`: dropped the paragraph description;
+added real `Label` controls above Mesh/Link-name/Hierarchy (captions on
+Selectionbox/Textbox don't render visibly in this PMP); link name
+auto-fills from a single-part mesh pick (blank for sub-assembly or
+multi-pick, `OnSelectionboxListChanged` on the mesh box); tips repurposed
+as hover placeholders (skipped: real WinForms cue-banner placeholder —
+these are native PMP controls, not WinForms, converting them is a bigger
+diff than the ask); **removed the Parent combobox** — clicking a row in the
+hierarchy list now sets the parent for the next Add (`_linkRows` maps
+display row -> `LinkDef`, since the tree is rendered depth-first from root
+and no longer matches `Robot.Links` storage order); hierarchy list is a
+real indented tree (`AppendLinkRow` recursive DFS) instead of a flat
+one-level "-> parent" line. Native PMP label/control fonts/colors are
+SW-theme-driven, not stylable beyond what's already dark-themed on the
+WinForms button bar. 470 green, clean build, deployed 09:42:17. **Still
+needs the same live SW check as the previous entry** — not yet done.
+
+**Links step UI rework (2026-07-02).** Old flat model auto-seeded one link
+per top-level component, all Fixed to link[0]. New model, per user spec:
+no auto-seed; user picks mesh component(s) (parts/sub-assemblies, native
+live `Selectionbox`) → names the link → picks parent from a combo of
+existing links → **Add link**. First Add is always forced to root/
+`base_link` (REP-105), every later link needs an explicit parent — no more
+implicit flat-to-base. `RebuildJoints()` derives Joints (still hardcoded
+Fixed — joint-type refinement is a separate future increment) straight
+from each `LinkDef.ParentName`, so Links/Joints can't drift. Remove blocks
+a link that still has children (must remove leaves first). `Sw2gzCreateRobotPmp.cs`
+only; backend (`LinkDef.ParentName`, exporter, `Sw2gzDocLinkTreeRoundTripTests`)
+already supported a real tree, unchanged. 470 green, clean build, deployed
+09:21:57. **Needs a live SW check** — this is exactly the class of change
+(PMP/COM wiring) that has silently broken live before despite green tests;
+open Create Robot on FULL_ARM.SLDASM and walk: pick a part → Add link (becomes
+base_link) → pick another part → name it → parent=base_link → Add → remove
+base_link (should be blocked, has a child) → remove the child → remove
+base_link (should now work).
+
+## Done — Robot mode v3: minimal Create Robot wizard + exporter live (branch `feat/robot-mode-v3`, pushed, commit 185bd84)
+
+**Re-applied (2026-07-02) — PillUpdate Create/Edit label-sync fix, isolated.**
+The 2026-07-02 full revert (`git reset --hard af33ca2`, see below) dropped a
+sound, independent fix alongside the faulty link-hierarchy work: `PillUpdate`
+in `SwAddin.cs` was checking the (possibly stale) cached doc's `IsLocked`
+before `HasSaved`, so deleting the saved Robot doc attribute from the
+FeatureManager tree never re-ran `MaybeDeferLabelSync` — the ribbon's
+Create/Edit label stayed stuck. Re-applied that exact fix only (cherry-picked
+by hand from reflog commit `eb18968`, not the tree/mesh-assignment work it
+shipped alongside): check `HasSaved` first, always call
+`MaybeDeferLabelSync`, and drop+refetch the cached doc via
+`Sw2gzDocStore.Reset` if it's stale-locked while nothing is actually saved.
+470 green (unchanged), clean Release build, redeployed
+(`C:\Program Files\SW2GZ\SW2GZ.dll` 09:02:45). **Needs a live re-check**
+(delete the saved Robot attribute from the tree, confirm the ribbon label
+flips back to "Create Robot" without a doc reopen) — this bug was never
+confirmed fixed live before the revert wiped it out the first time.
 
 **FAILED + FULLY REVERTED (2026-07-02) — link hierarchy tree + manual mesh
 assignment.** Attempted: rework the Links step from the flat one-mesh-per-
