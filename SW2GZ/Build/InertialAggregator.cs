@@ -11,7 +11,7 @@ namespace SW2GZ.Build
         // Steps:
         //   1) total mass
         //   2) mass-weighted COM, with each part's local COM rotated into the assembly frame
-        //      via R_f = Matrix3.FromQuaternion(frame.Rotation) before translation
+        //      via R_f before translation
         //   3) for each part, transform its inertia tensor from part frame to assembly frame
         //      as I_a = R_f · I_part · R_fᵀ, then translate to the combined COM via the
         //      parallel-axis theorem, and sum.
@@ -23,19 +23,43 @@ namespace SW2GZ.Build
         // link-local frame — use the (parts, linkAnchor) overload below for that.
         public static MassProps Combine(IReadOnlyList<(MassProps Props, Pose Frame)> parts)
         {
-            if (parts == null) return new MassProps(0, Vector3.Zero, Matrix3.Identity);
-            if (parts.Count == 0)
+            if (parts == null)
+                return new MassProps(0, Vector3.Zero, Matrix3.Identity);
+            var matrixParts = parts
+                .Select(p => (p.Props, Matrix3.FromQuaternion(p.Frame.Rotation), p.Frame.Position))
+                .ToList();
+            return CombineCore(matrixParts);
+        }
+
+        // Matrix3-parameterized twin of the overload above. Same algorithm,
+        // same result for an equivalent rotation — exists so callers that
+        // already work entirely in Matrix3/Vector3 (e.g. Sw2gzRobotExporter,
+        // which reads SolidWorks component poses as Matrix3 directly) never
+        // need to construct a Quaternion just to call in here. Deliberately
+        // NOT implemented by converting to Quaternion and delegating to the
+        // overload above — a Matrix3-to-Quaternion conversion is new
+        // coordinate-conversion code, exactly the category that has already
+        // produced two real bugs in this codebase (the Transform2.ArrayData
+        // column-major bug, the mate-classification bug). Both overloads
+        // instead share CombineCore; only the Quaternion overload ever
+        // converts (Quaternion -> Matrix3, an already-proven, already-used
+        // direction), never the reverse.
+        public static MassProps Combine(IReadOnlyList<(MassProps Props, Matrix3 Rotation, Vector3 Position)> parts)
+        {
+            return CombineCore(parts);
+        }
+
+        private static MassProps CombineCore(IReadOnlyList<(MassProps Props, Matrix3 R, Vector3 Position)> parts)
+        {
+            if (parts == null || parts.Count == 0)
                 return new MassProps(0, Vector3.Zero, Matrix3.Identity);
 
             double totalMass = parts.Sum(p => p.Props.Mass);
             if (totalMass <= 0)
                 return new MassProps(0, Vector3.Zero, Matrix3.Identity);
 
-            // Cache R_f per part: FromQuaternion + the rotated COM offset are
-            // needed in both the COM pass and the parallel-axis pass.
-            var rotations = new Matrix3[parts.Count];
             // Per-part rotated COM offset in assembly frame (double precision),
-            // i.e. (f.Position + R_f * p.ComLocal). Reused for the parallel-axis d.
+            // i.e. (pos + R * p.ComLocal). Reused for the parallel-axis d.
             var partComsX = new double[parts.Count];
             var partComsY = new double[parts.Count];
             var partComsZ = new double[parts.Count];
@@ -43,13 +67,11 @@ namespace SW2GZ.Build
             double comX = 0.0, comY = 0.0, comZ = 0.0;
             for (int i = 0; i < parts.Count; i++)
             {
-                var (p, f) = parts[i];
-                var R_f = Matrix3.FromQuaternion(f.Rotation);
-                rotations[i] = R_f;
+                var (p, R_f, pos) = parts[i];
                 var (rx, ry, rz) = R_f.Mul((double)p.ComLocal.X, p.ComLocal.Y, p.ComLocal.Z);
-                double pcx = f.Position.X + rx;
-                double pcy = f.Position.Y + ry;
-                double pcz = f.Position.Z + rz;
+                double pcx = pos.X + rx;
+                double pcy = pos.Y + ry;
+                double pcz = pos.Z + rz;
                 partComsX[i] = pcx; partComsY[i] = pcy; partComsZ[i] = pcz;
                 double w = p.Mass / totalMass;
                 comX += w * pcx; comY += w * pcy; comZ += w * pcz;
@@ -60,11 +82,9 @@ namespace SW2GZ.Build
             var I = new double[3, 3];
             for (int i = 0; i < parts.Count; i++)
             {
-                var (p, _) = parts[i];
-                var R_f = rotations[i];
+                var (p, R_f, _) = parts[i];
                 var I_rot = R_f * p.InertiaAtComLocal * R_f.Transpose();
 
-                // Offset from assembly COM to this part's COM, in double precision.
                 double dx = partComsX[i] - comX;
                 double dy = partComsY[i] - comY;
                 double dz = partComsZ[i] - comZ;
@@ -108,20 +128,35 @@ namespace SW2GZ.Build
             if (linkAnchor == null || linkAnchor == Pose.Identity) return assemblyFrame;
             if (assemblyFrame.Mass <= 0) return assemblyFrame;
 
-            // R = link anchor rotation (assembly → link is Rᵀ; world rotates by R
-            // to land in link orientation only if we are going link → world).
-            // We need a vector expressed in the LINK frame, so we apply Rᵀ.
             Matrix3 R = Matrix3.FromQuaternion(linkAnchor.Rotation);
+            return RebaseCore(assemblyFrame, R, linkAnchor.Position);
+        }
+
+        // Matrix3-parameterized twin of the rebase overload above — see the
+        // Combine(parts) overload for why this exists instead of routing
+        // through Quaternion.
+        public static MassProps Combine(
+            IReadOnlyList<(MassProps Props, Matrix3 Rotation, Vector3 Position)> parts,
+            Matrix3 anchorR, Vector3 anchorT)
+        {
+            MassProps assemblyFrame = Combine(parts);
+            if (assemblyFrame.Mass <= 0) return assemblyFrame;
+            return RebaseCore(assemblyFrame, anchorR, anchorT);
+        }
+
+        private static MassProps RebaseCore(MassProps assemblyFrame, Matrix3 R, Vector3 anchorPosition)
+        {
+            // R = link anchor rotation. We need a vector expressed in the
+            // LINK frame, so we apply Rᵀ (R^-1 for an orthonormal rotation).
             Matrix3 Rinv = R.Transpose();
 
-            // COM offset in assembly coords, then rotate into link frame.
-            double dx = assemblyFrame.ComLocal.X - linkAnchor.Position.X;
-            double dy = assemblyFrame.ComLocal.Y - linkAnchor.Position.Y;
-            double dz = assemblyFrame.ComLocal.Z - linkAnchor.Position.Z;
+            double dx = assemblyFrame.ComLocal.X - anchorPosition.X;
+            double dy = assemblyFrame.ComLocal.Y - anchorPosition.Y;
+            double dz = assemblyFrame.ComLocal.Z - anchorPosition.Z;
             var (lx, ly, lz) = Rinv.Mul(dx, dy, dz);
             var comLink = new Vector3((float)lx, (float)ly, (float)lz);
 
-            // I_link = R^-1 · I_assembly · R   (same tensor at the same point,
+            // I_link = R^-1 · I_assembly · R (same tensor at the same point,
             // re-expressed in the rotated basis).
             Matrix3 Ilink = Rinv * assemblyFrame.InertiaAtComLocal * R;
 

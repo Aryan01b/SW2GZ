@@ -11,7 +11,7 @@ namespace SW2GZ.Build.Tests
         [Fact]
         public void Combine_Null_ReturnsIdentity()
         {
-            var result = InertialAggregator.Combine(null);
+            var result = InertialAggregator.Combine((IReadOnlyList<(MassProps, Pose)>)null);
             Assert.Equal(0.0, result.Mass);
         }
 
