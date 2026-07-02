@@ -141,22 +141,7 @@ namespace SW2GZ.URDFExport
                         "Sw2gzRobotExporter"));
                 }
 
-                try
-                {
-                    masses[link.Name] = massProps.Get(compName);
-                }
-                catch (Exception ex)
-                {
-                    // ponytail: no SW material on this part → placeholder mass/
-                    // inertia. Physical accuracy is out of scope for this
-                    // validating cut (no actuation/physics sim runs on the
-                    // export yet); revisit once Robot mode gets a real
-                    // inertia pipeline.
-                    masses[link.Name] = new MassProps(0.1, Vector3.Zero, Matrix3.Identity);
-                    issues.Add(new ValidationIssue(IssueSeverity.Warning, "ROBOT.MASS",
-                        "Link '" + link.Name + "' — no material on '" + compName + "', using placeholder mass: " + ex.Message,
-                        "Sw2gzRobotExporter"));
-                }
+                masses[link.Name] = CombineMass(massProps, poses, link.ComponentIds, linkR, linkT, issues, link.Name);
             }
 
             string urdfPath = Path.Combine(urdfDir, pkg + ".urdf.xacro");
@@ -223,6 +208,49 @@ namespace SW2GZ.URDFExport
             }
 
             return verts.Count == 0 ? null : new MeshData(verts.ToArray(), tris.ToArray(), color);
+        }
+
+        // Combines every assigned component's own mass/COM/inertia
+        // (parallel-axis, via InertialAggregator) into one MassProps rebased
+        // into the link's own reference frame (linkR/linkT — the SAME pose
+        // used for the joint and mesh math). For a single-component link
+        // this is byte-identical to using that component's raw MassProps
+        // directly: InertialAggregator's rebase exactly cancels when a
+        // part's own frame equals the anchor (see
+        // CombineWithLinkAnchor_SinglePartAtAnchor_RebasesBackToPartLocal /
+        // its Matrix3 twin). Mass/inertia physical accuracy beyond this is
+        // already out of scope for this validating cut (see the ponytail
+        // note this replaces) — this does not force the base_link
+        // identity-orientation convention the way mesh un-baking does,
+        // since that would only matter for a multi-component root with a
+        // non-identity native rotation, which isn't exercised yet.
+        private static MassProps CombineMass(
+            IMassProperties massProps, IComponentPoses poses, IReadOnlyList<string> componentIds,
+            Matrix3 linkR, Vector3 linkT, List<ValidationIssue> issues, string linkName)
+        {
+            var parts = new List<(MassProps Props, Matrix3 R, Vector3 T)>();
+            foreach (string compName in componentIds ?? (IReadOnlyList<string>)Array.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(compName)) continue;
+
+                MassProps mp;
+                try
+                {
+                    mp = massProps.Get(compName);
+                }
+                catch (Exception ex)
+                {
+                    mp = new MassProps(0.1, Vector3.Zero, Matrix3.Identity);
+                    issues.Add(new ValidationIssue(IssueSeverity.Warning, "ROBOT.MASS",
+                        "Link '" + linkName + "' — no material on '" + compName + "', using placeholder mass: " + ex.Message,
+                        "Sw2gzRobotExporter"));
+                }
+                (Matrix3 compR, Vector3 compT) = TryGetPose(poses, compName, issues, linkName);
+                parts.Add((mp, compR, compT));
+            }
+
+            if (parts.Count == 0) return new MassProps(0.1, Vector3.Zero, Matrix3.Identity);
+            return InertialAggregator.Combine(parts, linkR, linkT);
         }
 
         private static void WriteUrdf(

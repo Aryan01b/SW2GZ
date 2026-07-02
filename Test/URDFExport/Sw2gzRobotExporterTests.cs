@@ -42,6 +42,14 @@ namespace SW2GZ.Writers.Tests
                 _meshes.TryGetValue(n, out MeshData m) ? m : new MeshData(Array.Empty<Vector3>(), Array.Empty<int>(), null);
         }
 
+        private sealed class FakeMultiMassProps : IMassProperties
+        {
+            private readonly Dictionary<string, MassProps> _masses;
+            public FakeMultiMassProps(Dictionary<string, MassProps> masses) => _masses = masses;
+            public MassProps Get(string componentPathName) =>
+                _masses.TryGetValue(componentPathName, out MassProps m) ? m : new MassProps(0.1, Vector3.Zero, Matrix3.Identity);
+        }
+
         private sealed class FakeMassProps : IMassProperties
         {
             public bool ThrowOnGet;
@@ -359,6 +367,44 @@ namespace SW2GZ.Writers.Tests
             for (int i = 2; i < floats.Length; i += 3)
                 zValues.Add(double.Parse(floats[i], CultureInfo.InvariantCulture));
             Assert.Contains(zValues, z => System.Math.Abs(z - 5.0) < 1e-3);
+        }
+
+        [Fact]
+        public void Export_MultiComponentLink_CombinesMassOfAllAssignedComponents()
+        {
+            var links = new List<LinkDef>
+            {
+                new LinkDef { Name = "base_link", ComponentIds = { "base-1@asm" }, ParentName = "" },
+                new LinkDef { Name = "arm_link",  ComponentIds = { "arm-a@asm", "arm-b@asm" }, ParentName = "base_link" },
+            };
+            var cfg = new Sw2gzExportConfig
+            {
+                Mode = SW2GZ.Ros2.ExportMode.RobotPackage,
+                PackageName = "my_robot",
+                RobotLinks = links,
+            };
+            var poses = new Dictionary<string, (Matrix3, Vector3)>
+            {
+                ["base-1@asm"] = (Matrix3.Identity, Vector3.Zero),
+                ["arm-a@asm"]  = (Matrix3.Identity, new Vector3(1, 0, 0)),
+                ["arm-b@asm"]  = (Matrix3.Identity, new Vector3(1, 0, 0)),
+            };
+            var massProps = new FakeMultiMassProps(new Dictionary<string, MassProps>
+            {
+                ["base-1@asm"] = new MassProps(9.0, Vector3.Zero, Matrix3.Identity),
+                ["arm-a@asm"]  = new MassProps(1.5, Vector3.Zero, Matrix3.Identity),
+                ["arm-b@asm"]  = new MassProps(2.5, Vector3.Zero, Matrix3.Identity),
+            });
+
+            Sw2gzRobotExporter.Export(new FakeTess(), massProps, new FakePoses(poses), cfg, _dir, Matrix3.Identity);
+
+            XElement root = XElement.Load(Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "urdf", "my_robot.urdf.xacro"));
+            XElement armLink = root.Elements("link").Single(l => (string)l.Attribute("name") == "arm_link");
+            double mass = double.Parse((string)armLink.Element("inertial").Element("mass").Attribute("value"), CultureInfo.InvariantCulture);
+
+            // 1.5 + 2.5, not just arm-a's 1.5 (a "first component only"
+            // regression would report 1.5, silently dropping arm-b).
+            Assert.Equal(4.0, mass, 3);
         }
     }
 }
