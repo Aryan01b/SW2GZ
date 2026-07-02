@@ -8,6 +8,37 @@ Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
 ## ▶ CONTINUE HERE — Robot mode v3: minimal Create Robot wizard + exporter live (branch `feat/robot-mode-v3`, pushed, commit 185bd84)
 
+**FAILED + FULLY REVERTED (2026-07-02) — link hierarchy tree + manual mesh
+assignment.** Attempted: rework the Links step from the flat one-mesh-per-
+link list into a drag-to-reparent hierarchy (reusing pre-existing, unwired
+`LinkHierarchy`/`LinkTreeView`) + a geometry "pick funnel" for manual multi-
+mesh assignment, plus a `PillUpdate` ribbon label-sync bugfix. Spec/plan
+written, implemented task-by-task via subagent-driven-development (fresh
+implementer + spec-compliance review + code-quality review per task,
+including one review→fix→re-review cycle), independently build- and
+test-verified (473 green, clean Release build) at every step. **Still
+faulty live in SolidWorks** per user report after deploy — no specific
+symptom captured before the user called for a full revert, so the failure
+mode is NOT diagnosed. `git reset --hard` back to `af33ca2` (this session's
+8 commits were local-only, never pushed, so the reset was clean); DLL
+rebuilt from the reverted tree and redeployed over the faulty one. Test
+suite back to the pre-session baseline (470 green). Spec/plan docs left on
+disk for reference (`docs/superpowers/specs/2026-07-01-robot-wizard-link-
+hierarchy-design.md`, `docs/superpowers/plans/2026-07-01-robot-wizard-link-
+hierarchy.md`) but treat both as **abandoned, not pending** — the code they
+describe no longer exists on this branch. **Lesson for next attempt:** this
+is the second time in a row (see the mate-driven-detection postmortem right
+below) that a robot-wizard change passed every automated gate (build, full
+test suite, multi-stage code review) and still broke live in SW — the gap
+is entirely in COM/PMP-UI behavior that isn't and can't be exercised by
+`dotnet test`. Next attempt should get an early live checkpoint (open the
+wizard in SW after the *first* small wiring step, before piling on 3 more
+tasks on top) rather than building the whole thing then discovering it's
+broken at the end. `LinkHierarchy`/`LinkTreeView` themselves were NOT
+touched by this attempt (only called into) and remain exactly as they were
+— still inert, unwired, still a plausible starting point for a retry, just
+proven not sufficient on their own to make the wizard work correctly.
+
 **Working now, live-tested against FULL_ARM.SLDASM:** Create Robot → Links
 step (seeded from top-level components, first = base_link, rest Fixed to
 it) → Finish → Preview / Export both produce a real URDF package with
