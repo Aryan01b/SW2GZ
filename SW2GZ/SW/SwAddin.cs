@@ -722,14 +722,28 @@ namespace SW2GZ.SW
                 if (_wizardOpen) return 0;
                 if (AssemblyEnable() == 0) return 0;
                 if (!TryGetActiveAssembly(out ModelDoc2 modeldoc)) return 0;
-                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
-                if (SW2GZ.URDFExport.Sw2gzDocLock.IsLocked(doc)) return 0;
+
+                // Ground truth FIRST, before touching the (possibly stale) cached
+                // doc: deleting the saved attribute from the FeatureManager tree
+                // fires no doc-change event, so this poll is the only place that
+                // notices. Checking IsLocked on the stale cache before this used
+                // to return early and starve MaybeDeferLabelSync/HasSaved forever
+                // — the ribbon's Create/Edit label never re-synced after delete.
                 bool saved = SW2GZ.URDFExport.Sw2gzDocSerialization.HasSaved(modeldoc);
-                // If the saved-state changed with no doc-change event (attribute
-                // deleted from the tree), re-sync the Create/Edit label off-poll.
                 MaybeDeferLabelSync(saved);
+
+                var doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                if (!saved && SW2GZ.URDFExport.Sw2gzDocLock.IsLocked(doc))
+                {
+                    // Cached doc still shows locked content but nothing is
+                    // persisted — a stale leftover from the deleted attribute.
+                    // Drop it so a fresh, unlocked doc backs the next poll too.
+                    SW2GZ.URDFExport.Sw2gzDocStore.Reset(modeldoc);
+                    doc = SW2GZ.URDFExport.Sw2gzDocStore.GetOrCreate(modeldoc);
+                }
                 // Locked by saved attribute — user must Delete Config first.
                 if (saved) return 0;
+                if (SW2GZ.URDFExport.Sw2gzDocLock.IsLocked(doc)) return 0;
                 // Disable the pill that already represents the active mode —
                 // gives the grayed-out "you are here" visual cue.
                 return (doc.Mode == pillMode) ? 0 : 1;
