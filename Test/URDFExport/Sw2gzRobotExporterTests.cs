@@ -3,6 +3,7 @@ Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 */
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -31,6 +32,14 @@ namespace SW2GZ.Writers.Tests
             public MeshData Tessellate(string n, TessellationLod lod) => new MeshData(
                 new[] { new Vector3(0, 0, 0), new Vector3(1, 0, 0), new Vector3(0, 1, 0) },
                 new[] { 0, 1, 2 }, null);
+        }
+
+        private sealed class FakeMultiTess : IMeshTessellator
+        {
+            private readonly Dictionary<string, MeshData> _meshes;
+            public FakeMultiTess(Dictionary<string, MeshData> meshes) => _meshes = meshes;
+            public MeshData Tessellate(string n, TessellationLod lod) =>
+                _meshes.TryGetValue(n, out MeshData m) ? m : new MeshData(Array.Empty<Vector3>(), Array.Empty<int>(), null);
         }
 
         private sealed class FakeMassProps : IMassProperties
@@ -288,6 +297,68 @@ namespace SW2GZ.Writers.Tests
             Assert.Equal("fixed", (string)worldJoint.Attribute("type"));
             Assert.Equal("world", (string)worldJoint.Element("parent").Attribute("link"));
             Assert.Equal("base_link", (string)worldJoint.Element("child").Attribute("link"));
+        }
+
+        [Fact]
+        public void Export_MultiComponentLink_UnionsAllMeshesInLinkReferenceFrame()
+        {
+            var links = new List<LinkDef>
+            {
+                new LinkDef { Name = "base_link", ComponentIds = { "base-1@asm" }, ParentName = "" },
+                new LinkDef { Name = "arm_link",  ComponentIds = { "arm-a@asm", "arm-b@asm" }, ParentName = "base_link" },
+            };
+            var cfg = new Sw2gzExportConfig
+            {
+                Mode = SW2GZ.Ros2.ExportMode.RobotPackage,
+                PackageName = "my_robot",
+                RobotLinks = links,
+            };
+            var poses = new Dictionary<string, (Matrix3, Vector3)>
+            {
+                ["base-1@asm"] = (Matrix3.Identity, Vector3.Zero),
+                ["arm-a@asm"]  = (Matrix3.Identity, new Vector3(1, 0, 0)),
+                ["arm-b@asm"]  = (Matrix3.Identity, new Vector3(1, 0, 0)),
+            };
+            var meshA = new MeshData(
+                new[] { new Vector3(1, 0, 0), new Vector3(2, 0, 0), new Vector3(1, 1, 0) },
+                new[] { 0, 1, 2 }, null);
+            var meshB = new MeshData(
+                new[] { new Vector3(1, 0, 5), new Vector3(2, 0, 5), new Vector3(1, 1, 5) },
+                new[] { 0, 1, 2 }, null);
+            var tess = new FakeMultiTess(new Dictionary<string, MeshData>
+            {
+                ["base-1@asm"] = new MeshData(new[] { new Vector3(0, 0, 0), new Vector3(1, 0, 0), new Vector3(0, 1, 0) }, new[] { 0, 1, 2 }, null),
+                ["arm-a@asm"]  = meshA,
+                ["arm-b@asm"]  = meshB,
+            });
+
+            Sw2gzRobotExporter.Export(tess, new FakeMassProps(), new FakePoses(poses), cfg, _dir, Matrix3.Identity);
+
+            string daePath = Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "meshes", "arm_link.dae");
+            Assert.True(File.Exists(daePath));
+
+            XNamespace ns = "http://www.collada.org/2005/11/COLLADASchema";
+            XDocument dae = XDocument.Load(daePath);
+            XElement posArray = dae.Descendants(ns + "float_array")
+                .Single(e => (string)e.Attribute("id") == "g0-pos-array");
+            int floatCount = int.Parse((string)posArray.Attribute("count"));
+
+            // Both components' triangles survive the union: 3 verts each, 3
+            // floats per vert = 18 total (not 9 — which is what a
+            // "first component only" regression would silently produce).
+            Assert.Equal(18, floatCount);
+
+            // arm-b's vertices sit at z=5 in its own (identity-rotation,
+            // translation (1,0,0)) frame; arm_link's reference frame is
+            // arm-a's pose (also (1,0,0), identity) — so after un-baking,
+            // arm-b's local vertices should still carry that z=5 offset
+            // (proves it was folded into the SAME shared frame as arm-a,
+            // not silently dropped or mis-transformed).
+            string[] floats = posArray.Value.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            var zValues = new List<double>();
+            for (int i = 2; i < floats.Length; i += 3)
+                zValues.Add(double.Parse(floats[i], CultureInfo.InvariantCulture));
+            Assert.Contains(zValues, z => System.Math.Abs(z - 5.0) < 1e-3);
         }
     }
 }

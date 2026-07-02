@@ -38,6 +38,7 @@ unit-testable with fakes.
 */
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -112,25 +113,12 @@ namespace SW2GZ.URDFExport
 
                 (Matrix3 linkR, Vector3 linkT) = linkPoses[link.Name];
 
-                MeshData meshWorld;
-                try
-                {
-                    meshWorld = tess.Tessellate(compName, TessellationLod.Fine);
-                }
-                catch (Exception ex)
-                {
-                    issues.Add(new ValidationIssue(IssueSeverity.Warning, "ROBOT.MESH",
-                        "Link '" + link.Name + "' — could not tessellate '" + compName + "': " + ex.Message,
-                        "Sw2gzRobotExporter"));
-                    meshWorld = null;
-                }
+                MeshData meshLocal = link.Name == baseLinkName
+                    ? UnionMeshInLocalFrame(tess, link.ComponentIds, Matrix3.Identity, linkT, issues, link.Name)
+                    : UnionMeshInLocalFrame(tess, link.ComponentIds, linkR, linkT, issues, link.Name);
 
-                if (meshWorld != null)
+                if (meshLocal != null)
                 {
-                    MeshData meshLocal = link.Name == baseLinkName
-                        ? Translate(meshWorld, -linkT)
-                        : UnbakeToLocal(meshWorld, linkR, linkT);
-
                     string daeFile = link.Name + ".dae";
                     DaeWriter.Write(meshLocal, Path.Combine(meshesDir, daeFile), withNormals: true);
                     meshFiles[link.Name] = daeFile;
@@ -195,23 +183,47 @@ namespace SW2GZ.URDFExport
             }
         }
 
-        private static MeshData Translate(MeshData mesh, Vector3 t)
+        // Every component assigned to a link gets tessellated and folded
+        // into ONE mesh, all expressed in the SAME reference frame (refR,
+        // refT) — not each component's own frame, which would scatter the
+        // pieces apart. Generalizes the old single-component un-bake to N
+        // components via the same vertex-offset + index-shift pattern
+        // SolidWorksMeshTessellator already uses internally to union
+        // multiple solid bodies within one component.
+        private static MeshData UnionMeshInLocalFrame(
+            IMeshTessellator tess, IReadOnlyList<string> componentIds,
+            Matrix3 refR, Vector3 refT, List<ValidationIssue> issues, string linkName)
         {
-            if (mesh?.Vertices == null || mesh.Vertices.Length == 0) return mesh;
-            var shifted = new Vector3[mesh.Vertices.Length];
-            for (int i = 0; i < shifted.Length; i++) shifted[i] = mesh.Vertices[i] + t;
-            return new MeshData(shifted, mesh.Triangles, mesh.MaterialColor);
-        }
+            var verts = new List<Vector3>();
+            var tris = new List<int>();
+            Color? color = null;
+            Matrix3 refRInv = refR.Transpose();
 
-        // p_local = R^T * (p_world - t) — reverses the tessellator's bake so the
-        // mesh sits in the component's own native part frame.
-        private static MeshData UnbakeToLocal(MeshData mesh, Matrix3 r, Vector3 t)
-        {
-            if (mesh?.Vertices == null || mesh.Vertices.Length == 0) return mesh;
-            Matrix3 rInv = r.Transpose();
-            var local = new Vector3[mesh.Vertices.Length];
-            for (int i = 0; i < local.Length; i++) local[i] = rInv.Mul(mesh.Vertices[i] - t);
-            return new MeshData(local, mesh.Triangles, mesh.MaterialColor);
+            foreach (string compName in componentIds ?? (IReadOnlyList<string>)Array.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(compName)) continue;
+
+                MeshData meshWorld;
+                try
+                {
+                    meshWorld = tess.Tessellate(compName, TessellationLod.Fine);
+                }
+                catch (Exception ex)
+                {
+                    issues.Add(new ValidationIssue(IssueSeverity.Warning, "ROBOT.MESH",
+                        "Link '" + linkName + "' — could not tessellate '" + compName + "': " + ex.Message,
+                        "Sw2gzRobotExporter"));
+                    continue;
+                }
+                if (meshWorld?.Vertices == null || meshWorld.Vertices.Length == 0) continue;
+
+                color ??= meshWorld.MaterialColor;
+                int baseIdx = verts.Count;
+                foreach (Vector3 v in meshWorld.Vertices) verts.Add(refRInv.Mul(v - refT));
+                foreach (int idx in meshWorld.Triangles) tris.Add(baseIdx + idx);
+            }
+
+            return verts.Count == 0 ? null : new MeshData(verts.ToArray(), tris.ToArray(), color);
         }
 
         private static void WriteUrdf(
