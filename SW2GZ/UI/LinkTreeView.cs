@@ -101,9 +101,21 @@ namespace SW2GZ.UI
                 + "  [" + n + (n == 1 ? " part]" : " parts]");
             var node = new TreeNode(label) { Tag = link };
             if (n == 0) node.ForeColor = System.Drawing.Color.Firebrick;   // unassigned = needs attention
+            node.ToolTipText = DescribePrimary(link);
             foreach (LinkDef child in LinkHierarchy.ChildrenOf(links, link.Name))
                 node.Nodes.Add(BuildNode(child));
             return node;
+        }
+
+        // The first ComponentIds entry defines this link's whole frame
+        // (mesh anchor, joint origin, inertial rebase) — surfaced on hover
+        // since the compact node label has no room for it.
+        private static string DescribePrimary(LinkDef link)
+        {
+            List<string> ids = link.ComponentIds;
+            if (ids == null || ids.Count == 0) return "no mesh assigned";
+            if (ids.Count == 1) return ids[0];
+            return "primary: " + ids[0] + "  |  also: " + string.Join(", ", ids.GetRange(1, ids.Count - 1));
         }
 
         public void SelectByLinkName(string name)
@@ -124,6 +136,7 @@ namespace SW2GZ.UI
             n.Text = (link.Name ?? "")
                 + (isRoot ? "  (base)" : "")
                 + "  [" + parts + (parts == 1 ? " part]" : " parts]");
+            n.ToolTipText = DescribePrimary(link);
         }
 
         private static IEnumerable<TreeNode> AllNodes(TreeNodeCollection nodes)

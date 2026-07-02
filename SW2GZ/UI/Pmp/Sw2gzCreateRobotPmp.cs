@@ -2,20 +2,23 @@
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
 Sw2gzCreateRobotPmp — the "Create Robot" PropertyManagerPage opened from the
-mode-specific Create button when the active mode is Robot. Minimal v3
-rebuild cut: a flat list of links (one per top-level component), all fixed
-to a single base link — no mate-driven joint detection yet (see
-agent-progress/progress.md "Robot mode gutted for clean rebuild"). Mirrors
-Sw2gzCreateWorldPmp's chrome exactly: a WinForms nav bar (Back/Next + step
-indicator, dark theme) embedded via WindowFromHandle, and a WinForms
-action-button bar per step. PMP swControlType_Button controls are avoided
-entirely — clicking one and mutating PMP state from inside OnButtonPress
-corrupts SW's PMP renderer. Nav clicks defer via BeginInvoke so the
-group-visibility flip runs off the click-handler reentrancy frame.
+mode-specific Create button when the active mode is Robot. Manual, URDF-
+hierarchy-shaped link building: no auto-seed, the user picks the mesh
+component(s) for each link (parts or sub-assemblies), names it, and picks
+its parent — the first link added is always the root, forced to
+"base_link" per ROS2/REP-105 convention. Every non-root link gets an
+implicit Fixed joint to its chosen parent (joint-type refinement is a later
+increment, see agent-progress/progress.md). Mirrors Sw2gzCreateWorldPmp's
+chrome exactly: a WinForms nav bar (Back/Next + step indicator, dark theme)
+embedded via WindowFromHandle, and a WinForms action-button bar per step.
+PMP swControlType_Button controls are avoided entirely — clicking one and
+mutating PMP state from inside OnButtonPress corrupts SW's PMP renderer.
+Nav clicks defer via BeginInvoke so the group-visibility flip runs off the
+click-handler reentrancy frame.
 
 Steps map to Sw2gzDoc.Robot:
-    0 — Links    (seeded from top-level components; first link = base,
-                  every other link gets an implicit Fixed joint to it)
+    0 — Links    (pick mesh -> name -> parent -> Add; first Add = base_link;
+                  Joints rebuilt (Fixed) from each link's ParentName)
     1 — Review   (counts; Next caption flips to "Finish")
 */
 #if SW_INTEROP
@@ -29,6 +32,7 @@ using SolidWorks.Interop.swpublished;
 using SW2GZ.Build;
 using SW2GZ.Build.Model;
 using SW2GZ.Build.Urdf;
+using SW2GZ.UI;
 using SW2GZ.URDFExport;
 using SW2GZ.Utilities;
 
@@ -61,10 +65,18 @@ namespace SW2GZ.UI.Pmp
         private const int IdNavBar      = 3;
 
         // Step groups.
-        private const int IdLinksGroup  = 10;
-        private const int IdLinksDescr  = 11;
-        private const int IdLinksBtnBar = 12;
-        private const int IdLinksList   = 13;
+        private const int IdLinksGroup     = 10;
+        private const int IdMeshLabel      = 11;
+        private const int IdMeshPicker     = 12;
+        private const int IdLinkNameLabel  = 13;
+        private const int IdLinkNameBox    = 14;
+        private const int IdLinksBtnBar    = 15;
+        private const int IdSelectedInfo   = 16;
+        private const int IdLinksListLabel = 17;
+        private const int IdLinksTree      = 18;
+
+        private const int MeshSelectionMark = 0x4C0;
+        private const string LinkNamePlaceholder = "e.g. wheel_link";
 
         private const int IdReviewGroup       = 20;
         private const int IdReviewDescr       = 21;
@@ -84,15 +96,25 @@ namespace SW2GZ.UI.Pmp
         // WinForms per-step action bar (Links step).
         private PropertyManagerPageWindowFromHandle _linksBarHandle;
         private System.Windows.Forms.Panel _linksBar;
-        private System.Windows.Forms.Button _reseedBtn;
+        private System.Windows.Forms.Button _addLinkBtn;
         private System.Windows.Forms.Button _removeLinkBtn;
         private System.Windows.Forms.Button _clearLinksBtn;
 
         // PMP-native controls.
-        private PropertyManagerPageListbox _linksList;
+        private PropertyManagerPageSelectionbox _meshPicker;
+        private PropertyManagerPageTextbox _linkNameBox;
+        private PropertyManagerPageLabel _selectedInfoLabel;
         private PropertyManagerPageLabel _reviewLinksLabel;
         private PropertyManagerPageLabel _reviewBaseLabel;
         private PropertyManagerPageLabel _reviewJointsLabel;
+
+        // WinForms tree (Links step) — drag-to-reparent hierarchy, embedded
+        // via WindowFromHandle like the nav/action bars. Reuses the pure
+        // SW2GZ.Build.LinkHierarchy helpers (already unit-tested) for
+        // roots/children/cycle-detection; operates directly on the live
+        // Robot.Links list.
+        private PropertyManagerPageWindowFromHandle _treeHandle;
+        private LinkTreeView _linkTree;
 
         public Sw2gzCreateRobotPmp(SldWorks swApp, ModelDoc2 modelDoc, Sw2gzDoc liveDoc, Action<Sw2gzDoc> onCommit, Action onClosed = null)
         {
@@ -117,7 +139,6 @@ namespace SW2GZ.UI.Pmp
             }
 
             BuildPage();
-            if (_liveDoc.Robot.Links.Count == 0) SeedLinksFromAssembly();
             ShowStep(StepLinks);
         }
 
@@ -212,41 +233,71 @@ namespace SW2GZ.UI.Pmp
         private PropertyManagerPageGroup BuildLinksGroup(int grpOptions, int leftEdge, int visibleEnabled)
         {
             var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdLinksGroup, "Links", grpOptions);
-            grp.AddControl2(IdLinksDescr,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "One link per top-level component. The first link is the base "
-                + "link; every other link gets a Fixed joint to it. Reseed "
-                + "re-scans the assembly for new components without dropping "
-                + "existing links.",
-                (short)leftEdge, visibleEnabled, "");
+
+            AddFieldLabel(grp, IdMeshLabel, "Mesh", leftEdge, visibleEnabled);
+            _meshPicker = (PropertyManagerPageSelectionbox)grp.AddControl2(
+                IdMeshPicker,
+                (short)swPropertyManagerPageControlType_e.swControlType_Selectionbox,
+                "", (short)leftEdge, visibleEnabled,
+                "Pick one or more components in the viewport — parts or sub-assemblies");
+            _meshPicker.SingleEntityOnly = false;
+            _meshPicker.AllowMultipleSelectOfSameEntity = false;
+            _meshPicker.Height = 30;
+            _meshPicker.Mark = MeshSelectionMark;
+            _meshPicker.SetSelectionFilters((object)new swSelectType_e[] { swSelectType_e.swSelCOMPONENTS });
+
+            AddFieldLabel(grp, IdLinkNameLabel, "Link name", leftEdge, visibleEnabled);
+            _linkNameBox = (PropertyManagerPageTextbox)grp.AddControl2(
+                IdLinkNameBox,
+                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "", (short)leftEdge, visibleEnabled,
+                "Auto-fills from a single part pick, editable. Ignored for the first/base link.");
+            SetLinkNamePlaceholder();
 
             _linksBar       = NewBar(260, 32);
-            _reseedBtn      = NewBarButton("Reseed", 70);
+            _addLinkBtn     = NewBarButton("Add link", 80);
             _removeLinkBtn  = NewBarButton("Remove", 70);
             _clearLinksBtn  = NewBarButton("Clear all", 80);
-            _reseedBtn.Click     += (s, e) => HandleReseed();
-            _removeLinkBtn.Click += (s, e) => HandleRemoveLink();
-            _clearLinksBtn.Click += (s, e) => HandleClearLinks();
-            _linksBar.Controls.Add(_reseedBtn);
+            _addLinkBtn.Click     += (s, e) => HandleAddLink();
+            _removeLinkBtn.Click  += (s, e) => HandleRemoveLink();
+            _clearLinksBtn.Click  += (s, e) => HandleClearLinks();
+            _linksBar.Controls.Add(_addLinkBtn);
             _linksBar.Controls.Add(_removeLinkBtn);
             _linksBar.Controls.Add(_clearLinksBtn);
-            _linksBar.Resize += (s, e) => CenterRow(_linksBar, _reseedBtn, _removeLinkBtn, _clearLinksBtn);
-            CenterRow(_linksBar, _reseedBtn, _removeLinkBtn, _clearLinksBtn);
+            _linksBar.Resize += (s, e) => CenterRow(_linksBar, _addLinkBtn, _removeLinkBtn, _clearLinksBtn);
+            CenterRow(_linksBar, _addLinkBtn, _removeLinkBtn, _clearLinksBtn);
             _linksBarHandle = (PropertyManagerPageWindowFromHandle)grp.AddControl2(
                 IdLinksBtnBar,
                 (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
-                "", (short)leftEdge, visibleEnabled, "Reseed, remove, or clear links");
+                "", (short)leftEdge, visibleEnabled, "Add, remove, or clear links");
             _linksBarHandle.Height = 34;
             _linksBarHandle.SetWindowHandlex64(_linksBar.Handle.ToInt64());
 
-            _linksList = (PropertyManagerPageListbox)grp.AddControl2(
-                IdLinksList,
-                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
-                "Links", (short)leftEdge, visibleEnabled, "Current robot links");
-            ((IPropertyManagerPageListbox)_linksList).Height = 140;
+            _selectedInfoLabel = (PropertyManagerPageLabel)grp.AddControl2(
+                IdSelectedInfo,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                "Selected: (none)", (short)leftEdge, visibleEnabled, "");
 
-            RefreshLinksList();
+            AddFieldLabel(grp, IdLinksListLabel, "Hierarchy — drag to reparent, click to select",
+                leftEdge, visibleEnabled);
+            _linkTree = new LinkTreeView { Width = 260, Height = 220 };
+            _linkTree.ActiveLinkChanged += (s, link) => RefreshSelectedInfo(link);
+            _linkTree.LinksChanged += (s, e) => RebuildJoints();
+            _linkTree.SetLinks(_liveDoc.Robot.Links);
+            _treeHandle = (PropertyManagerPageWindowFromHandle)grp.AddControl2(
+                IdLinksTree,
+                (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
+                "", (short)leftEdge, visibleEnabled, "Drag a link onto another to re-parent it");
+            _treeHandle.Height = 220;
+            _treeHandle.SetWindowHandlex64(_linkTree.Handle.ToInt64());
+
             return grp;
+        }
+
+        private static void AddFieldLabel(PropertyManagerPageGroup grp, int id, string text, int leftEdge, int visibleEnabled)
+        {
+            grp.AddControl2(id, (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                text, (short)leftEdge, visibleEnabled, "");
         }
 
         private PropertyManagerPageGroup BuildReviewGroup(int grpOptions, int leftEdge, int visibleEnabled)
@@ -272,92 +323,152 @@ namespace SW2GZ.UI.Pmp
         }
 
         // ─── Action handlers ───────────────────────────────────────────────────
-        private void SeedLinksFromAssembly()
+        // Reads the mesh picker + name box and appends one link. The first
+        // link ever added is forced to root/base_link regardless of the name
+        // box — every URDF tree needs exactly one root, and REP-105 names it
+        // base_link, so there is nothing for the user to choose there. Every
+        // later link's parent is whichever node is selected in the hierarchy
+        // tree below (no separate parent picker — click to target; drag a
+        // node there afterward to move it under a different parent).
+        private void HandleAddLink()
         {
             try
             {
-                object[] comps = (object[])((AssemblyDoc)_modelDoc).GetComponents(true);
-                if (comps == null) return;
-                var existing = new HashSet<string>(
-                    _liveDoc.Robot.Links.SelectMany(l => l.ComponentIds), StringComparer.OrdinalIgnoreCase);
-                foreach (object o in comps)
-                {
-                    var c = (Component2)o;
-                    if (c.IsSuppressed()) continue;
-                    if (string.IsNullOrEmpty(c.Name2)) continue;
-                    if (existing.Contains(c.Name2)) continue;
-                    string linkName = UniqueLinkName(RosNameSanitizer.Sanitize(c.Name2).Value);
-                    _liveDoc.Robot.Links.Add(new LinkDef { Name = linkName, ComponentIds = { c.Name2 } });
-                    existing.Add(c.Name2);
-                }
-                RebuildParentsAndJoints();
-                RefreshLinksList();
-            }
-            catch (Exception e) { logger.Warn("SeedLinksFromAssembly failed", e); }
-        }
+                ISelectionMgr selMgr = (ISelectionMgr)_modelDoc.SelectionManager;
+                if (selMgr == null) return;
+                int count = selMgr.GetSelectedObjectCount2(MeshSelectionMark);
+                if (count < 1) return;
 
-        private void HandleReseed() => SeedLinksFromAssembly();
+                var componentIds = new List<string>();
+                for (int i = 1; i <= count; i++)
+                {
+                    object selObj = selMgr.GetSelectedObject6(i, MeshSelectionMark);
+                    if (selObj is Component2 c && !string.IsNullOrEmpty(c.Name2))
+                        componentIds.Add(c.Name2);
+                }
+                if (componentIds.Count == 0) return;
+
+                bool isRoot = _liveDoc.Robot.Links.Count == 0;
+                string parentName = string.Empty;
+                string name;
+                if (isRoot)
+                {
+                    name = "base_link";
+                }
+                else
+                {
+                    LinkDef parent = _linkTree?.ActiveLink;
+                    if (parent == null) return; // click a link in the tree to parent this one to it
+                    parentName = parent.Name;
+                    name = LinkNameBoxValue();
+                }
+                if (string.IsNullOrEmpty(name)) return;
+                if (_liveDoc.Robot.Links.Any(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) return;
+
+                _liveDoc.Robot.Links.Add(new LinkDef { Name = name, ComponentIds = componentIds, ParentName = parentName });
+                RebuildJoints();
+                _linkTree.Rebuild();
+                _linkTree.SelectByLinkName(name);   // chain the next Add onto what was just created
+                SetLinkNamePlaceholder();
+                _modelDoc.ClearSelection2(true);
+            }
+            catch (Exception e) { logger.Warn("HandleAddLink failed", e); }
+        }
 
         private void HandleRemoveLink()
         {
-            int idx = _linksList != null ? _linksList.CurrentSelection : -1;
-            if (idx < 0 || idx >= _liveDoc.Robot.Links.Count) return;
-            _liveDoc.Robot.Links.RemoveAt(idx);
-            RebuildParentsAndJoints();
-            RefreshLinksList();
+            LinkDef link = _linkTree?.ActiveLink;
+            if (link == null) return;
+            if (_liveDoc.Robot.Links.Any(l => l.ParentName == link.Name))
+            {
+                _swApp.SendMsgToUser("Remove its child links first.");
+                return;
+            }
+            _liveDoc.Robot.Links.Remove(link);
+            RebuildJoints();
+            _linkTree.Rebuild();
         }
 
         private void HandleClearLinks()
         {
             _liveDoc.Robot.Links.Clear();
             _liveDoc.Robot.Joints.Clear();
-            RefreshLinksList();
+            _linkTree.Rebuild();
+            RefreshSelectedInfo(null);
         }
 
-        // Every link after the first is Fixed to the first (the base link).
-        // Re-derived after every list mutation so Links/Joints never drift out
-        // of sync — there is no manual joint editing and no mate-driven
-        // detection in this cut (removed 2026-07-01 — detection was
-        // misclassifying joints; reverted to the last known-good, fully-Fixed
-        // baseline until it's rebuilt and verified live).
-        private void RebuildParentsAndJoints()
+        // Auto-fills the name box from a single-part mesh pick (sub-assembly
+        // or multi-component picks are ambiguous — leave it for the user to
+        // type). Root/base_link ignores the name box entirely, so skip while
+        // the tree is still empty.
+        private void AutoFillLinkName()
+        {
+            if (_linkNameBox == null || _liveDoc.Robot.Links.Count == 0) return;
+            ISelectionMgr selMgr = (ISelectionMgr)_modelDoc.SelectionManager;
+            if (selMgr == null) return;
+            if (selMgr.GetSelectedObjectCount2(MeshSelectionMark) != 1)
+            {
+                SetLinkNamePlaceholder();
+                return;
+            }
+            if (!(selMgr.GetSelectedObject6(1, MeshSelectionMark) is Component2 c)) return;
+            bool isSubAssembly = (c.GetModelDoc2() as ModelDoc2)?.GetType() == (int)swDocumentTypes_e.swDocASSEMBLY;
+            if (isSubAssembly) SetLinkNamePlaceholder();
+            else _linkNameBox.Text = RosNameSanitizer.Sanitize(c.Name2).Value;
+        }
+
+        private void SetLinkNamePlaceholder()
+        {
+            if (_linkNameBox != null) _linkNameBox.Text = LinkNamePlaceholder;
+        }
+
+        private string LinkNameBoxValue()
+        {
+            string t = (_linkNameBox?.Text ?? string.Empty).Trim();
+            return t == LinkNamePlaceholder ? string.Empty : t;
+        }
+
+        private void RefreshSelectedInfo(LinkDef link)
+        {
+            if (_selectedInfoLabel == null) return;
+            _selectedInfoLabel.Caption = link == null
+                ? "Selected: (none)"
+                : "Selected: " + link.Name + "    Mesh: " + DescribeMeshes(link.ComponentIds);
+        }
+
+        // The first component defines the link's own frame (mesh anchor,
+        // joint origin, inertial rebase — see
+        // docs/superpowers/specs/2026-07-02-robot-joint-relative-pose-design.md),
+        // so it's marked (primary) wherever the mesh list is shown —
+        // otherwise which one drives the frame is invisible.
+        private static string DescribeMeshes(List<string> componentIds)
+        {
+            if (componentIds == null || componentIds.Count == 0) return "(none)";
+            var parts = new List<string>(componentIds.Count);
+            for (int i = 0; i < componentIds.Count; i++)
+                parts.Add(i == 0 ? componentIds[i] + " (primary)" : componentIds[i]);
+            return string.Join(", ", parts);
+        }
+
+        // Joints are pure derived state: one Fixed joint per non-root link,
+        // straight off the ParentName the user picked at Add time. Re-run
+        // after every list mutation so Links/Joints never drift out of sync.
+        // Joint TYPE stays hardcoded Fixed in this cut (mate-driven detection
+        // was attempted and reverted — see memory `robot-mode-dev`).
+        private void RebuildJoints()
         {
             _liveDoc.Robot.Joints.Clear();
-            if (_liveDoc.Robot.Links.Count == 0) return;
-
-            LinkDef baseLink = _liveDoc.Robot.Links[0];
-            baseLink.ParentName = string.Empty;
-            for (int i = 1; i < _liveDoc.Robot.Links.Count; i++)
+            foreach (LinkDef link in _liveDoc.Robot.Links)
             {
-                LinkDef link = _liveDoc.Robot.Links[i];
-                link.ParentName = baseLink.Name;
+                if (string.IsNullOrEmpty(link.ParentName)) continue;
                 _liveDoc.Robot.Joints.Add(new JointDef
                 {
-                    Name = baseLink.Name + "_to_" + link.Name,
-                    ParentLink = baseLink.Name,
+                    Name = link.ParentName + "_to_" + link.Name,
+                    ParentLink = link.ParentName,
                     ChildLink = link.Name,
                     Type = UrdfJointType.Fixed,
                 });
             }
-        }
-
-        private static string UniqueLinkName(string baseName)
-        {
-            // Caller already checked against ComponentIds for dedup; this only
-            // guards a same-named-different-instance edge case.
-            return baseName;
-        }
-
-        private void RefreshLinksList()
-        {
-            if (_linksList == null) return;
-            _linksList.Clear();
-            for (int i = 0; i < _liveDoc.Robot.Links.Count; i++)
-            {
-                LinkDef link = _liveDoc.Robot.Links[i];
-                _linksList.AddItems(i == 0 ? link.Name + "  (base)" : link.Name + "  -> " + link.ParentName + " (fixed)");
-            }
-            if (_liveDoc.Robot.Links.Count > 0) _linksList.CurrentSelection = 0;
         }
 
         private void RefreshReviewLabels()
@@ -439,8 +550,20 @@ namespace SW2GZ.UI.Pmp
         void IPropertyManagerPage2Handler9.AfterClose() { if (_okay && _liveDoc != null) _onCommit(_liveDoc); _onClosed?.Invoke(); }
 
         void IPropertyManagerPage2Handler9.OnButtonPress(int Id) { }
-        void IPropertyManagerPage2Handler9.OnGainedFocus(int Id) { }
-        void IPropertyManagerPage2Handler9.OnLostFocus(int Id) { }
+
+        // Fake cue-banner placeholder: PMP-native Textbox has no real one, so
+        // swap the placeholder text for real empty content on focus and back
+        // on blur-while-still-empty.
+        void IPropertyManagerPage2Handler9.OnGainedFocus(int Id)
+        {
+            if (Id == IdLinkNameBox && _linkNameBox != null && _linkNameBox.Text == LinkNamePlaceholder)
+                _linkNameBox.Text = string.Empty;
+        }
+        void IPropertyManagerPage2Handler9.OnLostFocus(int Id)
+        {
+            if (Id == IdLinkNameBox && _linkNameBox != null && string.IsNullOrEmpty(_linkNameBox.Text))
+                SetLinkNamePlaceholder();
+        }
         bool IPropertyManagerPage2Handler9.OnHelp() => true;
         bool IPropertyManagerPage2Handler9.OnNextPage() => true;
         bool IPropertyManagerPage2Handler9.OnPreviousPage() => true;
@@ -450,7 +573,11 @@ namespace SW2GZ.UI.Pmp
         bool IPropertyManagerPage2Handler9.OnSubmitSelection(int Id, object Selection, int SelType, ref string ItemText) => true;
         void IPropertyManagerPage2Handler9.OnTextboxChanged(int Id, string Text) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxFocusChanged(int Id) { }
-        void IPropertyManagerPage2Handler9.OnSelectionboxListChanged(int Id, int Count) { }
+        void IPropertyManagerPage2Handler9.OnSelectionboxListChanged(int Id, int Count)
+        {
+            if (Id != IdMeshPicker) return;
+            try { AutoFillLinkName(); } catch (Exception e) { logger.Warn("AutoFillLinkName failed", e); }
+        }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutCreated(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutDestroyed(int Id) { }
         void IPropertyManagerPage2Handler9.OnNumberboxChanged(int Id, double Value) { }
