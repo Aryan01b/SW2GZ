@@ -32,6 +32,7 @@ using SolidWorks.Interop.swpublished;
 using SW2GZ.Build;
 using SW2GZ.Build.Model;
 using SW2GZ.Build.Urdf;
+using SW2GZ.SwSurface;
 using SW2GZ.UI;
 using SW2GZ.URDFExport;
 using SW2GZ.Utilities;
@@ -281,7 +282,7 @@ namespace SW2GZ.UI.Pmp
             AddFieldLabel(grp, IdLinksListLabel, "Hierarchy — drag to reparent, click to select",
                 leftEdge, visibleEnabled);
             _linkTree = new LinkTreeView { Width = 260, Height = 220 };
-            _linkTree.ActiveLinkChanged += (s, link) => RefreshSelectedInfo(link);
+            _linkTree.ActiveLinkChanged += (s, link) => { RefreshSelectedInfo(link); HighlightLinkMesh(link); };
             _linkTree.LinksChanged += (s, e) => RebuildJoints();
             _linkTree.SetLinks(_liveDoc.Robot.Links);
             _treeHandle = (PropertyManagerPageWindowFromHandle)grp.AddControl2(
@@ -426,6 +427,37 @@ namespace SW2GZ.UI.Pmp
         {
             string t = (_linkNameBox?.Text ?? string.Empty).Trim();
             return t == LinkNamePlaceholder ? string.Empty : t;
+        }
+
+        // Selects the clicked link's own mesh components in the SW model,
+        // tagged with the same MeshSelectionMark the Mesh box already
+        // listens to — so clicking a tree node highlights that link's
+        // geometry in the viewport AND populates the Mesh box, instead of
+        // the box staying empty regardless of tree selection. Reuses the
+        // legacy CommonSwOperations.SelectComponents helper (its own doc
+        // comment: "Helps highlight when the associated node is selected
+        // from the tree" — this exact use case, just never wired into the
+        // current wizard until now).
+        private void HighlightLinkMesh(LinkDef link)
+        {
+            try
+            {
+                if (link == null || link.ComponentIds == null || link.ComponentIds.Count == 0)
+                {
+                    _modelDoc.ClearSelection2(true);
+                    return;
+                }
+
+                object[] topLevel = (object[])((AssemblyDoc)_modelDoc).GetComponents(false);
+                var components = new List<Component2>();
+                foreach (string compName in link.ComponentIds)
+                {
+                    Component2 c = SolidWorksMassProperties.FindComponent(topLevel, compName);
+                    if (c != null) components.Add(c);
+                }
+                CommonSwOperations.SelectComponents(_modelDoc, components, clearSelection: true, mark: MeshSelectionMark);
+            }
+            catch (Exception e) { logger.Warn("HighlightLinkMesh failed", e); }
         }
 
         private void RefreshSelectedInfo(LinkDef link)
