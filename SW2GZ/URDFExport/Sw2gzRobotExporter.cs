@@ -1,18 +1,31 @@
 /*
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
-Robot mode v3 — minimal validating cut for the clean rebuild (see
-agent-progress/progress.md "Robot mode gutted for clean rebuild"). One link
-per top-level component (config.RobotLinks[0] is the base link), every other
-link Fixed to it — no mate-driven joint detection (removed 2026-07-01, was
-misclassifying joints; reverted to this known-good baseline), but the joint
-DOES carry the real relative pose (rotation + translation) between parent
-and child, not an identity placeholder.
+Robot mode v3 — arbitrary user-built link tree (drag-to-reparent in the
+Links wizard), no mate-driven joint detection (removed 2026-07-01, was
+misclassifying joints; reverted to a known-good baseline) — every joint is
+still type="fixed", but DOES carry the real relative pose (rotation +
+translation) between parent and child, computed against each link's OWN
+declared ParentName, not always the root. Root is resolved by tree
+structure (LinkHierarchy.Roots — whichever link has no parent), not by
+list position, since re-rooting (LinkTreeView's "Set as base link") edits
+ParentName pointers without reordering Robot.Links.
 
-Each link's <visual> mesh is expressed in that component's OWN native
-part-local frame (un-baked from the tessellator's assembly-frame output using
-the same (R, t) pose read for the joint math), so the mesh renders correctly
-under the real joint chain and each link's TF frame reflects its true SW
+A link's mesh and mass/inertia are each a UNION of every component
+assigned to it (LinkDef.ComponentIds, wizard multi-select), not just the
+first — components are combined in the link's own reference frame, which
+is always its FIRST assigned component's pose. Mesh union: every
+component's tessellated mesh is un-baked into that one shared frame and
+concatenated. Mass union: every component's own MassProps + own pose feed
+InertialAggregator.Combine, rebased into the same shared frame — for a
+single-component link this is byte-identical to reading that component's
+MassProps directly (the rebase-by-anchor math cancels exactly when a
+part's own frame equals the anchor).
+
+Each link's <visual> mesh is expressed in that shared reference frame
+(un-baked from the tessellator's assembly-frame output using the same
+(R, t) pose read for the joint math), so the mesh renders correctly under
+the real joint chain and each link's TF frame reflects its true SW
 orientation — not just its true position.
 
     p_world = R_link * p_local + t_link                       (tessellator bake)
@@ -23,10 +36,13 @@ orientation — not just its true position.
 Base link is the one exception: its own frame is treated as identity (a
 common, valid URDF convention for the root link — nothing above it to be
 "relative" to), so its mesh is only re-centered (t_base subtracted), not
-un-rotated. This matches FULL_ARM's own base_link (already identity-rotated
-in SW) exactly; a base_link with a genuinely rotated native frame would show
-that rotation baked into its mesh rather than reflected in its own TF triad —
-a known simplification, not a bug, for this validating cut.
+un-rotated — mass combination does NOT get this same treatment (it rebases
+into the root's REAL pose, not forced identity; see CombineMass's own doc
+comment for why). This matches FULL_ARM's own base_link (already
+identity-rotated in SW) exactly; a base_link with a genuinely rotated
+native frame would show that rotation baked into its mesh rather than
+reflected in its own TF triad — a known simplification, not a bug, for
+this validating cut.
 
 Output layout (no ament package yet — deliberately out of scope for this
 validating cut):
