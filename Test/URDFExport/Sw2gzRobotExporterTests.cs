@@ -222,6 +222,37 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void Export_DanglingParentReference_DoesNotCrash_AndWarns()
+        {
+            // arm_link's ParentName points at a link name that isn't in
+            // RobotLinks at all (e.g. the parent link was deleted but this
+            // sibling's ParentName pointer was left stale).
+            var links = new List<LinkDef>
+            {
+                new LinkDef { Name = "base_link", ComponentIds = { "base-1@asm" }, ParentName = "" },
+                new LinkDef { Name = "arm_link",  ComponentIds = { "arm-1@asm" },  ParentName = "deleted_link" },
+            };
+            var cfg = new Sw2gzExportConfig
+            {
+                Mode = SW2GZ.Ros2.ExportMode.RobotPackage,
+                PackageName = "my_robot",
+                RobotLinks = links,
+            };
+
+            var rep = Sw2gzRobotExporter.Export(
+                new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir, Matrix3.Identity);
+
+            Assert.True(rep.Warnings.Any(w => w.Code == "ROBOT.PARENT"));
+
+            XElement root = XElement.Load(Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "urdf", "my_robot.urdf.xacro"));
+            XElement joint = root.Elements("joint").Single(j => (string)j.Attribute("name") == "deleted_link_to_arm_link");
+            string[] xyz = ((string)joint.Element("origin").Attribute("xyz")).Split(' ');
+            Assert.Equal(0.0, double.Parse(xyz[0]), 3);
+            Assert.Equal(0.0, double.Parse(xyz[1]), 3);
+            Assert.Equal(0.0, double.Parse(xyz[2]), 3);
+        }
+
+        [Fact]
         public void Export_NoLinks_Throws()
         {
             var cfg = Cfg(); cfg.RobotLinks = new List<LinkDef>();

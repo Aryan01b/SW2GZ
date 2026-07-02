@@ -147,6 +147,12 @@ namespace SW2GZ.URDFExport
                     jointOrigins[link.Name] = tJoint;
                     jointRpys[link.Name] = rJoint.ToRpy();
                 }
+                else if (!string.IsNullOrEmpty(link.ParentName))
+                {
+                    issues.Add(new ValidationIssue(IssueSeverity.Warning, "ROBOT.PARENT",
+                        "Link '" + link.Name + "' — parent '" + link.ParentName + "' not found, joint origin defaults to identity.",
+                        "Sw2gzRobotExporter"));
+                }
 
                 try
                 {
