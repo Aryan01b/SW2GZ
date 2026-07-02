@@ -406,5 +406,68 @@ namespace SW2GZ.Writers.Tests
             // regression would report 1.5, silently dropping arm-b).
             Assert.Equal(4.0, mass, 3);
         }
+
+        [Fact]
+        public void Export_MultiComponentLink_UsesEachComponentsOwnPose_NotSharedLinkFrame()
+        {
+            // arm-a and arm-b sit at DIFFERENT positions (unlike
+            // Export_MultiComponentLink_CombinesMassOfAllAssignedComponents
+            // above, where both parts share arm_link's own reference pose
+            // and so can't distinguish a correct per-part TryGetPose call
+            // inside CombineMass from a bug that reused the shared
+            // linkR/linkT for every part — both produce the same answer
+            // when every part's pose already equals the link frame).
+            //
+            // <inertial><origin> is hardcoded to "0 0 0" in WriteUrdf (a
+            // separate, pre-existing simplification — COM is not written),
+            // and mass is pose-invariant, so the only pose-sensitive value
+            // that reaches the URDF is the combined inertia tensor: with
+            // both parts spread away from arm_link's own frame (arm-a's
+            // pose), the parallel-axis contribution is nonzero. A
+            // shared-frame bug would instead evaluate every part AT
+            // arm_link's own frame (d = 0 for every part), so parallel-axis
+            // contributes nothing and izz stays at the parts' own identity
+            // inertia (1.0) instead of growing with the offset.
+            var links = new List<LinkDef>
+            {
+                new LinkDef { Name = "base_link", ComponentIds = { "base-1@asm" }, ParentName = "" },
+                new LinkDef { Name = "arm_link",  ComponentIds = { "arm-a@asm", "arm-b@asm" }, ParentName = "base_link" },
+            };
+            var cfg = new Sw2gzExportConfig
+            {
+                Mode = SW2GZ.Ros2.ExportMode.RobotPackage,
+                PackageName = "my_robot",
+                RobotLinks = links,
+            };
+            var poses = new Dictionary<string, (Matrix3, Vector3)>
+            {
+                ["base-1@asm"] = (Matrix3.Identity, Vector3.Zero),
+                ["arm-a@asm"]  = (Matrix3.Identity, new Vector3(1, 0, 0)),
+                ["arm-b@asm"]  = (Matrix3.Identity, new Vector3(1, 4, 0)),
+            };
+            var unitInertia = new Matrix3(1, 0, 0, 0, 1, 0, 0, 0, 1);
+            var massProps = new FakeMultiMassProps(new Dictionary<string, MassProps>
+            {
+                ["base-1@asm"] = new MassProps(9.0, Vector3.Zero, Matrix3.Identity),
+                ["arm-a@asm"]  = new MassProps(1.0, Vector3.Zero, unitInertia),
+                ["arm-b@asm"]  = new MassProps(1.0, Vector3.Zero, unitInertia),
+            });
+
+            Sw2gzRobotExporter.Export(new FakeTess(), massProps, new FakePoses(poses), cfg, _dir, Matrix3.Identity);
+
+            XElement root = XElement.Load(Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "urdf", "my_robot.urdf.xacro"));
+            XElement armLink = root.Elements("link").Single(l => (string)l.Attribute("name") == "arm_link");
+            double izz = double.Parse((string)armLink.Element("inertial").Element("inertia").Attribute("izz"), CultureInfo.InvariantCulture);
+
+            // arm-a at (1,0,0) == arm_link's own frame (d=0); arm-b at
+            // (1,4,0) is offset by (0,4,0) from the combined COM (0,2,0) in
+            // world space, i.e. d=2 on each side. izz picks up
+            // m*(dx^2+dy^2) = 1*(0+4) = 4 from EACH part's offset from the
+            // shared COM at (0,2,0): arm-a contributes 1*(0+4)=4, arm-b
+            // contributes 1*(0+4)=4, so combined izz = 1 + 1 + 4 + 4 = 10.
+            // A shared-frame bug (both parts evaluated at arm_link's own
+            // pose, d=0 for both) would instead report izz = 1 + 1 = 2.
+            Assert.True(izz > 5.0, "izz=" + izz + " — expected > 5 (parallel-axis from per-component pose); a shared-frame bug would report izz=2.");
+        }
     }
 }
