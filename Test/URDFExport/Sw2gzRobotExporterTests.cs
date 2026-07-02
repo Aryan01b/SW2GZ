@@ -143,6 +143,85 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void Export_GrandchildJointOrigin_IsRelativeToItsOwnParent_NotRoot()
+        {
+            var links = new List<LinkDef>
+            {
+                new LinkDef { Name = "base_link", ComponentIds = { "base-1@asm" }, ParentName = "" },
+                new LinkDef { Name = "mid_link",  ComponentIds = { "mid-1@asm" },  ParentName = "base_link" },
+                new LinkDef { Name = "leaf_link", ComponentIds = { "leaf-1@asm" }, ParentName = "mid_link" },
+            };
+            var cfg = new Sw2gzExportConfig
+            {
+                Mode = SW2GZ.Ros2.ExportMode.RobotPackage,
+                PackageName = "my_robot",
+                RobotLinks = links,
+            };
+            var poses = new Dictionary<string, (Matrix3, Vector3)>
+            {
+                ["base-1@asm"] = (Matrix3.Identity, new Vector3(0, 0, 0)),
+                ["mid-1@asm"]  = (Matrix3.Identity, new Vector3(1, 0, 0)),
+                ["leaf-1@asm"] = (Matrix3.Identity, new Vector3(1, 5, 0)),
+            };
+
+            Sw2gzRobotExporter.Export(
+                new FakeTess(), new FakeMassProps(), new FakePoses(poses), cfg, _dir, Matrix3.Identity);
+
+            XElement root = XElement.Load(Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "urdf", "my_robot.urdf.xacro"));
+            XElement leafJoint = root.Elements("joint").Single(j => (string)j.Attribute("name") == "mid_link_to_leaf_link");
+            Assert.Equal("mid_link", (string)leafJoint.Element("parent").Attribute("link"));
+
+            // leaf is at (1,5,0), its real parent mid_link is at (1,0,0) — the
+            // relative offset is (0,5,0). If this were still computed relative
+            // to ROOT (0,0,0) instead of mid_link, it would wrongly read (1,5,0).
+            string[] xyz = ((string)leafJoint.Element("origin").Attribute("xyz")).Split(' ');
+            Assert.Equal(0.0, double.Parse(xyz[0]), 3);
+            Assert.Equal(5.0, double.Parse(xyz[1]), 3);
+            Assert.Equal(0.0, double.Parse(xyz[2]), 3);
+        }
+
+        [Fact]
+        public void Export_RootDetectedByTreeStructure_NotListPosition()
+        {
+            // Simulates a post-reroot doc: mid_link is now the actual root
+            // (ParentName == ""), but sits at list position [1], not [0] —
+            // exactly what LinkTreeView's "Set as base link" produces (it
+            // edits ParentName pointers, never reorders Robot.Links).
+            var links = new List<LinkDef>
+            {
+                new LinkDef { Name = "leaf_link", ComponentIds = { "leaf-1@asm" }, ParentName = "mid_link" },
+                new LinkDef { Name = "mid_link",  ComponentIds = { "mid-1@asm" },  ParentName = "" },
+            };
+            var cfg = new Sw2gzExportConfig
+            {
+                Mode = SW2GZ.Ros2.ExportMode.RobotPackage,
+                PackageName = "my_robot",
+                RobotLinks = links,
+            };
+            var poses = new Dictionary<string, (Matrix3, Vector3)>
+            {
+                ["mid-1@asm"]  = (Matrix3.Identity, new Vector3(5, 0, 0)),
+                ["leaf-1@asm"] = (Matrix3.Identity, new Vector3(5, 2, 0)),
+            };
+
+            Sw2gzRobotExporter.Export(
+                new FakeTess(), new FakeMassProps(), new FakePoses(poses), cfg, _dir, Matrix3.Identity);
+
+            XElement root = XElement.Load(Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "urdf", "my_robot.urdf.xacro"));
+            XElement joint = root.Elements("joint").Single();
+            Assert.Equal("mid_link", (string)joint.Element("parent").Attribute("link"));
+            Assert.Equal("leaf_link", (string)joint.Element("child").Attribute("link"));
+
+            // leaf (5,2,0) relative to its real parent mid_link (5,0,0) = (0,2,0).
+            // If root were still wrongly detected as leaf_link (list position
+            // [0]), this would never be computed at all (falls back to 0 0 0).
+            string[] xyz = ((string)joint.Element("origin").Attribute("xyz")).Split(' ');
+            Assert.Equal(0.0, double.Parse(xyz[0]), 3);
+            Assert.Equal(2.0, double.Parse(xyz[1]), 3);
+            Assert.Equal(0.0, double.Parse(xyz[2]), 3);
+        }
+
+        [Fact]
         public void Export_NoLinks_Throws()
         {
             var cfg = Cfg(); cfg.RobotLinks = new List<LinkDef>();

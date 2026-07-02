@@ -85,14 +85,32 @@ namespace SW2GZ.URDFExport
             var jointOrigins = new Dictionary<string, Vector3>(StringComparer.Ordinal);
             var jointRpys = new Dictionary<string, (double, double, double)>(StringComparer.Ordinal);
 
-            string baseLinkName = links[0].Name;
-            string baseCompName = links[0].ComponentIds?.FirstOrDefault();
-            (Matrix3 baseR, Vector3 baseT) = TryGetPose(poses, baseCompName, issues, baseLinkName);
+            // Root = whichever link the TREE says has no parent, not
+            // links[0]. "Set as base link" (re-root, in LinkTreeView) edits
+            // ParentName pointers but never reorders Robot.Links, so list
+            // position [0] can silently stop being the real root.
+            LinkDef baseLink = LinkHierarchy.Roots(links).FirstOrDefault() ?? links[0];
+            string baseLinkName = baseLink.Name;
+
+            // Pass 1: every link's own reference pose (its first assigned
+            // component), read once up front. A child can be positioned
+            // before its parent in this list after a drag-drop reparent
+            // (reparenting only edits ParentName, never reorders Links), so
+            // pass 2 needs random access to ANY link's pose by name, not
+            // list order.
+            var linkPoses = new Dictionary<string, (Matrix3 R, Vector3 T)>(StringComparer.Ordinal);
+            foreach (LinkDef link in links)
+            {
+                string refComp = link.ComponentIds?.FirstOrDefault();
+                linkPoses[link.Name] = TryGetPose(poses, refComp, issues, link.Name);
+            }
 
             foreach (LinkDef link in links)
             {
                 string compName = link.ComponentIds?.FirstOrDefault();
                 if (string.IsNullOrWhiteSpace(compName)) continue;
+
+                (Matrix3 linkR, Vector3 linkT) = linkPoses[link.Name];
 
                 MeshData meshWorld;
                 try
@@ -109,26 +127,25 @@ namespace SW2GZ.URDFExport
 
                 if (meshWorld != null)
                 {
-                    MeshData meshLocal;
-                    if (link.Name == baseLinkName)
-                    {
-                        // Base = frame is identity by convention; only recenter.
-                        meshLocal = Translate(meshWorld, -baseT);
-                    }
-                    else
-                    {
-                        (Matrix3 childR, Vector3 childT) = TryGetPose(poses, compName, issues, link.Name);
-                        meshLocal = UnbakeToLocal(meshWorld, childR, childT);
-
-                        Matrix3 rJoint = baseR.Transpose() * childR;
-                        Vector3 tJoint = baseR.Transpose().Mul(childT - baseT);
-                        jointOrigins[link.Name] = tJoint;
-                        jointRpys[link.Name] = rJoint.ToRpy();
-                    }
+                    MeshData meshLocal = link.Name == baseLinkName
+                        ? Translate(meshWorld, -linkT)
+                        : UnbakeToLocal(meshWorld, linkR, linkT);
 
                     string daeFile = link.Name + ".dae";
                     DaeWriter.Write(meshLocal, Path.Combine(meshesDir, daeFile), withNormals: true);
                     meshFiles[link.Name] = daeFile;
+                }
+
+                // Joint origin relative to THIS link's own declared parent —
+                // not always the root. Same formula as before; only the
+                // source of "parent pose" changed.
+                if (!string.IsNullOrEmpty(link.ParentName) &&
+                    linkPoses.TryGetValue(link.ParentName, out (Matrix3 R, Vector3 T) parentPose))
+                {
+                    Matrix3 rJoint = parentPose.R.Transpose() * linkR;
+                    Vector3 tJoint = parentPose.R.Transpose().Mul(linkT - parentPose.T);
+                    jointOrigins[link.Name] = tJoint;
+                    jointRpys[link.Name] = rJoint.ToRpy();
                 }
 
                 try
@@ -150,7 +167,7 @@ namespace SW2GZ.URDFExport
             }
 
             string urdfPath = Path.Combine(urdfDir, pkg + ".urdf.xacro");
-            WriteUrdf(urdfPath, pkg, links, meshFiles, masses, jointOrigins, jointRpys, config.EmitWorldLink, swToRos);
+            WriteUrdf(urdfPath, pkg, baseLinkName, links, meshFiles, masses, jointOrigins, jointRpys, config.EmitWorldLink, swToRos);
 
             return new ValidationReport(issues);
         }
@@ -192,7 +209,7 @@ namespace SW2GZ.URDFExport
         }
 
         private static void WriteUrdf(
-            string path, string pkg, List<LinkDef> links,
+            string path, string pkg, string baseLinkName, List<LinkDef> links,
             Dictionary<string, string> meshFiles, Dictionary<string, MassProps> masses,
             Dictionary<string, Vector3> jointOrigins, Dictionary<string, (double, double, double)> jointRpys,
             bool emitWorldLink, Matrix3 swToRos)
@@ -202,8 +219,6 @@ namespace SW2GZ.URDFExport
             w.WriteStartDocument();
             w.WriteStartElement("robot");
             w.WriteAttributeString("name", pkg);
-
-            string baseLinkName = links[0].Name;
 
             // Same mechanism Sw2gzModelPreviewer already uses for the browser
             // preview: a synthetic world link + fixed joint carrying the SW→ROS
