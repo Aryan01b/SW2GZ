@@ -26,7 +26,13 @@ Each link's <visual> mesh is expressed in that shared reference frame
 (un-baked from the tessellator's assembly-frame output using the same
 (R, t) pose read for the joint math), so the mesh renders correctly under
 the real joint chain and each link's TF frame reflects its true SW
-orientation — not just its true position.
+orientation — not just its true position. "t" here is the link's
+frameOrigin — its first component's raw pose UNLESS a mate-derived pivot
+(JointDef.HasMatePoint) overrides it, in which case mesh, mass, AND joint
+<origin> all rebase around that same pivot point. Applying the override
+to <origin> alone once caused the mesh to render offset from the joint's
+declared frame — the link visibly orbited the wrong point in space; fixed
+by making frameOrigin the one anchor all three share.
 
     p_world = R_link * p_local + t_link                       (tessellator bake)
     p_local = R_link^T * (p_world - t_link)                   (un-bake for <visual>)
@@ -134,9 +140,24 @@ namespace SW2GZ.URDFExport
 
                 (Matrix3 linkR, Vector3 linkT) = linkPoses[link.Name];
 
+                // A mate-derived pivot (from mate-based joint suggestion)
+                // becomes this link's frame origin for EVERYTHING —
+                // mesh, mass, and joint <origin> alike — not just the
+                // joint math. Overriding only the joint origin while
+                // still un-baking the mesh around the link's raw
+                // component pose (linkT) put the mesh and the joint
+                // frame at two different points in space: the mesh
+                // rendered offset from wherever the joint said the link's
+                // frame was, so the link visibly pivoted around the wrong
+                // physical point. frameOrigin is the single source of
+                // truth all three now share.
+                Vector3 frameOrigin = linkT;
+                if (jointByChild.TryGetValue(link.Name, out JointDef jdFrame) && jdFrame.HasMatePoint)
+                    frameOrigin = new Vector3((float)jdFrame.MatePointX, (float)jdFrame.MatePointY, (float)jdFrame.MatePointZ);
+
                 MeshData meshLocal = link.Name == baseLinkName
-                    ? UnionMeshInLocalFrame(tess, link.ComponentIds, Matrix3.Identity, linkT, issues, link.Name)
-                    : UnionMeshInLocalFrame(tess, link.ComponentIds, linkR, linkT, issues, link.Name);
+                    ? UnionMeshInLocalFrame(tess, link.ComponentIds, Matrix3.Identity, frameOrigin, issues, link.Name)
+                    : UnionMeshInLocalFrame(tess, link.ComponentIds, linkR, frameOrigin, issues, link.Name);
 
                 if (meshLocal != null)
                 {
@@ -152,23 +173,13 @@ namespace SW2GZ.URDFExport
                     linkPoses.TryGetValue(link.ParentName, out (Matrix3 R, Vector3 T) parentPose))
                 {
                     Matrix3 rJoint = parentPose.R.Transpose() * linkR;
-                    Vector3 tJointGeometric = parentPose.R.Transpose().Mul(linkT - parentPose.T);
-                    // A mate-derived pivot point (from mate-based joint
-                    // suggestion) overrides ORIGIN POSITION only — never
-                    // orientation, which stays the proven parent-relative
-                    // rotation computed above. MatePoint is stored in
-                    // assembly frame (same convention as Axis); express it
-                    // relative to the parent exactly like the geometric
-                    // origin already is.
-                    if (jointByChild.TryGetValue(link.Name, out JointDef jdOrigin) && jdOrigin.HasMatePoint)
-                    {
-                        var matePointAssembly = new Vector3((float)jdOrigin.MatePointX, (float)jdOrigin.MatePointY, (float)jdOrigin.MatePointZ);
-                        jointOrigins[link.Name] = parentPose.R.Transpose().Mul(matePointAssembly - parentPose.T);
-                    }
-                    else
-                    {
-                        jointOrigins[link.Name] = tJointGeometric;
-                    }
+                    // Orientation stays the proven parent-relative rotation
+                    // above regardless of frameOrigin — a mate point only
+                    // ever overrides position. Position is frameOrigin
+                    // expressed relative to the parent, same formula either
+                    // way (frameOrigin defaults to linkT, so this covers the
+                    // no-mate-point case identically to before).
+                    jointOrigins[link.Name] = parentPose.R.Transpose().Mul(frameOrigin - parentPose.T);
                     jointRpys[link.Name] = rJoint.ToRpy();
 
                     // Axis is stored in assembly frame (what the user sees/enters
@@ -191,7 +202,7 @@ namespace SW2GZ.URDFExport
                         "Sw2gzRobotExporter"));
                 }
 
-                masses[link.Name] = CombineMass(massProps, poses, link.ComponentIds, linkR, linkT, issues, link.Name);
+                masses[link.Name] = CombineMass(massProps, poses, link.ComponentIds, linkR, frameOrigin, issues, link.Name);
             }
 
             string urdfPath = Path.Combine(urdfDir, pkg + ".urdf.xacro");

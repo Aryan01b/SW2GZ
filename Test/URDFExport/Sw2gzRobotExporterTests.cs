@@ -596,6 +596,38 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void Export_MeshRebasesAroundMatePoint_WhenHasMatePoint()
+        {
+            // Regression for the "pivot renders at the wrong point" bug:
+            // overriding only the joint <origin> position left the mesh
+            // un-baked around the link's raw pose, so mesh and joint frame
+            // pointed at two different places in space. FakeTess's first
+            // vertex is world (0,0,0); arm_link's own pose (FakePoses
+            // default) is identity at the world origin. Un-baked around a
+            // mate point at assembly (1,0,0), that vertex must read local
+            // (-1,0,0) — proof the mesh follows frameOrigin, not linkT.
+            var cfg = Cfg();
+            cfg.RobotJoints = new List<JointDef>
+            {
+                new JointDef { Name = "j1", ParentLink = "base_link", ChildLink = "arm_link", Type = UrdfJointType.Revolute, AxisX = 0, AxisY = 0, AxisZ = 1 },
+            };
+            cfg.RobotJoints[0].SetMatePoint(new Vector3(1, 0, 0));
+
+            Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir, Matrix3.Identity);
+
+            string daePath = Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "meshes", "arm_link.dae");
+            XNamespace ns = "http://www.collada.org/2005/11/COLLADASchema";
+            XDocument dae = XDocument.Load(daePath);
+            XElement posArray = dae.Descendants(ns + "float_array")
+                .Single(e => (string)e.Attribute("id") == "g0-pos-array");
+            double[] vals = posArray.Value.Split(' ')
+                .Select(s => double.Parse(s, CultureInfo.InvariantCulture)).ToArray();
+            Assert.Equal(-1.0, vals[0], 3);
+            Assert.Equal(0.0, vals[1], 3);
+            Assert.Equal(0.0, vals[2], 3);
+        }
+
+        [Fact]
         public void Export_NoMatePoint_OriginStaysLinkPoseDerived_AsBefore()
         {
             // Regression guard: a joint with no mate point must be totally
