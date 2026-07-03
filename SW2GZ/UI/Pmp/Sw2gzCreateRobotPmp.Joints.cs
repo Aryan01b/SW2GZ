@@ -42,6 +42,13 @@ namespace SW2GZ.UI.Pmp
         private static readonly UrdfJointType[] JointTypeOptions =
             { UrdfJointType.Fixed, UrdfJointType.Revolute, UrdfJointType.Continuous, UrdfJointType.Prismatic };
 
+        // Distinct from Sw2gzCreateRobotPmp.MeshSelectionMark (0x4C0) so a
+        // pivot-axis selection is never confused with a Links-step mesh
+        // selection — they don't coexist today (ShowStep clears between
+        // steps) but keeping separate marks costs nothing and avoids a
+        // future foot-gun if that ever changes.
+        private const int PivotAxisSelectionMark = 0x4C1;
+
         private PropertyManagerPageListbox _jointsList;
         private PropertyManagerPageTextbox _jointNameBox;
         private PropertyManagerPageCombobox _jointTypeCombo;
@@ -176,6 +183,131 @@ namespace SW2GZ.UI.Pmp
             _jointLimitLowerBox.Value = j.Type == UrdfJointType.Revolute ? RadToDeg(j.LimitLower ?? 0.0) : (j.LimitLower ?? 0.0);
             _jointLimitUpperBox.Value = j.Type == UrdfJointType.Revolute ? RadToDeg(j.LimitUpper ?? 0.0) : (j.LimitUpper ?? 0.0);
             UpdateJointFieldVisibility(j.Type);
+            HighlightJointPivotAxis(j);
+        }
+
+        // Highlights the selected joint's pivot axis as a yellow (pending
+        // suggestion) or neutral (confirmed) line in the SW viewport, reusing
+        // the same "only the active selection" pattern as HighlightLinkMesh.
+        // SPIKE (Task 5 of the mate-joint-suggestion plan): the design spec
+        // deliberately left the exact rendering mechanism open. Primary
+        // candidate implemented here: select SW's own system-generated
+        // Temporary Axis (the same entity toggled by View > Temporary Axes
+        // for any cylindrical/conical face) rather than creating new sketch
+        // geometry — closest in spirit to HighlightLinkMesh's plain-selection
+        // approach.
+        //
+        // UNCERTAIN — flag for the live tester:
+        //   1) Entity targeting: IModelDocExtension.SelectByID2's Name param
+        //      for a bare, feature-less temp axis is "" (there is no feature
+        //      name to give it — a temp axis is not a tree feature). With
+        //      Name == "", SW hit-tests the given (X,Y,Z) point against
+        //      entities of the requested Type and picks the nearest match —
+        //      this is the exact pattern this codebase's own legacy code
+        //      already uses for "" + "EXTSKETCHPOINT" (see
+        //      ExportHelperExtension.cs). j.MatePointX/Y/Z is the concentric
+        //      mate's cylinder-axis origin in the ASSEMBLY frame (see
+        //      SwMateJointResolver/MateJointClassification), which should sit
+        //      exactly ON the temp axis line SW would hit-test against — but
+        //      this has never been run live, so it's unverified whether
+        //      SelectByID2 actually resolves a TEMPAXIS this way (vs.
+        //      requiring the axis to be made visible first via
+        //      IModelDoc2.ViewTempAxes(true), or vs. needing a component-
+        //      qualified Name like "compName@asmName" the way component-
+        //      scoped face/edge selects sometimes do).
+        //   2) Selection-type string: "TEMPAXIS" (singular) is the string
+        //      SelectByID2 expects for this entity kind; swSelTEMPAXES is the
+        //      matching swSelectType_e enum member but SelectByID2's Type
+        //      parameter takes the STRING name (this codebase's existing
+        //      "AXIS"/"COORDSYS"/"SKETCH" SelectByID2 calls all use strings,
+        //      not the enum cast to int) — unverified against a real
+        //      TEMPAXIS pick in this SW version.
+        //   3) Coloring: this codebase has no existing "color a selection"
+        //      precedent anywhere (grepped SW2GZ/SwSurface, SW2GZ/UI,
+        //      URDFExport — none). A temp axis is a system-generated display
+        //      artifact, not a real body/face IEntity, so the usual
+        //      IEntity.SetMaterialPropertyValues2 per-entity coloring call
+        //      does not apply to it, and no confirmed per-selection color
+        //      setter for temp axes was found. Rather than fabricate an
+        //      unverified call, this implementation deliberately stops at
+        //      "select the temp axis" and relies on SW's default selection
+        //      highlight — still real visual feedback, just without the
+        //      yellow/neutral distinction until the live tester confirms a
+        //      working color call (see the method body for the full note).
+        //   4) If TEMPAXIS selection turns out not to render visibly at all
+        //      (e.g. temp axes are hidden by default and SelectByID2 can't
+        //      select a hidden entity), the documented fallback per the plan
+        //      is to fall back to a transient sketch line/point at
+        //      j.MatePointX/Y/Z instead of a temp-axis select — that is
+        //      explicitly NOT implemented here (out of scope for this spike
+        //      candidate) and would need a follow-up task if Step 2 fails.
+        private void HighlightJointPivotAxis(JointDef j)
+        {
+            try
+            {
+                _modelDoc.ClearSelection2(true);
+                if (j == null || j.Type == UrdfJointType.Fixed || !j.HasMatePoint) return;
+
+                LinkDef childLink = _liveDoc.Robot.Links.FirstOrDefault(l => l.Name == j.ChildLink);
+                string childPrimary = childLink?.ComponentIds?.FirstOrDefault();
+                if (string.IsNullOrEmpty(childPrimary)) return;
+
+                System.Drawing.Color lineColor = j.IsSuggested
+                    ? System.Drawing.Color.Yellow
+                    : System.Drawing.Color.FromArgb(180, 180, 180);
+
+                // Hit-test for the temp axis at the mate's cylinder-origin
+                // point — see uncertainty note (1)/(2) above. Mark reuses
+                // MeshSelectionMark's sibling range so this selection is
+                // distinguishable from the Links-step mesh selection if both
+                // ever needed to coexist (they don't today — ShowStep clears
+                // between steps — but keeps the mark namespace tidy).
+                bool selected = _modelDoc.Extension.SelectByID2(
+                    "", "TEMPAXIS",
+                    j.MatePointX, j.MatePointY, j.MatePointZ,
+                    false, PivotAxisSelectionMark, null, 0);
+
+                if (!selected)
+                {
+                    logger.Warn("HighlightJointPivotAxis: SelectByID2 could not resolve a TEMPAXIS " +
+                        "near (" + j.MatePointX + ", " + j.MatePointY + ", " + j.MatePointZ +
+                        ") for joint '" + j.Name + "' (child component '" + childPrimary + "') — " +
+                        "see Step 2 live-check notes.");
+                    return;
+                }
+
+                // See uncertainty note (3) above. A temporary axis is a
+                // system-generated display artifact, not a real body/face
+                // entity — it does NOT implement IEntity, so the usual
+                // IEntity.SetMaterialPropertyValues2 per-entity coloring call
+                // (the standard way to color a face/edge/body in SW COM)
+                // does not apply here. The one documented, targeted (i.e.
+                // not a global preference) coloring surface for an arbitrary
+                // *current selection* is ModelDocExtension.SelectByID2's own
+                // selection combined with IModelDoc2.Extension.
+                // SetSelectionColor... but no such per-selection color setter
+                // for temp axes is confirmed to exist in the interop version
+                // this project references (grepped this whole repo: no
+                // prior SetElementColor2/SetMaterialPropertyValues2/entity-
+                // color precedent anywhere to copy). Rather than fabricate a
+                // call that looks plausible but is unverified, this spike
+                // intentionally stops at "select the temp axis" (still gives
+                // real visual feedback via SW's default selection highlight)
+                // and leaves the yellow-vs-neutral color distinction for the
+                // live tester to confirm one way or the other — see Step 2.
+                // If SW does expose per-entity coloring for TEMPAXIS in this
+                // version (e.g. via IFeature-like GetDefinition/
+                // ModifyDefinition on the axis, or a Selection-object method
+                // not enumerated above), the live tester should report the
+                // working call so it can be wired in as a fast-follow.
+                logger.Info("HighlightJointPivotAxis: selected TEMPAXIS for joint '" + j.Name +
+                    "' (child component '" + childPrimary + "'); explicit " +
+                    (j.IsSuggested ? "yellow" : "neutral") +
+                    " coloring NOT applied — relying on SW's default selection highlight " +
+                    "pending live confirmation of a working per-entity color call (see Step 2).");
+                _ = lineColor; // computed for when a real color call is confirmed live; unused until then.
+            }
+            catch (Exception ex) { logger.Warn("HighlightJointPivotAxis failed", ex); }
         }
 
         private void ClearJointControls()

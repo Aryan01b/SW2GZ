@@ -535,6 +535,16 @@ namespace SW2GZ.UI.Pmp
                 catch (Exception ex) { logger.Warn("ShowStep ClearSelection2 on Links exit failed", ex); }
             }
 
+            // Same reasoning, Joints side: HighlightJointPivotAxis (see
+            // Sw2gzCreateRobotPmp.Joints.cs) selects the pending joint's
+            // pivot axis but never clears it — left alone, that selection
+            // would linger into Links/Review after navigating away.
+            if (_currentStep == StepJoints && step != StepJoints)
+            {
+                try { _modelDoc.ClearSelection2(true); }
+                catch (Exception ex) { logger.Warn("ShowStep ClearSelection2 on Joints exit failed", ex); }
+            }
+
             _currentStep = step;
             for (int i = 0; i < StepCount; i++)
             {
