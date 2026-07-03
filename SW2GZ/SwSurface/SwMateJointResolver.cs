@@ -61,13 +61,21 @@ namespace SW2GZ.SwSurface
         // values, matching LinkDef.ComponentIds[0]'s own convention. Returns
         // a not-found Result if the assembly has no mate spanning that pair,
         // or if _doc/_poses is null.
-        public MateJointClassification.Result Resolve(string parentComponentName, string childComponentName)
+        public MateJointClassification.Result Resolve(string parentComponentName, string childComponentName) =>
+            MateJointClassification.ChooseBest(ResolveAllCandidates(parentComponentName, childComponentName));
+
+        // Every real (Found) mate spanning this link pair, each tagged with
+        // its own MateName — lets the Joints step UI offer a picker when a
+        // link has more than one plausible pivot mate (e.g. two similar
+        // holes, only one of which is the actual hinge) instead of silently
+        // trusting whichever ChooseBest's tie-break happens to prefer.
+        public List<MateJointClassification.Result> ResolveAllCandidates(string parentComponentName, string childComponentName)
         {
+            var candidates = new List<MateJointClassification.Result>();
             if (_doc == null || _poses == null ||
                 string.IsNullOrEmpty(parentComponentName) || string.IsNullOrEmpty(childComponentName))
-                return new MateJointClassification.Result { Found = false };
+                return candidates;
 
-            var candidates = new List<MateJointClassification.Result>();
             var modelDoc = (IModelDoc2)_doc;
             Feature feat = (Feature)modelDoc.FirstFeature();
             try
@@ -98,7 +106,117 @@ namespace SW2GZ.SwSurface
             }
             finally { if (feat != null) Marshal.ReleaseComObject(feat); }
 
-            return MateJointClassification.ChooseBest(candidates);
+            return candidates;
+        }
+
+        // Re-finds a specific mate BY NAME (walks MateGroup sub-features
+        // same as ResolveAllCandidates, stopping at the first name match —
+        // this interop version has no confirmed IModelDoc2.FeatureByName)
+        // and selects the real entity it used for classification — parent-
+        // side preferred, same fallback order TryExtractCylinderLocal
+        // already uses. Replaces guessing a TEMPAXIS by point-proximity:
+        // this selects the exact entity the data came from, so what lights
+        // up in the viewport is provably what the suggestion used, not a
+        // nearby look-alike. Returns false if the mate/entities/geometry
+        // can't be re-resolved (mate renamed/deleted since the suggestion
+        // was made).
+        public bool SelectPivotFace(string mateName, string parentComponentName, string childComponentName)
+        {
+            if (_doc == null || string.IsNullOrEmpty(mateName)) return false;
+
+            Feature feat = FindMateFeatureByName(mateName);
+            if (feat == null) return false;
+
+            object specific = null;
+            Mate2 mate = null;
+            try
+            {
+                specific = feat.GetSpecificFeature2();
+                mate = specific as Mate2;
+                if (mate == null) return false;
+
+                int parentEntIdx = -1, childEntIdx = -1;
+                int n = mate.GetMateEntityCount();
+                for (int i = 0; i < n; i++)
+                {
+                    MateEntity2 ent = mate.MateEntity(i);
+                    if (ent == null) continue;
+                    try
+                    {
+                        Component2 comp = ent.ReferenceComponent;
+                        if (comp == null) continue;
+                        try
+                        {
+                            string name = TopLevelName(comp);
+                            if (parentEntIdx < 0 && name == parentComponentName) parentEntIdx = i;
+                            else if (childEntIdx < 0 && name == childComponentName) childEntIdx = i;
+                        }
+                        finally { Marshal.ReleaseComObject(comp); }
+                    }
+                    finally { Marshal.ReleaseComObject(ent); }
+                }
+
+                return TrySelectEntityFace(mate, parentEntIdx) || TrySelectEntityFace(mate, childEntIdx);
+            }
+            catch { return false; }
+            finally
+            {
+                if (mate != null) try { Marshal.ReleaseComObject(mate); } catch { }
+                else if (specific != null) try { Marshal.ReleaseComObject(specific); } catch { }
+                try { Marshal.ReleaseComObject(feat); } catch { }
+            }
+        }
+
+        private Feature FindMateFeatureByName(string mateName)
+        {
+            var modelDoc = (IModelDoc2)_doc;
+            Feature feat = (Feature)modelDoc.FirstFeature();
+            try
+            {
+                while (feat != null)
+                {
+                    if (feat.GetTypeName2() == "MateGroup")
+                    {
+                        Feature sub = (Feature)feat.GetFirstSubFeature();
+                        while (sub != null)
+                        {
+                            if (sub.Name == mateName)
+                            {
+                                Marshal.ReleaseComObject(feat); // sub returned to caller; feat itself is done
+                                return sub;
+                            }
+                            Feature nextSub = (Feature)sub.GetNextSubFeature();
+                            Marshal.ReleaseComObject(sub);
+                            sub = nextSub;
+                        }
+                    }
+                    Feature next = (Feature)feat.GetNextFeature();
+                    Marshal.ReleaseComObject(feat);
+                    feat = next;
+                }
+            }
+            catch { if (feat != null) try { Marshal.ReleaseComObject(feat); } catch { } }
+            return null;
+        }
+
+        private static bool TrySelectEntityFace(Mate2 mate, int entityIdx)
+        {
+            if (entityIdx < 0) return false;
+            MateEntity2 ent = mate.MateEntity(entityIdx);
+            if (ent == null) return false;
+
+            object refObj = null;
+            try
+            {
+                try { refObj = ent.Reference; } catch { refObj = null; }
+                return refObj is Entity ent2 && ent2.Select4(false, null);
+            }
+            catch { return false; }
+            finally
+            {
+                if (refObj != null) try { Marshal.ReleaseComObject(refObj); } catch { }
+                try { Marshal.ReleaseComObject(ent); } catch { }
+            }
         }
 
         private MateJointClassification.Result TryResolveMate(
@@ -191,6 +309,7 @@ namespace SW2GZ.SwSurface
 
                 MateJointClassification.Result result =
                     MateJointClassification.Classify(code, lower, upper, cylPair, planes);
+                result.MateName = feat.Name;
 
                 if (result.AxisAgreementDot.HasValue &&
                     (result.AxisAgreementDot.Value < AxisAgreementDotMin ||

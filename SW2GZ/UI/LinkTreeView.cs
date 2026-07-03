@@ -124,6 +124,12 @@ namespace SW2GZ.UI
                 if (n.Tag is LinkDef l && l.Name == name) { SelectedNode = n; return; }
         }
 
+        // Deselects the tree without touching the model — used when the SW
+        // viewport selection is cleared (e.g. the user clicked empty space)
+        // so the Links step doesn't look "stuck" showing whichever row was
+        // last clicked once its mesh is no longer actually selected.
+        public void ClearActiveSelection() => SelectedNode = null;
+
         // Update the SELECTED node's display label without rebuilding the tree.
         // Used by the rename textbox so each keystroke doesn't fire a Rebuild +
         // ActiveLinkChanged cascade that would reset the textbox cursor to 0.

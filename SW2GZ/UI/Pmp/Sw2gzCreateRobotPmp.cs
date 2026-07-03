@@ -635,6 +635,20 @@ namespace SW2GZ.UI.Pmp
         {
             if (Id != IdMeshPicker) return;
             try { AutoFillLinkName(); } catch (Exception e) { logger.Warn("AutoFillLinkName failed", e); }
+
+            // Clicking empty space in the viewport drops the marked
+            // selection to 0 — treat that as "start fresh": forget the
+            // tree's remembered active row and reset the info label so the
+            // Mesh box reads as empty/ready-for-a-new-pick, instead of
+            // still looking pinned to whichever link's row was last
+            // clicked (which stays highlighted otherwise, since the tree
+            // selection and the SW viewport selection are tracked
+            // separately).
+            if (Count == 0 && _currentStep == StepLinks)
+            {
+                try { _linkTree?.ClearActiveSelection(); RefreshSelectedInfo(null); }
+                catch (Exception e) { logger.Warn("Clearing Links step selection failed", e); }
+            }
         }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutCreated(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutDestroyed(int Id) { }

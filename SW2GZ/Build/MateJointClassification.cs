@@ -114,6 +114,11 @@ namespace SW2GZ.Build
             public double? LimitUpper;
             public double? AxisAgreementDot;
             public double? OriginPerpendicularDistance;
+            // Which SW mate produced this candidate — set by the impure
+            // caller (SwMateJointResolver), not by Classify itself (pure,
+            // has no mate identity to give). Lets the Joints step UI offer
+            // a picker when a link pair has more than one plausible mate.
+            public string MateName;
         }
 
         public static Result Classify(
