@@ -167,12 +167,12 @@ namespace SW2GZ.UI.Pmp
             _jointNameBox.Text = j.Name;
             int typeIdx = Array.IndexOf(JointTypeOptions, j.Type);
             _jointTypeCombo.CurrentSelection = (short)(typeIdx >= 0 ? typeIdx : 0);
-            _jointAxisXBox.Value = j.AxisX;
-            _jointAxisYBox.Value = j.AxisY;
+            _jointAxisXBox.Value = SnapNearZero(j.AxisX);
+            _jointAxisYBox.Value = SnapNearZero(j.AxisY);
             // !HasAxis means X/Y/Z are all still 0 (never set) — X/Y correctly stay 0,
             // only Z needs the (0,0,1) default substituted in, matching the same
             // default OnComboboxSelectionChanged applies when a joint first leaves Fixed.
-            _jointAxisZBox.Value = j.HasAxis ? j.AxisZ : 1.0;
+            _jointAxisZBox.Value = j.HasAxis ? SnapNearZero(j.AxisZ) : 1.0;
             _jointLimitLowerBox.Value = j.Type == UrdfJointType.Revolute ? RadToDeg(j.LimitLower ?? 0.0) : (j.LimitLower ?? 0.0);
             _jointLimitUpperBox.Value = j.Type == UrdfJointType.Revolute ? RadToDeg(j.LimitUpper ?? 0.0) : (j.LimitUpper ?? 0.0);
             UpdateJointFieldVisibility(j.Type);
@@ -241,6 +241,14 @@ namespace SW2GZ.UI.Pmp
 
         private static double DegToRad(double deg) => deg * System.Math.PI / 180.0;
         private static double RadToDeg(double rad) => rad * 180.0 / System.Math.PI;
+
+        // Mate-suggested axis components carry double-precision noise from
+        // real SW geometry (e.g. 1.39e-16 instead of exactly 0) — below the
+        // 6-decimal-place precision Sw2gzRobotExporter.Fmt() already rounds
+        // to on export, so the exported URDF is unaffected either way. This
+        // only cleans up the live panel display so a suggested axis reads
+        // as "1, 0, 0" instead of scientific-notation noise.
+        private static double SnapNearZero(double v) => System.Math.Abs(v) < 1e-6 ? 0.0 : v;
 
         private static UrdfJointType ComboIndexToType(int idx) =>
             JointTypeOptions[System.Math.Max(0, System.Math.Min(JointTypeOptions.Length - 1, idx))];
