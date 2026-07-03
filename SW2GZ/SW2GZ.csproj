@@ -377,6 +377,7 @@
     <Compile Include="Build\Model\LinkDef.cs" />
     <Compile Include="Build\LinkHierarchy.cs" />
     <Compile Include="Build\JointDefReconciler.cs" />
+    <Compile Include="Build\MateJointClassification.cs" />
     <Compile Include="UI\LinkTreeView.cs" />
     <Compile Include="URDFExport\ExportHelper.cs" />
     <Compile Include="URDFExport\ExportHelperExtension.cs" />
