@@ -50,6 +50,7 @@ namespace SW2GZ.UI.Pmp
         private readonly SldWorks _swApp;
         private readonly ModelDoc2 _modelDoc;
         private readonly Sw2gzDoc _liveDoc;
+        private readonly SwMateJointResolver _mateResolver;
         private readonly Sw2gzDoc _snapshot;
         private readonly Action<Sw2gzDoc> _onCommit;
         private readonly Action _onClosed;
@@ -129,6 +130,9 @@ namespace SW2GZ.UI.Pmp
             _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
             _modelDoc = modelDoc ?? throw new ArgumentNullException(nameof(modelDoc));
             _liveDoc = liveDoc ?? throw new ArgumentNullException(nameof(liveDoc));
+            _mateResolver = new SwMateJointResolver(
+                (AssemblyDoc)_modelDoc,
+                new SolidWorksComponentPoses((AssemblyDoc)_modelDoc));
             _onCommit = onCommit ?? (d => { });
             _onClosed = onClosed;
 

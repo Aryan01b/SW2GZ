@@ -10,9 +10,11 @@ type-panel-design.md.
 */
 #if SW_INTEROP
 using System;
+using System.Linq;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidWorks.Interop.swpublished;
+using SW2GZ.Build;
 using SW2GZ.Build.Model;
 using SW2GZ.Build.Urdf;
 
@@ -121,6 +123,29 @@ namespace SW2GZ.UI.Pmp
         private void RefreshJointsList()
         {
             if (_jointsList == null) return;
+            foreach (JointDef j in _liveDoc.Robot.Joints)
+            {
+                if (j.IsSuggested) continue;
+                LinkDef parentLink = _liveDoc.Robot.Links.FirstOrDefault(l => l.Name == j.ParentLink);
+                LinkDef childLink = _liveDoc.Robot.Links.FirstOrDefault(l => l.Name == j.ChildLink);
+                string parentPrimary = parentLink?.ComponentIds?.FirstOrDefault();
+                string childPrimary = childLink?.ComponentIds?.FirstOrDefault();
+                if (string.IsNullOrEmpty(parentPrimary) || string.IsNullOrEmpty(childPrimary)) continue;
+
+                MateJointClassification.Result suggestion;
+                try { suggestion = _mateResolver.Resolve(parentPrimary, childPrimary); }
+                catch (Exception ex) { logger.Warn("Mate suggestion failed for " + j.Name, ex); continue; }
+
+                if (!suggestion.Found || suggestion.Type == UrdfJointType.Fixed) continue;
+
+                j.Type = suggestion.Type;
+                j.SetAxis(suggestion.AxisAssembly);
+                if (suggestion.OriginAssembly.HasValue) j.SetMatePoint(suggestion.OriginAssembly.Value);
+                if (suggestion.LimitLower.HasValue) j.LimitLower = suggestion.LimitLower;
+                if (suggestion.LimitUpper.HasValue) j.LimitUpper = suggestion.LimitUpper;
+                j.IsSuggested = true;
+            }
+
             _jointsList.Clear();
             foreach (JointDef j in _liveDoc.Robot.Joints) _jointsList.AddItems(j.Name);
             if (_liveDoc.Robot.Joints.Count > 0)
@@ -192,6 +217,7 @@ namespace SW2GZ.UI.Pmp
         {
             if (_selectedJointIndex < 0 || _selectedJointIndex >= _liveDoc.Robot.Joints.Count) return;
             JointDef j = _liveDoc.Robot.Joints[_selectedJointIndex];
+            j.IsSuggested = true;
 
             string newName = (_jointNameBox?.Text ?? string.Empty).Trim();
             if (!string.IsNullOrEmpty(newName)) j.Name = newName;
