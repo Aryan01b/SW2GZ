@@ -18,8 +18,11 @@ click-handler reentrancy frame.
 
 Steps map to Sw2gzDoc.Robot:
     0 — Links    (pick mesh -> name -> parent -> Add; first Add = base_link;
-                  Joints rebuilt (Fixed) from each link's ParentName)
-    1 — Review   (counts; Next caption flips to "Finish")
+                  Joints re-synced (merge-preserve) from each link's
+                  ParentName via JointDefReconciler)
+    1 — Joints   (one row per non-root link; edit type/axis/limit for the
+                  selected row)
+    2 — Review   (counts; Next caption flips to "Finish")
 */
 #if SW_INTEROP
 using System;
@@ -53,9 +56,10 @@ namespace SW2GZ.UI.Pmp
         private readonly PropertyManagerPage2 _page;
 
         private const int StepLinks  = 0;
-        private const int StepReview = 1;
-        private static readonly string[] StepNames = { "Links", "Review" };
-        private const int StepCount = 2;
+        private const int StepJoints = 1;
+        private const int StepReview = 2;
+        private static readonly string[] StepNames = { "Links", "Joints", "Review" };
+        private const int StepCount = 3;
 
         private bool _okay;
         private int _currentStep = StepLinks;
@@ -76,14 +80,34 @@ namespace SW2GZ.UI.Pmp
         private const int IdLinksListLabel = 17;
         private const int IdLinksTree      = 18;
 
+        private const int IdJointsGroup        = 20;
+        private const int IdJointsDescr        = 21;
+        private const int IdJointsList         = 22;
+        private const int IdJointNameLabel     = 23;
+        private const int IdJointNameBox       = 24;
+        private const int IdJointTypeLabel     = 25;
+        private const int IdJointTypeCombo     = 26;
+        private const int IdJointAxisLabel     = 27;
+        private const int IdJointAxisXBox      = 28;
+        private const int IdJointAxisYBox      = 29;
+        private const int IdJointAxisZBox      = 30;
+        private const int IdJointLimitLabel    = 31;
+        private const int IdJointLimitLowerBox = 32;
+        private const int IdJointLimitUpperBox = 33;
+
         private const int MeshSelectionMark = 0x4C0;
         private const string LinkNamePlaceholder = "e.g. wheel_link";
 
-        private const int IdReviewGroup       = 20;
-        private const int IdReviewDescr       = 21;
-        private const int IdReviewLinksLabel  = 22;
-        private const int IdReviewBaseLabel   = 23;
-        private const int IdReviewJointsLabel = 24;
+        private static readonly string[] JointTypeLabels =
+            { "Fixed", "Revolute", "Continuous", "Prismatic" };
+        private static readonly UrdfJointType[] JointTypeOptions =
+            { UrdfJointType.Fixed, UrdfJointType.Revolute, UrdfJointType.Continuous, UrdfJointType.Prismatic };
+
+        private const int IdReviewGroup       = 40;
+        private const int IdReviewDescr       = 41;
+        private const int IdReviewLinksLabel  = 42;
+        private const int IdReviewBaseLabel   = 43;
+        private const int IdReviewJointsLabel = 44;
 
         private PropertyManagerPageGroup[] _stepGroups;
 
@@ -108,6 +132,19 @@ namespace SW2GZ.UI.Pmp
         private PropertyManagerPageLabel _reviewLinksLabel;
         private PropertyManagerPageLabel _reviewBaseLabel;
         private PropertyManagerPageLabel _reviewJointsLabel;
+
+        private PropertyManagerPageListbox _jointsList;
+        private PropertyManagerPageTextbox _jointNameBox;
+        private PropertyManagerPageCombobox _jointTypeCombo;
+        private PropertyManagerPageLabel _jointAxisLabel;
+        private PropertyManagerPageNumberbox _jointAxisXBox;
+        private PropertyManagerPageNumberbox _jointAxisYBox;
+        private PropertyManagerPageNumberbox _jointAxisZBox;
+        private PropertyManagerPageLabel _jointLimitLabel;
+        private PropertyManagerPageNumberbox _jointLimitLowerBox;
+        private PropertyManagerPageNumberbox _jointLimitUpperBox;
+
+        private int _selectedJointIndex = -1;
 
         // WinForms tree (Links step) — drag-to-reparent hierarchy, embedded
         // via WindowFromHandle like the nav/action bars. Reuses the pure
@@ -197,6 +234,7 @@ namespace SW2GZ.UI.Pmp
 
             _stepGroups = new PropertyManagerPageGroup[StepCount];
             _stepGroups[StepLinks]  = BuildLinksGroup(grpOptions, leftEdge, visibleEnabled);
+            _stepGroups[StepJoints] = BuildJointsGroup(grpOptions, leftEdge, visibleEnabled);
             _stepGroups[StepReview] = BuildReviewGroup(grpOptions, leftEdge, visibleEnabled);
         }
 
@@ -293,6 +331,71 @@ namespace SW2GZ.UI.Pmp
             _treeHandle.SetWindowHandlex64(_linkTree.Handle.ToInt64());
 
             return grp;
+        }
+
+        private PropertyManagerPageGroup BuildJointsGroup(int grpOptions, int leftEdge, int visibleEnabled)
+        {
+            var grp = (PropertyManagerPageGroup)_page.AddGroupBox(IdJointsGroup, "Joints", grpOptions);
+            grp.AddControl2(IdJointsDescr,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                "One joint per non-root link. Click a joint to edit its type, axis, and limits.",
+                (short)leftEdge, visibleEnabled, "");
+
+            _jointsList = (PropertyManagerPageListbox)grp.AddControl2(
+                IdJointsList,
+                (short)swPropertyManagerPageControlType_e.swControlType_Listbox,
+                "Joints", (short)leftEdge, visibleEnabled, "Current robot joints");
+            ((IPropertyManagerPageListbox)_jointsList).Height = 90;
+
+            AddFieldLabel(grp, IdJointNameLabel, "Joint name", leftEdge, visibleEnabled);
+            _jointNameBox = (PropertyManagerPageTextbox)grp.AddControl2(
+                IdJointNameBox,
+                (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
+                "", (short)leftEdge, visibleEnabled, "Renamable; defaults to parent_to_child");
+
+            AddFieldLabel(grp, IdJointTypeLabel, "Type", leftEdge, visibleEnabled);
+            _jointTypeCombo = (PropertyManagerPageCombobox)grp.AddControl2(
+                IdJointTypeCombo,
+                (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
+                "", (short)leftEdge, visibleEnabled, "Joint type");
+            _jointTypeCombo.Height = 14;
+            _jointTypeCombo.Style = (int)swPropMgrPageComboBoxStyle_e.swPropMgrPageComboBoxStyle_EditBoxReadOnly;
+            foreach (string label in JointTypeLabels) _jointTypeCombo.AddItems(label);
+
+            _jointAxisLabel = (PropertyManagerPageLabel)grp.AddControl2(
+                IdJointAxisLabel,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                "Axis (assembly frame X/Y/Z)", (short)leftEdge, visibleEnabled, "");
+            _jointAxisXBox = NewAxisBox(grp, IdJointAxisXBox, leftEdge, visibleEnabled);
+            _jointAxisYBox = NewAxisBox(grp, IdJointAxisYBox, leftEdge, visibleEnabled);
+            _jointAxisZBox = NewAxisBox(grp, IdJointAxisZBox, leftEdge, visibleEnabled);
+
+            _jointLimitLabel = (PropertyManagerPageLabel)grp.AddControl2(
+                IdJointLimitLabel,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                "", (short)leftEdge, visibleEnabled, "");
+            _jointLimitLowerBox = (PropertyManagerPageNumberbox)grp.AddControl2(
+                IdJointLimitLowerBox,
+                (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
+                "Lower", (short)leftEdge, visibleEnabled, "Lower motion limit");
+            _jointLimitUpperBox = (PropertyManagerPageNumberbox)grp.AddControl2(
+                IdJointLimitUpperBox,
+                (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
+                "Upper", (short)leftEdge, visibleEnabled, "Upper motion limit");
+
+            RefreshJointsList();
+            return grp;
+        }
+
+        private static PropertyManagerPageNumberbox NewAxisBox(
+            PropertyManagerPageGroup grp, int id, int leftEdge, int visibleEnabled)
+        {
+            var box = (PropertyManagerPageNumberbox)grp.AddControl2(
+                id, (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
+                "", (short)leftEdge, visibleEnabled, "Axis component");
+            box.SetRange2((int)swNumberboxUnitType_e.swNumberBox_UnitlessDouble,
+                -1.0, 1.0, true, 0.0, 0.05, 0.05);
+            return box;
         }
 
         private static void AddFieldLabel(PropertyManagerPageGroup grp, int id, string text, int leftEdge, int visibleEnabled)
@@ -493,6 +596,22 @@ namespace SW2GZ.UI.Pmp
             _liveDoc.Robot.Joints = JointDefReconciler.Reconcile(_liveDoc.Robot.Joints, _liveDoc.Robot.Links);
         }
 
+        private void RefreshJointsList()
+        {
+            if (_jointsList == null) return;
+            _jointsList.Clear();
+            foreach (JointDef j in _liveDoc.Robot.Joints) _jointsList.AddItems(j.Name);
+            if (_liveDoc.Robot.Joints.Count > 0)
+            {
+                _jointsList.CurrentSelection = 0;
+                _selectedJointIndex = 0;
+            }
+            else
+            {
+                _selectedJointIndex = -1;
+            }
+        }
+
         private void RefreshReviewLabels()
         {
             if (_reviewLinksLabel != null)
@@ -501,7 +620,7 @@ namespace SW2GZ.UI.Pmp
                 _reviewBaseLabel.Caption = "Base link: " +
                     (_liveDoc.Robot.Links.Count > 0 ? _liveDoc.Robot.Links[0].Name : "(none)");
             if (_reviewJointsLabel != null)
-                _reviewJointsLabel.Caption = "Joints (fixed): " + _liveDoc.Robot.Joints.Count;
+                _reviewJointsLabel.Caption = "Joints: " + _liveDoc.Robot.Joints.Count;
         }
 
         // ─── Navigation ──────────────────────────────────────────────────────
@@ -529,6 +648,7 @@ namespace SW2GZ.UI.Pmp
             }
             catch (Exception ex) { logger.Error("Robot ShowStep next threw", ex); }
 
+            if (_currentStep == StepJoints) RefreshJointsList();
             if (_currentStep == StepReview) RefreshReviewLabels();
         }
 
