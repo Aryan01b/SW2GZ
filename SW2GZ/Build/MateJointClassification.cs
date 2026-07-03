@@ -26,7 +26,10 @@ Axis + pivot geometry, once local geometry is transformed into assembly
 frame via Matrix3.Mul (rotation) / Matrix3.Mul + translation (points) —
 NEVER via raw Transform2.ArrayData reads, see the plan's "Why not reuse
 AutoJointResolver.cs verbatim" section:
-  Concentric → cylinder axis direction + a point on that axis.
+  Concentric → cylinder axis direction + a point on that axis, preferring
+               the parent-side face's own geometry when both mated faces
+               are extractable cylinders (falls back to the child side
+               only if the parent's entity isn't a real cylindrical face).
   Angle      → cross product of the two mated planes' normals; origin =
                parent plane's point (the actual hinge sits on the shared
                edge between the two faces — the parent point is a fair
@@ -40,6 +43,17 @@ A movable classification (Continuous/Revolute/Prismatic) with no
 extractable geometry (e.g. a Concentric mate whose face somehow wasn't a
 real cylinder) demotes to Fixed rather than emit a zero-axis joint — same
 defensive rule the pre-gut AutoJointResolver used.
+
+Concentric agreement check: a satisfied Concentric mate forces both mated
+cylinders' axes onto the exact same 3D line — that's what the constraint
+solve guarantees. When both sides are extractable, Result.AxisAgreementDot
+(~1.0 = parallel) and Result.OriginPerpendicularDistance (~0 = coincident
+lines) record how well the two independently-transformed cylinders actually
+agree. This never changes which axis/origin gets used (still parent-
+preferred, unchanged) — it's a diagnostic the impure caller
+(SwMateJointResolver, which owns a logger) uses to flag a real bug (wrong
+entity/pose) instead of silently trusting one side. Both fields are null
+when only one side extracted a real cylinder — nothing to compare.
 */
 using System.Collections.Generic;
 using System.Numerics;
@@ -70,6 +84,26 @@ namespace SW2GZ.Build
             }
         }
 
+        public sealed class CylinderPair
+        {
+            public Vector3? ParentOriginLocal, ParentAxisLocal;
+            public Matrix3 ParentRotation;
+            public Vector3 ParentTranslation;
+            public Vector3? ChildOriginLocal, ChildAxisLocal;
+            public Matrix3 ChildRotation;
+            public Vector3 ChildTranslation;
+
+            public CylinderPair(
+                Vector3? parentOriginLocal, Vector3? parentAxisLocal, Matrix3 parentRotation, Vector3 parentTranslation,
+                Vector3? childOriginLocal, Vector3? childAxisLocal, Matrix3 childRotation, Vector3 childTranslation)
+            {
+                ParentOriginLocal = parentOriginLocal; ParentAxisLocal = parentAxisLocal;
+                ParentRotation = parentRotation; ParentTranslation = parentTranslation;
+                ChildOriginLocal = childOriginLocal; ChildAxisLocal = childAxisLocal;
+                ChildRotation = childRotation; ChildTranslation = childTranslation;
+            }
+        }
+
         public sealed class Result
         {
             public bool Found;
@@ -78,13 +112,14 @@ namespace SW2GZ.Build
             public Vector3? OriginAssembly;
             public double? LimitLower;
             public double? LimitUpper;
+            public double? AxisAgreementDot;
+            public double? OriginPerpendicularDistance;
         }
 
         public static Result Classify(
             SwMateTypeCode mateType,
             double? limitLower, double? limitUpper,
-            Vector3? cylinderLocalOrigin, Vector3? cylinderLocalAxis,
-            Matrix3 cylinderComponentRotation, Vector3 cylinderComponentTranslation,
+            CylinderPair cylinderGeometry,
             PlanePair planeGeometry)
         {
             bool hasLimit = (limitLower.HasValue && System.Math.Abs(limitLower.Value) > 1e-9)
@@ -102,12 +137,44 @@ namespace SW2GZ.Build
             Vector3 axis = Vector3.Zero;
             Vector3? origin = null;
             bool geometryOk = false;
+            double? axisAgreementDot = null;
+            double? originPerpendicularDistance = null;
 
-            if (mateType == SwMateTypeCode.Concentric && cylinderLocalOrigin.HasValue && cylinderLocalAxis.HasValue)
+            if (mateType == SwMateTypeCode.Concentric && cylinderGeometry != null)
             {
-                axis = NormalizeOrZero(cylinderComponentRotation.Mul(cylinderLocalAxis.Value));
-                origin = cylinderComponentRotation.Mul(cylinderLocalOrigin.Value) + cylinderComponentTranslation;
-                geometryOk = axis != Vector3.Zero;
+                Vector3? parentAxisAsm = null, parentOriginAsm = null;
+                if (cylinderGeometry.ParentOriginLocal.HasValue && cylinderGeometry.ParentAxisLocal.HasValue)
+                {
+                    Vector3 a = NormalizeOrZero(cylinderGeometry.ParentRotation.Mul(cylinderGeometry.ParentAxisLocal.Value));
+                    if (a != Vector3.Zero)
+                    {
+                        parentAxisAsm = a;
+                        parentOriginAsm = cylinderGeometry.ParentRotation.Mul(cylinderGeometry.ParentOriginLocal.Value) + cylinderGeometry.ParentTranslation;
+                    }
+                }
+
+                Vector3? childAxisAsm = null, childOriginAsm = null;
+                if (cylinderGeometry.ChildOriginLocal.HasValue && cylinderGeometry.ChildAxisLocal.HasValue)
+                {
+                    Vector3 a = NormalizeOrZero(cylinderGeometry.ChildRotation.Mul(cylinderGeometry.ChildAxisLocal.Value));
+                    if (a != Vector3.Zero)
+                    {
+                        childAxisAsm = a;
+                        childOriginAsm = cylinderGeometry.ChildRotation.Mul(cylinderGeometry.ChildOriginLocal.Value) + cylinderGeometry.ChildTranslation;
+                    }
+                }
+
+                if (parentAxisAsm.HasValue) { axis = parentAxisAsm.Value; origin = parentOriginAsm; geometryOk = true; }
+                else if (childAxisAsm.HasValue) { axis = childAxisAsm.Value; origin = childOriginAsm; geometryOk = true; }
+
+                if (parentAxisAsm.HasValue && childAxisAsm.HasValue)
+                {
+                    axisAgreementDot = System.Math.Abs(Vector3.Dot(parentAxisAsm.Value, childAxisAsm.Value));
+                    Vector3 toChild = childOriginAsm.Value - parentOriginAsm.Value;
+                    double along = Vector3.Dot(toChild, parentAxisAsm.Value);
+                    double perpSq = System.Math.Max(0.0, toChild.LengthSquared() - along * along);
+                    originPerpendicularDistance = System.Math.Sqrt(perpSq);
+                }
             }
             else if (mateType == SwMateTypeCode.Angle && planeGeometry != null)
             {
@@ -146,6 +213,8 @@ namespace SW2GZ.Build
                 OriginAssembly = geometryOk ? origin : null,
                 LimitLower = hasLimit ? limitLower : null,
                 LimitUpper = hasLimit ? limitUpper : null,
+                AxisAgreementDot = axisAgreementDot,
+                OriginPerpendicularDistance = originPerpendicularDistance,
             };
         }
 

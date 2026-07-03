@@ -14,6 +14,14 @@ sw-mathtransform-column-major). Every local-to-assembly-frame transform here
 goes through IComponentPoses.GetPose (already column-major-correct, the
 same interface Sw2gzRobotExporter already depends on) and Matrix3.Mul — see
 the plan's "Why not reuse AutoJointResolver.cs verbatim" section.
+
+For a Concentric mate, extracts BOTH mated faces' cylinder geometry (not
+just parent-with-child-fallback) and lets MateJointClassification's
+agreement check compare them — a satisfied Concentric mate geometrically
+forces both cylinders onto the same line, so a real disagreement here means
+a bug (wrong entity/pose), not noise. When Classify reports the two sides
+disagree beyond tolerance, this class is the one that owns a logger and
+decides to warn — the pure classifier only reports the numbers.
 */
 #if SW_INTEROP
 using System.Collections.Generic;
@@ -29,6 +37,16 @@ namespace SW2GZ.SwSurface
 {
     public sealed class SwMateJointResolver
     {
+        // ~2.5deg — a satisfied Concentric mate's two cylinder axes should
+        // be parallel to within SW's own solve tolerance, far tighter than
+        // this; anything past it means the two sides genuinely disagree.
+        private const double AxisAgreementDotMin = 0.999;
+        // 1mm — same reasoning for how far the origins sit off each
+        // other's axis line.
+        private const double OriginPerpendicularDistanceMaxMeters = 0.001;
+
+        private static readonly log4net.ILog logger = SW2GZ.Utilities.Logger.GetLogger();
+
         private readonly AssemblyDoc _doc;
         private readonly IComponentPoses _poses;
 
@@ -135,21 +153,22 @@ namespace SW2GZ.SwSurface
                     _ => SwMateTypeCode.Other,
                 };
 
-                Vector3? cylOrigin = null, cylAxis = null;
-                Matrix3 cylRot = Matrix3.Identity;
-                Vector3 cylTrans = Vector3.Zero;
+                MateJointClassification.CylinderPair cylPair = null;
                 MateJointClassification.PlanePair planes = null;
 
                 if (code == SwMateTypeCode.Concentric)
                 {
-                    var cyl = TryExtractCylinderLocal(mate, parentEntIdx, parentName)
-                              ?? TryExtractCylinderLocal(mate, childEntIdx, childName);
-                    if (cyl.HasValue)
+                    var parentCyl = TryExtractCylinderLocal(mate, parentEntIdx, parentName);
+                    var childCyl = TryExtractCylinderLocal(mate, childEntIdx, childName);
+                    if (parentCyl.HasValue || childCyl.HasValue)
                     {
-                        cylOrigin = cyl.Value.origin;
-                        cylAxis = cyl.Value.axis;
-                        cylRot = cyl.Value.rotation;
-                        cylTrans = cyl.Value.translation;
+                        cylPair = new MateJointClassification.CylinderPair(
+                            parentOriginLocal: parentCyl?.origin, parentAxisLocal: parentCyl?.axis,
+                            parentRotation: parentCyl?.rotation ?? Matrix3.Identity,
+                            parentTranslation: parentCyl?.translation ?? Vector3.Zero,
+                            childOriginLocal: childCyl?.origin, childAxisLocal: childCyl?.axis,
+                            childRotation: childCyl?.rotation ?? Matrix3.Identity,
+                            childTranslation: childCyl?.translation ?? Vector3.Zero);
                     }
                 }
                 else if (code == SwMateTypeCode.Angle || code == SwMateTypeCode.Distance)
@@ -170,8 +189,21 @@ namespace SW2GZ.SwSurface
                     }
                 }
 
-                return MateJointClassification.Classify(
-                    code, lower, upper, cylOrigin, cylAxis, cylRot, cylTrans, planes);
+                MateJointClassification.Result result =
+                    MateJointClassification.Classify(code, lower, upper, cylPair, planes);
+
+                if (result.AxisAgreementDot.HasValue &&
+                    (result.AxisAgreementDot.Value < AxisAgreementDotMin ||
+                     result.OriginPerpendicularDistance.GetValueOrDefault() > OriginPerpendicularDistanceMaxMeters))
+                {
+                    logger.Warn("Mate '" + feat.Name + "' (" + parentName + " <-> " + childName +
+                        "): parent/child cylinder geometry disagree (axis dot=" +
+                        result.AxisAgreementDot.Value.ToString("F6") + ", perp dist=" +
+                        result.OriginPerpendicularDistance.GetValueOrDefault().ToString("F6") +
+                        "m) — suggested pivot may be inaccurate; consider a manual override.");
+                }
+
+                return result;
             }
             finally { Marshal.ReleaseComObject(mate); }
         }

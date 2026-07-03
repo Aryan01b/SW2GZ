@@ -16,16 +16,25 @@ namespace SW2GZ.Writers.Tests
         // (RotZ helper produces [[0,-1,0],[1,0,0],[0,0,1]]).
         private static Matrix3 RotZ90() => new Matrix3(0, -1, 0, 1, 0, 0, 0, 0, 1);
 
+        // Only ParentOriginLocal/ParentAxisLocal set (ChildOriginLocal/
+        // ChildAxisLocal null) — matches a mate where only one side's face
+        // was extractable, same as most existing tests exercised before
+        // the dual-cylinder agreement check was added.
+        private static MateJointClassification.CylinderPair ParentOnly(
+            Vector3 originLocal, Vector3 axisLocal, Matrix3 rotation, Vector3 translation) =>
+            new MateJointClassification.CylinderPair(
+                parentOriginLocal: originLocal, parentAxisLocal: axisLocal,
+                parentRotation: rotation, parentTranslation: translation,
+                childOriginLocal: null, childAxisLocal: null,
+                childRotation: Matrix3.Identity, childTranslation: Vector3.Zero);
+
         [Fact]
         public void Classify_ConcentricNoLimit_IsContinuous()
         {
             var result = MateJointClassification.Classify(
                 mateType: SwMateTypeCode.Concentric,
                 limitLower: null, limitUpper: null,
-                cylinderLocalOrigin: new Vector3(0, 0, 0),
-                cylinderLocalAxis: new Vector3(0, 0, 1),
-                cylinderComponentRotation: Matrix3.Identity,
-                cylinderComponentTranslation: Vector3.Zero,
+                cylinderGeometry: ParentOnly(new Vector3(0, 0, 0), new Vector3(0, 0, 1), Matrix3.Identity, Vector3.Zero),
                 planeGeometry: null);
 
             Assert.True(result.Found);
@@ -41,10 +50,7 @@ namespace SW2GZ.Writers.Tests
             var result = MateJointClassification.Classify(
                 mateType: SwMateTypeCode.Concentric,
                 limitLower: -1.2, limitUpper: 0.5,
-                cylinderLocalOrigin: new Vector3(0, 0, 0),
-                cylinderLocalAxis: new Vector3(0, 0, 1),
-                cylinderComponentRotation: Matrix3.Identity,
-                cylinderComponentTranslation: Vector3.Zero,
+                cylinderGeometry: ParentOnly(new Vector3(0, 0, 0), new Vector3(0, 0, 1), Matrix3.Identity, Vector3.Zero),
                 planeGeometry: null);
 
             Assert.Equal(UrdfJointType.Revolute, result.Type);
@@ -62,10 +68,7 @@ namespace SW2GZ.Writers.Tests
             var result = MateJointClassification.Classify(
                 mateType: SwMateTypeCode.Concentric,
                 limitLower: null, limitUpper: null,
-                cylinderLocalOrigin: new Vector3(1, 0, 0),
-                cylinderLocalAxis: new Vector3(1, 0, 0),
-                cylinderComponentRotation: RotZ90(),
-                cylinderComponentTranslation: new Vector3(5, 0, 0),
+                cylinderGeometry: ParentOnly(new Vector3(1, 0, 0), new Vector3(1, 0, 0), RotZ90(), new Vector3(5, 0, 0)),
                 planeGeometry: null);
 
             Assert.Equal(0.0, result.AxisAssembly.X, 3);
@@ -75,6 +78,63 @@ namespace SW2GZ.Writers.Tests
             Assert.Equal(5.0, result.OriginAssembly.Value.X, 3);
             Assert.Equal(1.0, result.OriginAssembly.Value.Y, 3);
             Assert.Equal(0.0, result.OriginAssembly.Value.Z, 3);
+        }
+
+        [Fact]
+        public void Classify_BothCylindersAgree_ReportsHighAgreementDot_AndZeroPerpDistance()
+        {
+            // Parent and child cylinders both describe the exact same
+            // assembly-frame line — axis +Z through (0,0,0) — same as a
+            // genuinely satisfied Concentric mate. Different local points
+            // along the same line (0,0,0) vs (0,0,5) confirm the check
+            // tolerates "different point, same line", not just identical
+            // numbers.
+            var pair = new MateJointClassification.CylinderPair(
+                parentOriginLocal: new Vector3(0, 0, 0), parentAxisLocal: new Vector3(0, 0, 1),
+                parentRotation: Matrix3.Identity, parentTranslation: Vector3.Zero,
+                childOriginLocal: new Vector3(0, 0, 5), childAxisLocal: new Vector3(0, 0, 1),
+                childRotation: Matrix3.Identity, childTranslation: Vector3.Zero);
+
+            var result = MateJointClassification.Classify(
+                SwMateTypeCode.Concentric, null, null, pair, null);
+
+            Assert.True(result.AxisAgreementDot.HasValue);
+            Assert.Equal(1.0, result.AxisAgreementDot.Value, 4);
+            Assert.True(result.OriginPerpendicularDistance.HasValue);
+            Assert.Equal(0.0, result.OriginPerpendicularDistance.Value, 4);
+        }
+
+        [Fact]
+        public void Classify_CylindersDisagree_ReportsLowAgreementDot_AndNonZeroPerpDistance()
+        {
+            // Child's axis/origin describe a PARALLEL but offset line
+            // (shifted +1 in X) — exactly the bug this check exists to
+            // catch: a real Concentric mate can never produce this, so a
+            // caller sees a non-zero perpendicular distance here as a
+            // signal something upstream (wrong entity/pose) is broken.
+            var pair = new MateJointClassification.CylinderPair(
+                parentOriginLocal: new Vector3(0, 0, 0), parentAxisLocal: new Vector3(0, 0, 1),
+                parentRotation: Matrix3.Identity, parentTranslation: Vector3.Zero,
+                childOriginLocal: new Vector3(1, 0, 0), childAxisLocal: new Vector3(0, 0, 1),
+                childRotation: Matrix3.Identity, childTranslation: Vector3.Zero);
+
+            var result = MateJointClassification.Classify(
+                SwMateTypeCode.Concentric, null, null, pair, null);
+
+            Assert.Equal(1.0, result.AxisAgreementDot.Value, 4);
+            Assert.Equal(1.0, result.OriginPerpendicularDistance.Value, 4);
+        }
+
+        [Fact]
+        public void Classify_OnlyOneCylinderSide_AgreementFieldsStayNull()
+        {
+            var result = MateJointClassification.Classify(
+                SwMateTypeCode.Concentric, null, null,
+                ParentOnly(new Vector3(0, 0, 0), new Vector3(0, 0, 1), Matrix3.Identity, Vector3.Zero),
+                null);
+
+            Assert.False(result.AxisAgreementDot.HasValue);
+            Assert.False(result.OriginPerpendicularDistance.HasValue);
         }
 
         [Fact]
@@ -97,8 +157,7 @@ namespace SW2GZ.Writers.Tests
             var result = MateJointClassification.Classify(
                 mateType: SwMateTypeCode.Angle,
                 limitLower: -0.3, limitUpper: 0.3,
-                cylinderLocalOrigin: null, cylinderLocalAxis: null,
-                cylinderComponentRotation: Matrix3.Identity, cylinderComponentTranslation: Vector3.Zero,
+                cylinderGeometry: null,
                 planeGeometry: planes);
 
             Assert.Equal(UrdfJointType.Revolute, result.Type);
@@ -123,8 +182,7 @@ namespace SW2GZ.Writers.Tests
             var result = MateJointClassification.Classify(
                 mateType: SwMateTypeCode.Distance,
                 limitLower: -0.1, limitUpper: 0.1,
-                cylinderLocalOrigin: null, cylinderLocalAxis: null,
-                cylinderComponentRotation: Matrix3.Identity, cylinderComponentTranslation: Vector3.Zero,
+                cylinderGeometry: null,
                 planeGeometry: planes);
 
             Assert.Equal(UrdfJointType.Prismatic, result.Type);
@@ -144,8 +202,7 @@ namespace SW2GZ.Writers.Tests
             var result = MateJointClassification.Classify(
                 mateType: SwMateTypeCode.Concentric,
                 limitLower: null, limitUpper: null,
-                cylinderLocalOrigin: null, cylinderLocalAxis: null,
-                cylinderComponentRotation: Matrix3.Identity, cylinderComponentTranslation: Vector3.Zero,
+                cylinderGeometry: null,
                 planeGeometry: null);
 
             Assert.Equal(UrdfJointType.Fixed, result.Type);
@@ -158,8 +215,7 @@ namespace SW2GZ.Writers.Tests
             var result = MateJointClassification.Classify(
                 mateType: SwMateTypeCode.Angle,
                 limitLower: -0.3, limitUpper: 0.3,
-                cylinderLocalOrigin: null, cylinderLocalAxis: null,
-                cylinderComponentRotation: Matrix3.Identity, cylinderComponentTranslation: Vector3.Zero,
+                cylinderGeometry: null,
                 planeGeometry: null);
 
             Assert.Equal(UrdfJointType.Fixed, result.Type);
@@ -172,8 +228,7 @@ namespace SW2GZ.Writers.Tests
             var result = MateJointClassification.Classify(
                 mateType: SwMateTypeCode.Distance,
                 limitLower: -0.1, limitUpper: 0.1,
-                cylinderLocalOrigin: null, cylinderLocalAxis: null,
-                cylinderComponentRotation: Matrix3.Identity, cylinderComponentTranslation: Vector3.Zero,
+                cylinderGeometry: null,
                 planeGeometry: null);
 
             Assert.Equal(UrdfJointType.Fixed, result.Type);
@@ -186,8 +241,7 @@ namespace SW2GZ.Writers.Tests
             var result = MateJointClassification.Classify(
                 mateType: SwMateTypeCode.Lock,
                 limitLower: null, limitUpper: null,
-                cylinderLocalOrigin: null, cylinderLocalAxis: null,
-                cylinderComponentRotation: Matrix3.Identity, cylinderComponentTranslation: Vector3.Zero,
+                cylinderGeometry: null,
                 planeGeometry: null);
 
             Assert.Equal(UrdfJointType.Fixed, result.Type);
@@ -198,10 +252,10 @@ namespace SW2GZ.Writers.Tests
         {
             var continuous = MateJointClassification.Classify(
                 SwMateTypeCode.Concentric, null, null,
-                new Vector3(0, 0, 0), new Vector3(0, 0, 1), Matrix3.Identity, Vector3.Zero, null);
+                ParentOnly(new Vector3(0, 0, 0), new Vector3(0, 0, 1), Matrix3.Identity, Vector3.Zero), null);
             var revolute = MateJointClassification.Classify(
                 SwMateTypeCode.Concentric, -1.0, 1.0,
-                new Vector3(0, 0, 0), new Vector3(0, 0, 1), Matrix3.Identity, Vector3.Zero, null);
+                ParentOnly(new Vector3(0, 0, 0), new Vector3(0, 0, 1), Matrix3.Identity, Vector3.Zero), null);
 
             var chosen = MateJointClassification.ChooseBest(new[] { continuous, revolute });
 
