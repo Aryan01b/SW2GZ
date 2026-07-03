@@ -482,25 +482,15 @@ namespace SW2GZ.UI.Pmp
             return string.Join(", ", parts);
         }
 
-        // Joints are pure derived state: one Fixed joint per non-root link,
-        // straight off the ParentName the user picked at Add time. Re-run
-        // after every list mutation so Links/Joints never drift out of sync.
-        // Joint TYPE stays hardcoded Fixed in this cut (mate-driven detection
-        // was attempted and reverted — see memory `robot-mode-dev`).
+        // Joints stay 1:1 with the link tree (one per non-root link), but
+        // MERGE-preserve instead of clear-and-rebuild — a link add/remove/
+        // reparent elsewhere must not wipe out Type/Axis/Limit edits the
+        // user already made on a joint whose (parent, child) pair is
+        // unaffected. See JointDefReconciler and
+        // docs/superpowers/specs/2026-07-03-robot-joint-type-panel-design.md.
         private void RebuildJoints()
         {
-            _liveDoc.Robot.Joints.Clear();
-            foreach (LinkDef link in _liveDoc.Robot.Links)
-            {
-                if (string.IsNullOrEmpty(link.ParentName)) continue;
-                _liveDoc.Robot.Joints.Add(new JointDef
-                {
-                    Name = link.ParentName + "_to_" + link.Name,
-                    ParentLink = link.ParentName,
-                    ChildLink = link.Name,
-                    Type = UrdfJointType.Fixed,
-                });
-            }
+            _liveDoc.Robot.Joints = JointDefReconciler.Reconcile(_liveDoc.Robot.Joints, _liveDoc.Robot.Links);
         }
 
         private void RefreshReviewLabels()
