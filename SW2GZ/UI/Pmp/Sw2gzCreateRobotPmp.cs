@@ -521,6 +521,16 @@ namespace SW2GZ.UI.Pmp
 
             if (_currentStep == StepJoints && step != StepJoints) CommitSelectedJointFromControls();
 
+            // HighlightLinkMesh (tree click) selects a link's mesh in the
+            // viewport but never clears it — left alone, that selection
+            // persists into Joints/Review, which reads as "SW is still
+            // reacting to the Links step" even after navigating away.
+            if (_currentStep == StepLinks && step != StepLinks)
+            {
+                try { _modelDoc.ClearSelection2(true); }
+                catch (Exception ex) { logger.Warn("ShowStep ClearSelection2 on Links exit failed", ex); }
+            }
+
             _currentStep = step;
             for (int i = 0; i < StepCount; i++)
             {
