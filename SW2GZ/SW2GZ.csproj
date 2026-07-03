@@ -507,6 +507,7 @@
     <Compile Include="SwSurface\SolidWorksMassProperties.cs" />
     <Compile Include="SwSurface\Abstractions\IComponentPoses.cs" />
     <Compile Include="SwSurface\SolidWorksComponentPoses.cs" />
+    <Compile Include="SwSurface\SwMateJointResolver.cs" />
     <Compile Include="SwSurface\Abstractions\LinkSpec.cs" />
     <Compile Include="SwSurface\Abstractions\IAssemblyWalker.cs" />
     <Compile Include="SwSurface\SolidWorksAssemblyWalker.cs" />
