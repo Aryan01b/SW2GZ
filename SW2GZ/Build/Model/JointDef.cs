@@ -79,6 +79,14 @@ namespace SW2GZ.Build.Model
         [DataMember] public double MatePointZ { get; set; }
         [DataMember] public bool HasMatePoint { get; set; }
 
+        // True once a mate-based suggestion has been accepted or the user
+        // has edited this joint by hand (Type/Axis/Limit/Name) — permanently
+        // opts the joint out of future auto-suggestion, including a
+        // deliberate choice to leave it Fixed with no axis (otherwise
+        // indistinguishable from "never analyzed"). Defaults false so
+        // legacy payloads round-trip unchanged.
+        [DataMember] public bool IsSuggested { get; set; }
+
         public void SetMatePoint(System.Numerics.Vector3 p)
         {
             MatePointX = p.X; MatePointY = p.Y; MatePointZ = p.Z;

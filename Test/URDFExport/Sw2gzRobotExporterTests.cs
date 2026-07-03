@@ -547,5 +547,72 @@ namespace SW2GZ.Writers.Tests
             Assert.Null(joint.Element("axis"));
             Assert.Null(joint.Element("limit"));
         }
+
+        [Fact]
+        public void Export_UsesMatePointForOrigin_WhenHasMatePoint()
+        {
+            var cfg = Cfg();
+            cfg.RobotJoints = new List<JointDef>
+            {
+                new JointDef { Name = "j1", ParentLink = "base_link", ChildLink = "arm_link", Type = UrdfJointType.Revolute, AxisX = 0, AxisY = 0, AxisZ = 1 },
+            };
+            cfg.RobotJoints[0].SetMatePoint(new Vector3(2, 3, 4));
+
+            Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir, Matrix3.Identity);
+
+            XElement joint = UrdfRoot().Elements("joint").Single();
+            string[] xyz = ((string)joint.Element("origin").Attribute("xyz")).Split(' ');
+            Assert.Equal(2.0, double.Parse(xyz[0]), 3);
+            Assert.Equal(3.0, double.Parse(xyz[1]), 3);
+            Assert.Equal(4.0, double.Parse(xyz[2]), 3);
+        }
+
+        [Fact]
+        public void Export_MatePoint_IsExpressedRelativeToParentFrame_LikeOrdinaryOrigin()
+        {
+            // Parent link translated to (10,0,0) in assembly frame, both
+            // identity rotation. A mate point at assembly (12,0,0) should
+            // read as (2,0,0) relative to the parent — same parent-relative
+            // convention ordinary (non-override) origins already use.
+            var poses = new Dictionary<string, (Matrix3, Vector3)>
+            {
+                ["base-1@asm"] = (Matrix3.Identity, new Vector3(10, 0, 0)),
+                ["arm-1@asm"]  = (Matrix3.Identity, new Vector3(10, 0, 0)),
+            };
+            var cfg = Cfg();
+            cfg.RobotJoints = new List<JointDef>
+            {
+                new JointDef { Name = "j1", ParentLink = "base_link", ChildLink = "arm_link", Type = UrdfJointType.Revolute, AxisX = 0, AxisY = 0, AxisZ = 1 },
+            };
+            cfg.RobotJoints[0].SetMatePoint(new Vector3(12, 0, 0));
+
+            Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(poses), cfg, _dir, Matrix3.Identity);
+
+            XElement joint = UrdfRoot().Elements("joint").Single();
+            string[] xyz = ((string)joint.Element("origin").Attribute("xyz")).Split(' ');
+            Assert.Equal(2.0, double.Parse(xyz[0]), 3);
+            Assert.Equal(0.0, double.Parse(xyz[1]), 3);
+            Assert.Equal(0.0, double.Parse(xyz[2]), 3);
+        }
+
+        [Fact]
+        public void Export_NoMatePoint_OriginStaysLinkPoseDerived_AsBefore()
+        {
+            // Regression guard: a joint with no mate point must be totally
+            // unaffected by this task — same as the existing (pre-Phase-2)
+            // origin behavior.
+            var cfg = Cfg();
+            cfg.RobotJoints = new List<JointDef>
+            {
+                new JointDef { Name = "j1", ParentLink = "base_link", ChildLink = "arm_link", Type = UrdfJointType.Revolute, AxisX = 0, AxisY = 0, AxisZ = 1 },
+            };
+            Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir, Matrix3.Identity);
+
+            XElement joint = UrdfRoot().Elements("joint").Single();
+            string[] xyz = ((string)joint.Element("origin").Attribute("xyz")).Split(' ');
+            Assert.Equal(0.0, double.Parse(xyz[0]), 3);
+            Assert.Equal(0.0, double.Parse(xyz[1]), 3);
+            Assert.Equal(0.0, double.Parse(xyz[2]), 3);
+        }
     }
 }

@@ -152,8 +152,23 @@ namespace SW2GZ.URDFExport
                     linkPoses.TryGetValue(link.ParentName, out (Matrix3 R, Vector3 T) parentPose))
                 {
                     Matrix3 rJoint = parentPose.R.Transpose() * linkR;
-                    Vector3 tJoint = parentPose.R.Transpose().Mul(linkT - parentPose.T);
-                    jointOrigins[link.Name] = tJoint;
+                    Vector3 tJointGeometric = parentPose.R.Transpose().Mul(linkT - parentPose.T);
+                    // A mate-derived pivot point (from mate-based joint
+                    // suggestion) overrides ORIGIN POSITION only — never
+                    // orientation, which stays the proven parent-relative
+                    // rotation computed above. MatePoint is stored in
+                    // assembly frame (same convention as Axis); express it
+                    // relative to the parent exactly like the geometric
+                    // origin already is.
+                    if (jointByChild.TryGetValue(link.Name, out JointDef jdOrigin) && jdOrigin.HasMatePoint)
+                    {
+                        var matePointAssembly = new Vector3((float)jdOrigin.MatePointX, (float)jdOrigin.MatePointY, (float)jdOrigin.MatePointZ);
+                        jointOrigins[link.Name] = parentPose.R.Transpose().Mul(matePointAssembly - parentPose.T);
+                    }
+                    else
+                    {
+                        jointOrigins[link.Name] = tJointGeometric;
+                    }
                     jointRpys[link.Name] = rJoint.ToRpy();
 
                     // Axis is stored in assembly frame (what the user sees/enters
