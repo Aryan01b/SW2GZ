@@ -119,6 +119,11 @@ namespace SW2GZ.Build
             // has no mate identity to give). Lets the Joints step UI offer
             // a picker when a link pair has more than one plausible mate.
             public string MateName;
+            // The mate type this candidate was classified from — lets
+            // ChooseBest prefer a Concentric candidate's exact cylinder
+            // axis over a limited Angle/Distance candidate's approximate
+            // plane-derived one when both exist for the same pair.
+            public SwMateTypeCode MateType;
         }
 
         public static Result Classify(
@@ -220,6 +225,7 @@ namespace SW2GZ.Build
                 LimitUpper = hasLimit ? limitUpper : null,
                 AxisAgreementDot = axisAgreementDot,
                 OriginPerpendicularDistance = originPerpendicularDistance,
+                MateType = mateType,
             };
         }
 
@@ -227,17 +233,49 @@ namespace SW2GZ.Build
         // plain Continuous one when multiple mates span the same (parent,
         // child) pair; first-seen wins within a tie, same rank the pre-gut
         // AutoJointResolved.ChooseBest used.
+        //
+        // A limited Angle/Distance mate's axis is only an approximation
+        // (plane cross-product / normal — see Classify's own doc comment);
+        // a live FULL_ARM test surfaced exactly this: base_link<->link_1
+        // has both a plain Concentric mate (exact cylinder axis) and a
+        // limited Angle mate (for the rotation limit), and picking the
+        // Angle candidate wholesale threw away the accurate axis. When a
+        // Concentric candidate for the same pair also has real geometry,
+        // graft the winning candidate's Type/Limit onto the Concentric
+        // candidate's axis/origin instead — both describe the same
+        // physical hinge, Concentric's geometry is just more precise.
         public static Result ChooseBest(IReadOnlyList<Result> candidates)
         {
             if (candidates == null || candidates.Count == 0) return new Result { Found = false };
-            Result firstAny = null, firstLimit = null;
+            Result firstAny = null, firstLimit = null, firstConcentricGeometry = null;
             foreach (Result c in candidates)
             {
                 if (c == null || !c.Found) continue;
                 if (firstAny == null) firstAny = c;
                 if (firstLimit == null && (c.LimitLower.HasValue || c.LimitUpper.HasValue)) firstLimit = c;
+                if (firstConcentricGeometry == null && c.MateType == SwMateTypeCode.Concentric && c.OriginAssembly.HasValue)
+                    firstConcentricGeometry = c;
             }
-            return firstLimit ?? firstAny ?? new Result { Found = false };
+
+            Result winner = firstLimit ?? firstAny;
+            if (winner == null) return new Result { Found = false };
+
+            if (winner.MateType != SwMateTypeCode.Concentric && firstConcentricGeometry != null && winner != firstConcentricGeometry)
+            {
+                return new Result
+                {
+                    Found = true,
+                    Type = winner.Type,
+                    AxisAssembly = firstConcentricGeometry.AxisAssembly,
+                    OriginAssembly = firstConcentricGeometry.OriginAssembly,
+                    LimitLower = winner.LimitLower,
+                    LimitUpper = winner.LimitUpper,
+                    MateName = firstConcentricGeometry.MateName,
+                    MateType = firstConcentricGeometry.MateType,
+                };
+            }
+
+            return winner;
         }
 
         private static Vector3 NormalizeOrZero(Vector3 v) =>

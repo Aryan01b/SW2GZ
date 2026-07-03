@@ -263,6 +263,56 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void ChooseBest_MergesLimitedAngleCandidateWithConcentricGeometry()
+        {
+            // Reproduces the live FULL_ARM bug: base_link<->link_1 has both a
+            // plain Concentric mate (exact cylinder axis through (0,0,5)) and
+            // a limited Angle mate (approximate axis from plane cross-
+            // product, through (0,0,0) — Angle's own point, per Classify's
+            // "parent plane's point" rule). ChooseBest must keep the Angle
+            // candidate's Type/Limit but use the Concentric candidate's
+            // axis/origin — picking Angle wholesale threw away the more
+            // precise geometry, which is exactly what broke live.
+            var concentric = MateJointClassification.Classify(
+                SwMateTypeCode.Concentric, null, null,
+                ParentOnly(new Vector3(0, 0, 5), new Vector3(0, 0, 1), Matrix3.Identity, Vector3.Zero), null);
+            concentric.MateName = "Concentric1";
+
+            var planes = new MateJointClassification.PlanePair(
+                parentNormalLocal: new Vector3(1, 0, 0), parentPointLocal: new Vector3(0, 0, 0),
+                parentRotation: Matrix3.Identity, parentTranslation: Vector3.Zero,
+                childNormalLocal: new Vector3(0, 1, 0), childPointLocal: new Vector3(0, 0, 0),
+                childRotation: Matrix3.Identity, childTranslation: Vector3.Zero);
+            var angle = MateJointClassification.Classify(SwMateTypeCode.Angle, -0.3, 0.3, null, planes);
+            angle.MateName = "LimitAngle1";
+
+            var chosen = MateJointClassification.ChooseBest(new[] { concentric, angle });
+
+            Assert.Equal(UrdfJointType.Revolute, chosen.Type);
+            Assert.Equal(-0.3, chosen.LimitLower);
+            Assert.Equal(0.3, chosen.LimitUpper);
+            Assert.Equal("Concentric1", chosen.MateName);
+            Assert.True(chosen.OriginAssembly.HasValue);
+            Assert.Equal(5.0, chosen.OriginAssembly.Value.Z, 3);
+        }
+
+        [Fact]
+        public void ChooseBest_NoConcentricCandidate_KeepsAngleGeometryAsIs()
+        {
+            var planes = new MateJointClassification.PlanePair(
+                parentNormalLocal: new Vector3(1, 0, 0), parentPointLocal: new Vector3(2, 0, 0),
+                parentRotation: Matrix3.Identity, parentTranslation: Vector3.Zero,
+                childNormalLocal: new Vector3(0, 1, 0), childPointLocal: new Vector3(0, 0, 0),
+                childRotation: Matrix3.Identity, childTranslation: Vector3.Zero);
+            var angle = MateJointClassification.Classify(SwMateTypeCode.Angle, -0.3, 0.3, null, planes);
+
+            var chosen = MateJointClassification.ChooseBest(new[] { angle });
+
+            Assert.True(chosen.OriginAssembly.HasValue);
+            Assert.Equal(2.0, chosen.OriginAssembly.Value.X, 3);
+        }
+
+        [Fact]
         public void ChooseBest_EmptyOrNullCandidates_ReturnsNotFound()
         {
             Assert.False(MateJointClassification.ChooseBest(new MateJointClassification.Result[0]).Found);
