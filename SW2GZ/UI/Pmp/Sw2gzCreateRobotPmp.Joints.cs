@@ -252,6 +252,14 @@ namespace SW2GZ.UI.Pmp
                 string childPrimary = childLink?.ComponentIds?.FirstOrDefault();
                 if (string.IsNullOrEmpty(childPrimary)) return;
 
+                // Note: IsSuggested flips true almost immediately in normal use — any
+                // listbox click commits the PREVIOUSLY selected joint first (via
+                // CommitSelectedJointFromControls, which unconditionally sets
+                // IsSuggested = true), so the "pending" (yellow) state is only
+                // observable in the brief window right after RefreshJointsList()
+                // first applies a suggestion, before any other row is clicked. If a
+                // live tester can't reproduce the pending/yellow case, this is why —
+                // not a sign the color logic itself is broken.
                 System.Drawing.Color lineColor = j.IsSuggested
                     ? System.Drawing.Color.Yellow
                     : System.Drawing.Color.FromArgb(180, 180, 180);
