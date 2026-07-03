@@ -144,7 +144,6 @@ namespace SW2GZ.UI.Pmp
         private PropertyManagerPageNumberbox _jointLimitLowerBox;
         private PropertyManagerPageNumberbox _jointLimitUpperBox;
 
-        // Read starting in Task 5 (OnListboxSelectionChanged / CommitSelectedJointFromControls).
         private int _selectedJointIndex = -1;
 
         // WinForms tree (Links step) — drag-to-reparent hierarchy, embedded
@@ -353,7 +352,6 @@ namespace SW2GZ.UI.Pmp
                 IdJointNameBox,
                 (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
                 "", (short)leftEdge, visibleEnabled, "Renamable; defaults to parent_to_child");
-            ((IPropertyManagerPageControl)_jointNameBox).Enabled = false; // inert until Task 5 wires load/commit
 
             AddFieldLabel(grp, IdJointTypeLabel, "Type", leftEdge, visibleEnabled);
             _jointTypeCombo = (PropertyManagerPageCombobox)grp.AddControl2(
@@ -363,7 +361,6 @@ namespace SW2GZ.UI.Pmp
             _jointTypeCombo.Height = 14;
             _jointTypeCombo.Style = (int)swPropMgrPageComboBoxStyle_e.swPropMgrPageComboBoxStyle_EditBoxReadOnly;
             foreach (string label in JointTypeLabels) _jointTypeCombo.AddItems(label);
-            ((IPropertyManagerPageControl)_jointTypeCombo).Enabled = false; // inert until Task 5 wires load/commit
 
             _jointAxisLabel = (PropertyManagerPageLabel)grp.AddControl2(
                 IdJointAxisLabel,
@@ -372,9 +369,6 @@ namespace SW2GZ.UI.Pmp
             _jointAxisXBox = NewAxisBox(grp, IdJointAxisXBox, leftEdge, visibleEnabled);
             _jointAxisYBox = NewAxisBox(grp, IdJointAxisYBox, leftEdge, visibleEnabled);
             _jointAxisZBox = NewAxisBox(grp, IdJointAxisZBox, leftEdge, visibleEnabled);
-            ((IPropertyManagerPageControl)_jointAxisXBox).Enabled = false; // inert until Task 5 wires load/commit
-            ((IPropertyManagerPageControl)_jointAxisYBox).Enabled = false; // inert until Task 5 wires load/commit
-            ((IPropertyManagerPageControl)_jointAxisZBox).Enabled = false; // inert until Task 5 wires load/commit
 
             _jointLimitLabel = (PropertyManagerPageLabel)grp.AddControl2(
                 IdJointLimitLabel,
@@ -388,8 +382,6 @@ namespace SW2GZ.UI.Pmp
                 IdJointLimitUpperBox,
                 (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
                 "Upper", (short)leftEdge, visibleEnabled, "Upper motion limit");
-            ((IPropertyManagerPageControl)_jointLimitLowerBox).Enabled = false; // inert until Task 5 wires load/commit
-            ((IPropertyManagerPageControl)_jointLimitUpperBox).Enabled = false; // inert until Task 5 wires load/commit
 
             RefreshJointsList();
             return grp;
@@ -613,15 +605,95 @@ namespace SW2GZ.UI.Pmp
             {
                 _jointsList.CurrentSelection = 0;
                 _selectedJointIndex = 0;
+                LoadJointIntoControls(_liveDoc.Robot.Joints[0]);
             }
             else
             {
                 _selectedJointIndex = -1;
+                ClearJointControls();
             }
         }
 
+        private void LoadJointIntoControls(JointDef j)
+        {
+            if (_jointNameBox == null) return;
+            _jointNameBox.Text = j.Name;
+            int typeIdx = Array.IndexOf(JointTypeOptions, j.Type);
+            _jointTypeCombo.CurrentSelection = (short)(typeIdx >= 0 ? typeIdx : 0);
+            _jointAxisXBox.Value = j.AxisX;
+            _jointAxisYBox.Value = j.AxisY;
+            _jointAxisZBox.Value = j.HasAxis ? j.AxisZ : 1.0;
+            _jointLimitLowerBox.Value = j.Type == UrdfJointType.Revolute ? RadToDeg(j.LimitLower ?? 0.0) : (j.LimitLower ?? 0.0);
+            _jointLimitUpperBox.Value = j.Type == UrdfJointType.Revolute ? RadToDeg(j.LimitUpper ?? 0.0) : (j.LimitUpper ?? 0.0);
+            UpdateJointFieldVisibility(j.Type);
+        }
+
+        private void ClearJointControls()
+        {
+            if (_jointNameBox == null) return;
+            _jointNameBox.Text = string.Empty;
+            _jointTypeCombo.CurrentSelection = 0;
+            _jointAxisXBox.Value = 0; _jointAxisYBox.Value = 0; _jointAxisZBox.Value = 1;
+            _jointLimitLowerBox.Value = 0; _jointLimitUpperBox.Value = 0;
+            UpdateJointFieldVisibility(UrdfJointType.Fixed);
+        }
+
+        // Axis is only meaningful for a moving joint; limits only for
+        // Revolute/Prismatic (Continuous is unlimited by definition, Fixed
+        // moves at all). IPropertyManagerPageControl.Visible is the same
+        // generic control property already used to toggle whole step groups
+        // (see docs/reference/solidworks-api.md) — this is its first use on
+        // an individual control rather than a group.
+        private void UpdateJointFieldVisibility(UrdfJointType type)
+        {
+            bool showAxis = type != UrdfJointType.Fixed;
+            bool showLimit = type == UrdfJointType.Revolute || type == UrdfJointType.Prismatic;
+            ((IPropertyManagerPageControl)_jointAxisLabel).Visible = showAxis;
+            ((IPropertyManagerPageControl)_jointAxisXBox).Visible = showAxis;
+            ((IPropertyManagerPageControl)_jointAxisYBox).Visible = showAxis;
+            ((IPropertyManagerPageControl)_jointAxisZBox).Visible = showAxis;
+            ((IPropertyManagerPageControl)_jointLimitLabel).Visible = showLimit;
+            _jointLimitLabel.Caption = type == UrdfJointType.Revolute ? "Limit (degrees)" : "Limit (meters)";
+            ((IPropertyManagerPageControl)_jointLimitLowerBox).Visible = showLimit;
+            ((IPropertyManagerPageControl)_jointLimitUpperBox).Visible = showLimit;
+        }
+
+        // Reads whatever is currently in the shared detail-form controls
+        // back into the JointDef that was loaded into them. Must run BEFORE
+        // switching the selected list row (single shared control set, one
+        // JointDef "checked out" at a time) and before leaving the Joints
+        // step entirely (ShowStep) or reviewing it (RefreshReviewLabels).
+        private void CommitSelectedJointFromControls()
+        {
+            if (_selectedJointIndex < 0 || _selectedJointIndex >= _liveDoc.Robot.Joints.Count) return;
+            JointDef j = _liveDoc.Robot.Joints[_selectedJointIndex];
+
+            string newName = (_jointNameBox?.Text ?? string.Empty).Trim();
+            if (!string.IsNullOrEmpty(newName)) j.Name = newName;
+
+            short typeIdx = _jointTypeCombo?.CurrentSelection ?? 0;
+            UrdfJointType type = JointTypeOptions[System.Math.Max(0, System.Math.Min(JointTypeOptions.Length - 1, typeIdx))];
+            j.Type = type;
+
+            if (type != UrdfJointType.Fixed)
+            {
+                j.SetAxis(new System.Numerics.Vector3(
+                    (float)_jointAxisXBox.Value, (float)_jointAxisYBox.Value, (float)_jointAxisZBox.Value));
+            }
+
+            if (type == UrdfJointType.Revolute || type == UrdfJointType.Prismatic)
+            {
+                j.LimitLower = type == UrdfJointType.Revolute ? DegToRad(_jointLimitLowerBox.Value) : _jointLimitLowerBox.Value;
+                j.LimitUpper = type == UrdfJointType.Revolute ? DegToRad(_jointLimitUpperBox.Value) : _jointLimitUpperBox.Value;
+            }
+        }
+
+        private static double DegToRad(double deg) => deg * System.Math.PI / 180.0;
+        private static double RadToDeg(double rad) => rad * 180.0 / System.Math.PI;
+
         private void RefreshReviewLabels()
         {
+            CommitSelectedJointFromControls();
             if (_reviewLinksLabel != null)
                 _reviewLinksLabel.Caption = "Links: " + _liveDoc.Robot.Links.Count;
             if (_reviewBaseLabel != null)
@@ -636,6 +708,8 @@ namespace SW2GZ.UI.Pmp
         {
             if (step < 0) step = 0;
             if (step > StepCount - 1) step = StepCount - 1;
+
+            if (_currentStep == StepJoints && step != StepJoints) CommitSelectedJointFromControls();
 
             _currentStep = step;
             for (int i = 0; i < StepCount; i++)
@@ -734,8 +808,24 @@ namespace SW2GZ.UI.Pmp
         void IPropertyManagerPage2Handler9.OnNumberBoxTrackingCompleted(int Id, double Value) { }
         void IPropertyManagerPage2Handler9.OnCheckboxCheck(int Id, bool Checked) { }
         void IPropertyManagerPage2Handler9.OnComboboxEditChanged(int Id, string Text) { }
-        void IPropertyManagerPage2Handler9.OnComboboxSelectionChanged(int Id, int Item) { }
-        void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item) { }
+        void IPropertyManagerPage2Handler9.OnComboboxSelectionChanged(int Id, int Item)
+        {
+            if (Id != IdJointTypeCombo) return;
+            UrdfJointType type = JointTypeOptions[System.Math.Max(0, System.Math.Min(JointTypeOptions.Length - 1, Item))];
+            // Suggest a sane default axis the first time a joint leaves
+            // Fixed, instead of leaving it at (0,0,0) — a zero-vector axis
+            // is meaningless in URDF.
+            if (type != UrdfJointType.Fixed && _jointAxisXBox.Value == 0 && _jointAxisYBox.Value == 0 && _jointAxisZBox.Value == 0)
+                _jointAxisZBox.Value = 1;
+            UpdateJointFieldVisibility(type);
+        }
+        void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item)
+        {
+            if (Id != IdJointsList) return;
+            CommitSelectedJointFromControls();
+            _selectedJointIndex = Item;
+            if (Item >= 0 && Item < _liveDoc.Robot.Joints.Count) LoadJointIntoControls(_liveDoc.Robot.Joints[Item]);
+        }
         void IPropertyManagerPage2Handler9.OnListboxRMBUp(int Id, int PosX, int PosY) { }
         void IPropertyManagerPage2Handler9.OnGroupCheck(int Id, bool Checked) { }
         void IPropertyManagerPage2Handler9.OnGroupExpand(int Id, bool Expanded) { }
