@@ -10,6 +10,7 @@ using System.Numerics;
 using System.Xml.Linq;
 using SW2GZ.Build;
 using SW2GZ.Build.Model;
+using SW2GZ.Build.Urdf;
 using SW2GZ.Math;
 using SW2GZ.SwSurface.Abstractions;
 using SW2GZ.URDFExport;
@@ -468,6 +469,83 @@ namespace SW2GZ.Writers.Tests
             // A shared-frame bug (both parts evaluated at arm_link's own
             // pose, d=0 for both) would instead report izz = 1 + 1 = 2.
             Assert.True(izz > 5.0, "izz=" + izz + " — expected > 5 (parallel-axis from per-component pose); a shared-frame bug would report izz=2.");
+        }
+
+        [Fact]
+        public void Export_UsesJointDefType_InsteadOfHardcodedFixed()
+        {
+            var cfg = Cfg();
+            cfg.RobotJoints = new List<JointDef>
+            {
+                new JointDef { Name = "shoulder", ParentLink = "base_link", ChildLink = "arm_link", Type = UrdfJointType.Continuous },
+            };
+            Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir, Matrix3.Identity);
+
+            XElement joint = UrdfRoot().Elements("joint").Single();
+            Assert.Equal("shoulder", (string)joint.Attribute("name"));
+            Assert.Equal("continuous", (string)joint.Attribute("type"));
+        }
+
+        [Fact]
+        public void Export_WritesAxisRotatedIntoChildLocalFrame()
+        {
+            // Child rotated 90deg about Z in the assembly; axis set to
+            // assembly +X. R_child^T expresses that same world direction in
+            // the child's own (locally un-rotated) frame — since the
+            // child's local +Y maps to world -X under its own rotation,
+            // world +X reads as local -Y here.
+            var poses = new Dictionary<string, (Matrix3, Vector3)>
+            {
+                ["base-1@asm"] = (Matrix3.Identity, Vector3.Zero),
+                ["arm-1@asm"]  = (RotZ(System.Math.PI / 2), Vector3.Zero),
+            };
+            var cfg = Cfg();
+            cfg.RobotJoints = new List<JointDef>
+            {
+                new JointDef { Name = "j1", ParentLink = "base_link", ChildLink = "arm_link", Type = UrdfJointType.Revolute, AxisX = 1, AxisY = 0, AxisZ = 0 },
+            };
+            Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(poses), cfg, _dir, Matrix3.Identity);
+
+            XElement joint = UrdfRoot().Elements("joint").Single();
+            string[] xyz = ((string)joint.Element("axis").Attribute("xyz")).Split(' ');
+            Assert.Equal(0.0, double.Parse(xyz[0]), 3);
+            Assert.Equal(-1.0, double.Parse(xyz[1]), 3);
+            Assert.Equal(0.0, double.Parse(xyz[2]), 3);
+        }
+
+        [Fact]
+        public void Export_WritesLimitElement_ForRevoluteAndPrismatic()
+        {
+            var cfg = Cfg();
+            cfg.RobotJoints = new List<JointDef>
+            {
+                new JointDef
+                {
+                    Name = "j1", ParentLink = "base_link", ChildLink = "arm_link",
+                    Type = UrdfJointType.Prismatic, AxisX = 0, AxisY = 0, AxisZ = 1,
+                    LimitLower = -0.5, LimitUpper = 0.5,
+                },
+            };
+            Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir, Matrix3.Identity);
+
+            XElement joint = UrdfRoot().Elements("joint").Single();
+            Assert.Equal(-0.5, double.Parse((string)joint.Element("limit").Attribute("lower"), CultureInfo.InvariantCulture), 3);
+            Assert.Equal(0.5, double.Parse((string)joint.Element("limit").Attribute("upper"), CultureInfo.InvariantCulture), 3);
+        }
+
+        [Fact]
+        public void Export_FixedType_EmitsNoAxisOrLimitElements()
+        {
+            var cfg = Cfg();
+            cfg.RobotJoints = new List<JointDef>
+            {
+                new JointDef { Name = "j1", ParentLink = "base_link", ChildLink = "arm_link", Type = UrdfJointType.Fixed },
+            };
+            Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir, Matrix3.Identity);
+
+            XElement joint = UrdfRoot().Elements("joint").Single();
+            Assert.Null(joint.Element("axis"));
+            Assert.Null(joint.Element("limit"));
         }
     }
 }

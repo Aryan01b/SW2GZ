@@ -60,6 +60,7 @@ using System.Linq;
 using System.Numerics;
 using SW2GZ.Build;
 using SW2GZ.Build.Model;
+using SW2GZ.Build.Urdf;
 using SW2GZ.Math;
 using SW2GZ.SwSurface.Abstractions;
 using SW2GZ.URDF;
@@ -100,6 +101,11 @@ namespace SW2GZ.URDFExport
             var masses = new Dictionary<string, MassProps>(StringComparer.Ordinal);
             var jointOrigins = new Dictionary<string, Vector3>(StringComparer.Ordinal);
             var jointRpys = new Dictionary<string, (double, double, double)>(StringComparer.Ordinal);
+            var jointAxesLocal = new Dictionary<string, Vector3>(StringComparer.Ordinal);
+
+            List<JointDef> jointDefs = config.RobotJoints ?? new List<JointDef>();
+            var jointByChild = new Dictionary<string, JointDef>(StringComparer.Ordinal);
+            foreach (JointDef j in jointDefs) jointByChild[j.ChildLink] = j;
 
             // Root = whichever link the TREE says has no parent, not
             // links[0]. "Set as base link" (re-root, in LinkTreeView) edits
@@ -149,6 +155,19 @@ namespace SW2GZ.URDFExport
                     Vector3 tJoint = parentPose.R.Transpose().Mul(linkT - parentPose.T);
                     jointOrigins[link.Name] = tJoint;
                     jointRpys[link.Name] = rJoint.ToRpy();
+
+                    // Axis is stored in assembly frame (what the user sees/enters
+                    // in the Joints panel — see the design spec's "Axis frame"
+                    // decision); URDF's <axis> is expressed in the joint frame,
+                    // which for a plain joint (no extra offset) is the child
+                    // link's own local frame. Same transpose-multiply pattern
+                    // already proven correct for the joint origin above.
+                    if (jointByChild.TryGetValue(link.Name, out JointDef jd) &&
+                        jd.Type != UrdfJointType.Fixed && jd.HasAxis)
+                    {
+                        var axisAssembly = new Vector3((float)jd.AxisX, (float)jd.AxisY, (float)jd.AxisZ);
+                        jointAxesLocal[link.Name] = linkR.Transpose().Mul(axisAssembly);
+                    }
                 }
                 else if (!string.IsNullOrEmpty(link.ParentName))
                 {
@@ -161,7 +180,8 @@ namespace SW2GZ.URDFExport
             }
 
             string urdfPath = Path.Combine(urdfDir, pkg + ".urdf.xacro");
-            WriteUrdf(urdfPath, pkg, baseLinkName, links, meshFiles, masses, jointOrigins, jointRpys, config.EmitWorldLink, swToRos);
+            WriteUrdf(urdfPath, pkg, baseLinkName, links, meshFiles, masses, jointOrigins, jointRpys,
+                jointByChild, jointAxesLocal, config.EmitWorldLink, swToRos);
 
             return new ValidationReport(issues);
         }
@@ -273,6 +293,7 @@ namespace SW2GZ.URDFExport
             string path, string pkg, string baseLinkName, List<LinkDef> links,
             Dictionary<string, string> meshFiles, Dictionary<string, MassProps> masses,
             Dictionary<string, Vector3> jointOrigins, Dictionary<string, (double, double, double)> jointRpys,
+            Dictionary<string, JointDef> jointByChild, Dictionary<string, Vector3> jointAxesLocal,
             bool emitWorldLink, Matrix3 swToRos)
         {
             var uw = new URDFWriter(path);
@@ -350,15 +371,37 @@ namespace SW2GZ.URDFExport
                 Vector3 origin = jointOrigins.TryGetValue(link.Name, out var o) ? o : Vector3.Zero;
                 (double roll, double pitch, double yaw) = jointRpys.TryGetValue(link.Name, out var rpy)
                     ? rpy : (0.0, 0.0, 0.0);
+
+                jointByChild.TryGetValue(link.Name, out JointDef jd);
+                UrdfJointType type = jd?.Type ?? UrdfJointType.Fixed;
+                string jointName = !string.IsNullOrEmpty(jd?.Name) ? jd.Name : link.ParentName + "_to_" + link.Name;
+
                 w.WriteStartElement("joint");
-                w.WriteAttributeString("name", link.ParentName + "_to_" + link.Name);
-                w.WriteAttributeString("type", "fixed");
+                w.WriteAttributeString("name", jointName);
+                w.WriteAttributeString("type", JointTypeString(type));
                 w.WriteStartElement("parent"); w.WriteAttributeString("link", link.ParentName); w.WriteEndElement();
                 w.WriteStartElement("child"); w.WriteAttributeString("link", link.Name); w.WriteEndElement();
                 w.WriteStartElement("origin");
                 w.WriteAttributeString("xyz", Fmt(origin.X) + " " + Fmt(origin.Y) + " " + Fmt(origin.Z));
                 w.WriteAttributeString("rpy", Fmt(roll) + " " + Fmt(pitch) + " " + Fmt(yaw));
                 w.WriteEndElement();
+
+                if (type != UrdfJointType.Fixed)
+                {
+                    Vector3 axis = jointAxesLocal.TryGetValue(link.Name, out var a) ? a : new Vector3(0, 0, 1);
+                    w.WriteStartElement("axis");
+                    w.WriteAttributeString("xyz", Fmt(axis.X) + " " + Fmt(axis.Y) + " " + Fmt(axis.Z));
+                    w.WriteEndElement();
+
+                    if (type == UrdfJointType.Revolute || type == UrdfJointType.Prismatic)
+                    {
+                        w.WriteStartElement("limit");
+                        w.WriteAttributeString("lower", Fmt(jd?.LimitLower ?? 0.0));
+                        w.WriteAttributeString("upper", Fmt(jd?.LimitUpper ?? 0.0));
+                        w.WriteEndElement();
+                    }
+                }
+
                 w.WriteEndElement();
             }
 
@@ -384,5 +427,18 @@ namespace SW2GZ.URDFExport
         }
 
         private static string Fmt(double v) => v.ToString("0.######", CultureInfo.InvariantCulture);
+
+        // Planar/Floating aren't offered in the Joints panel (no use case yet
+        // in this codebase) — fall back to fixed rather than throw, so a
+        // hand-edited or legacy JointDef with one of those values doesn't
+        // crash export.
+        private static string JointTypeString(UrdfJointType t) => t switch
+        {
+            UrdfJointType.Fixed      => "fixed",
+            UrdfJointType.Revolute   => "revolute",
+            UrdfJointType.Continuous => "continuous",
+            UrdfJointType.Prismatic  => "prismatic",
+            _ => "fixed",
+        };
     }
 }
