@@ -144,6 +144,7 @@ namespace SW2GZ.UI.Pmp
         private PropertyManagerPageNumberbox _jointLimitLowerBox;
         private PropertyManagerPageNumberbox _jointLimitUpperBox;
 
+        // Read starting in Task 5 (OnListboxSelectionChanged / CommitSelectedJointFromControls).
         private int _selectedJointIndex = -1;
 
         // WinForms tree (Links step) — drag-to-reparent hierarchy, embedded
@@ -352,6 +353,7 @@ namespace SW2GZ.UI.Pmp
                 IdJointNameBox,
                 (short)swPropertyManagerPageControlType_e.swControlType_Textbox,
                 "", (short)leftEdge, visibleEnabled, "Renamable; defaults to parent_to_child");
+            ((IPropertyManagerPageControl)_jointNameBox).Enabled = false; // inert until Task 5 wires load/commit
 
             AddFieldLabel(grp, IdJointTypeLabel, "Type", leftEdge, visibleEnabled);
             _jointTypeCombo = (PropertyManagerPageCombobox)grp.AddControl2(
@@ -361,6 +363,7 @@ namespace SW2GZ.UI.Pmp
             _jointTypeCombo.Height = 14;
             _jointTypeCombo.Style = (int)swPropMgrPageComboBoxStyle_e.swPropMgrPageComboBoxStyle_EditBoxReadOnly;
             foreach (string label in JointTypeLabels) _jointTypeCombo.AddItems(label);
+            ((IPropertyManagerPageControl)_jointTypeCombo).Enabled = false; // inert until Task 5 wires load/commit
 
             _jointAxisLabel = (PropertyManagerPageLabel)grp.AddControl2(
                 IdJointAxisLabel,
@@ -369,6 +372,9 @@ namespace SW2GZ.UI.Pmp
             _jointAxisXBox = NewAxisBox(grp, IdJointAxisXBox, leftEdge, visibleEnabled);
             _jointAxisYBox = NewAxisBox(grp, IdJointAxisYBox, leftEdge, visibleEnabled);
             _jointAxisZBox = NewAxisBox(grp, IdJointAxisZBox, leftEdge, visibleEnabled);
+            ((IPropertyManagerPageControl)_jointAxisXBox).Enabled = false; // inert until Task 5 wires load/commit
+            ((IPropertyManagerPageControl)_jointAxisYBox).Enabled = false; // inert until Task 5 wires load/commit
+            ((IPropertyManagerPageControl)_jointAxisZBox).Enabled = false; // inert until Task 5 wires load/commit
 
             _jointLimitLabel = (PropertyManagerPageLabel)grp.AddControl2(
                 IdJointLimitLabel,
@@ -382,6 +388,8 @@ namespace SW2GZ.UI.Pmp
                 IdJointLimitUpperBox,
                 (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
                 "Upper", (short)leftEdge, visibleEnabled, "Upper motion limit");
+            ((IPropertyManagerPageControl)_jointLimitLowerBox).Enabled = false; // inert until Task 5 wires load/commit
+            ((IPropertyManagerPageControl)_jointLimitUpperBox).Enabled = false; // inert until Task 5 wires load/commit
 
             RefreshJointsList();
             return grp;
