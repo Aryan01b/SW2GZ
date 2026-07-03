@@ -153,6 +153,34 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
+        public void Classify_AngleWithNullPlaneGeometry_DemotesToFixed()
+        {
+            var result = MateJointClassification.Classify(
+                mateType: SwMateTypeCode.Angle,
+                limitLower: -0.3, limitUpper: 0.3,
+                cylinderLocalOrigin: null, cylinderLocalAxis: null,
+                cylinderComponentRotation: Matrix3.Identity, cylinderComponentTranslation: Vector3.Zero,
+                planeGeometry: null);
+
+            Assert.Equal(UrdfJointType.Fixed, result.Type);
+            Assert.False(result.OriginAssembly.HasValue);
+        }
+
+        [Fact]
+        public void Classify_DistanceWithNullPlaneGeometry_DemotesToFixed()
+        {
+            var result = MateJointClassification.Classify(
+                mateType: SwMateTypeCode.Distance,
+                limitLower: -0.1, limitUpper: 0.1,
+                cylinderLocalOrigin: null, cylinderLocalAxis: null,
+                cylinderComponentRotation: Matrix3.Identity, cylinderComponentTranslation: Vector3.Zero,
+                planeGeometry: null);
+
+            Assert.Equal(UrdfJointType.Fixed, result.Type);
+            Assert.False(result.OriginAssembly.HasValue);
+        }
+
+        [Fact]
         public void Classify_LockMate_IsFixed_NoGeometryNeeded()
         {
             var result = MateJointClassification.Classify(
