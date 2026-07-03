@@ -622,6 +622,9 @@ namespace SW2GZ.UI.Pmp
             _jointTypeCombo.CurrentSelection = (short)(typeIdx >= 0 ? typeIdx : 0);
             _jointAxisXBox.Value = j.AxisX;
             _jointAxisYBox.Value = j.AxisY;
+            // !HasAxis means X/Y/Z are all still 0 (never set) — X/Y correctly stay 0,
+            // only Z needs the (0,0,1) default substituted in, matching the same
+            // default OnComboboxSelectionChanged applies when a joint first leaves Fixed.
             _jointAxisZBox.Value = j.HasAxis ? j.AxisZ : 1.0;
             _jointLimitLowerBox.Value = j.Type == UrdfJointType.Revolute ? RadToDeg(j.LimitLower ?? 0.0) : (j.LimitLower ?? 0.0);
             _jointLimitUpperBox.Value = j.Type == UrdfJointType.Revolute ? RadToDeg(j.LimitUpper ?? 0.0) : (j.LimitUpper ?? 0.0);
@@ -672,7 +675,7 @@ namespace SW2GZ.UI.Pmp
             if (!string.IsNullOrEmpty(newName)) j.Name = newName;
 
             short typeIdx = _jointTypeCombo?.CurrentSelection ?? 0;
-            UrdfJointType type = JointTypeOptions[System.Math.Max(0, System.Math.Min(JointTypeOptions.Length - 1, typeIdx))];
+            UrdfJointType type = ComboIndexToType(typeIdx);
             j.Type = type;
 
             if (type != UrdfJointType.Fixed)
@@ -690,6 +693,9 @@ namespace SW2GZ.UI.Pmp
 
         private static double DegToRad(double deg) => deg * System.Math.PI / 180.0;
         private static double RadToDeg(double rad) => rad * 180.0 / System.Math.PI;
+
+        private static UrdfJointType ComboIndexToType(int idx) =>
+            JointTypeOptions[System.Math.Max(0, System.Math.Min(JointTypeOptions.Length - 1, idx))];
 
         private void RefreshReviewLabels()
         {
@@ -811,7 +817,7 @@ namespace SW2GZ.UI.Pmp
         void IPropertyManagerPage2Handler9.OnComboboxSelectionChanged(int Id, int Item)
         {
             if (Id != IdJointTypeCombo) return;
-            UrdfJointType type = JointTypeOptions[System.Math.Max(0, System.Math.Min(JointTypeOptions.Length - 1, Item))];
+            UrdfJointType type = ComboIndexToType(Item);
             // Suggest a sane default axis the first time a joint leaves
             // Fixed, instead of leaving it at (0,0,0) — a zero-vector axis
             // is meaningless in URDF.
