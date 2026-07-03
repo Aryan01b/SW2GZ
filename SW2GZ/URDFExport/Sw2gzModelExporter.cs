@@ -58,11 +58,13 @@ namespace SW2GZ.URDFExport
                 return Sw2gzAssetExporter.Export(tess, config, outputDirOverride, rot);
             }
 
-            // Robot mode v2 — the inherited robot export pipeline was removed for
-            // a clean rebuild. World and Asset returned above; reaching here means
-            // a Robot-mode assembly doc, which is not implemented yet.
-            throw new System.NotSupportedException(
-                "Robot mode export is not implemented yet (removed for the v2 rebuild).");
+            // Robot mode v3 — minimal flat/fixed exporter (validating cut for the
+            // rebuild): one link per top-level component, all Fixed to the first,
+            // real relative joint pose (see Sw2gzRobotExporter for the math).
+            var massProps = new SolidWorksMassProperties(swApp, (AssemblyDoc)model);
+            var poses = new SolidWorksComponentPoses((AssemblyDoc)model);
+            var robotRot = SwToRosRotation.Build(config.SwUpAxis, config.SwForwardAxis);
+            return Sw2gzRobotExporter.Export(tess, massProps, poses, config, outputDirOverride, robotRot);
         }
 
         public static string WorkspacePath(string outputFolder, string packageName) =>

@@ -503,10 +503,13 @@
     <Compile Include="Validate\OutputValidator.cs" />
     <Compile Include="SwSurface\Abstractions\IMassProperties.cs" />
     <Compile Include="SwSurface\SolidWorksMassProperties.cs" />
+    <Compile Include="SwSurface\Abstractions\IComponentPoses.cs" />
+    <Compile Include="SwSurface\SolidWorksComponentPoses.cs" />
     <Compile Include="SwSurface\Abstractions\LinkSpec.cs" />
     <Compile Include="SwSurface\Abstractions\IAssemblyWalker.cs" />
     <Compile Include="SwSurface\SolidWorksAssemblyWalker.cs" />
     <Compile Include="URDFExport\Sw2gzModelExporter.cs" />
+    <Compile Include="URDFExport\Sw2gzRobotExporter.cs" />
     <Compile Include="URDFExport\Sw2gzWorldExporter.cs" />
     <Compile Include="URDFExport\Sw2gzAssetExporter.cs" />
     <Compile Include="URDFExport\Sw2gzModelPreviewer.cs" />
@@ -544,6 +547,7 @@
     <Compile Include="UI\Ribbon\Sw2gzRibbonRegistrar.cs" />
     <Compile Include="UI\Ribbon\Sw2gzModeChangeOverlay.cs" />
     <Compile Include="UI\Pmp\Sw2gzStubPmp.cs" />
+    <Compile Include="UI\Pmp\Sw2gzCreateRobotPmp.cs" />
     <Compile Include="UI\Pmp\Sw2gzCreateWorldPmp.cs" />
     <Compile Include="UI\Pmp\Sw2gzCreateAssetPmp.cs" />
     <Compile Include="UI\Pmp\Sw2gzWorldSettingsPmp.cs" />

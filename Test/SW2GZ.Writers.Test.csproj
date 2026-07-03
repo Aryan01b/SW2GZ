@@ -34,6 +34,10 @@
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzWorldSensorsConfig.cs" Link="Sources\URDFExport\Sw2gzWorldSensorsConfig.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzWorldExporter.cs" Link="Sources\URDFExport\Sw2gzWorldExporter.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzAssetExporter.cs" Link="Sources\URDFExport\Sw2gzAssetExporter.cs" />
+    <Compile Include="..\SW2GZ\URDFExport\Sw2gzRobotExporter.cs" Link="Sources\URDFExport\Sw2gzRobotExporter.cs" />
+    <Compile Include="..\SW2GZ\SwSurface\Abstractions\IComponentPoses.cs" Link="Sources\SwSurface\Abstractions\IComponentPoses.cs" />
+    <Compile Include="..\SW2GZ\SwSurface\SolidWorksComponentPoses.cs" Link="Sources\SwSurface\SolidWorksComponentPoses.cs" />
+    <Compile Include="..\SW2GZ\URDF\URDFWriter.cs"                Link="Sources\URDF\URDFWriter.cs" />
     <Compile Include="..\SW2GZ\Gz\SdfAssetModelWriter.cs"     Link="Sources\Gz\SdfAssetModelWriter.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzDoc.cs"          Link="Sources\URDFExport\Sw2gzDoc.cs" />
     <Compile Include="..\SW2GZ\URDFExport\Sw2gzDocSnapshot.cs"  Link="Sources\URDFExport\Sw2gzDocSnapshot.cs" />

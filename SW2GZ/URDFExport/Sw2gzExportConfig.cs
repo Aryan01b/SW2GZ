@@ -53,7 +53,12 @@ namespace SW2GZ.URDFExport
         // Resume position — 0-based wizard step index reached at last save.
         [DataMember] public int LastStep { get; set; }
 
-        // Robot link/joint definitions removed for the v2 rebuild.
+        // Robot mode v3 — minimal flat list threaded from Sw2gzDoc.Robot via
+        // Sw2gzDocToExportConfig.Bridge. Links[0] is the base link; every other
+        // link's Fixed joint to it is derived by the wizard (Sw2gzCreateRobotPmp),
+        // not re-derived here. No mate-driven joint detection yet.
+        [DataMember] public List<LinkDef> RobotLinks { get; set; } = new List<LinkDef>();
+        [DataMember] public List<JointDef> RobotJoints { get; set; } = new List<JointDef>();
 
         // World mode — picked components + physics from the Create-World wizard.
         // Flat schema mirroring Sw2gzWorldConfig (the v2.1.0 in-memory model);
@@ -126,6 +131,8 @@ namespace SW2GZ.URDFExport
         [OnDeserializing]
         private void OnDeserializing(StreamingContext context)
         {
+            RobotLinks = new List<LinkDef>();
+            RobotJoints = new List<JointDef>();
             // World-mode defaults for checkpoints saved before these fields existed.
             WorldGround = string.Empty;
             WorldAssets = new List<string>();
@@ -173,6 +180,8 @@ namespace SW2GZ.URDFExport
                 Email         = this.Email,
                 License       = this.License,
                 LastStep      = this.LastStep,
+                RobotLinks    = this.RobotLinks,
+                RobotJoints   = this.RobotJoints,
                 WorldGround        = this.WorldGround,
                 WorldAssets        = this.WorldAssets,
                 WorldPhysicsEngine = this.WorldPhysicsEngine,
