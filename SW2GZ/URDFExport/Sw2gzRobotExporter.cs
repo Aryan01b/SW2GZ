@@ -34,6 +34,17 @@ to <origin> alone once caused the mesh to render offset from the joint's
 declared frame — the link visibly orbited the wrong point in space; fixed
 by making frameOrigin the one anchor all three share.
 
+A link's frame origin is precomputed for EVERY link up front
+(frameOrigins, alongside linkPoses) for the same reason linkPoses is:
+a child's own joint-origin math needs its PARENT's frame origin, not the
+parent's raw pose — those differ exactly when the parent has a
+mate-derived pivot, and reading the raw pose there put a grandchild link
+at its grandparent's incoming-joint location instead of its own (live-
+tested: base_link<->link_1's pivot was correct but link_1<->end_link
+rendered end_link on top of the base_link joint, because end_link's
+origin was computed relative to link_1's raw pose while link_1's own
+established frame sat at the base_link pivot instead).
+
     p_world = R_link * p_local + t_link                       (tessellator bake)
     p_local = R_link^T * (p_world - t_link)                   (un-bake for <visual>)
     R_joint(parent->child) = R_parent^T * R_child
@@ -133,6 +144,26 @@ namespace SW2GZ.URDFExport
                 linkPoses[link.Name] = TryGetPose(poses, refComp, issues, link.Name);
             }
 
+            // Pass 1.5: every link's FRAME origin — a mate-derived pivot
+            // when the link has one, else its own raw pose. A link's mesh,
+            // mass, and joint <origin> all anchor here (see the comment
+            // below), which means a CHILD computing its own joint origin
+            // relative to its parent must read the parent's frame origin
+            // too, not the parent's raw pose — those two differ exactly
+            // when the parent itself has a mate-derived pivot, and using
+            // the wrong one put the child at the parent's incoming-joint
+            // location instead of its own (live-tested bug: a grandchild
+            // rendered on top of its grandparent's joint). Precomputed here
+            // for the same random-access-by-name reason linkPoses is.
+            var frameOrigins = new Dictionary<string, Vector3>(StringComparer.Ordinal);
+            foreach (LinkDef link in links)
+            {
+                Vector3 origin = linkPoses[link.Name].T;
+                if (jointByChild.TryGetValue(link.Name, out JointDef jdFrame) && jdFrame.HasMatePoint)
+                    origin = new Vector3((float)jdFrame.MatePointX, (float)jdFrame.MatePointY, (float)jdFrame.MatePointZ);
+                frameOrigins[link.Name] = origin;
+            }
+
             foreach (LinkDef link in links)
             {
                 string compName = link.ComponentIds?.FirstOrDefault();
@@ -150,10 +181,10 @@ namespace SW2GZ.URDFExport
                 // rendered offset from wherever the joint said the link's
                 // frame was, so the link visibly pivoted around the wrong
                 // physical point. frameOrigin is the single source of
-                // truth all three now share.
-                Vector3 frameOrigin = linkT;
-                if (jointByChild.TryGetValue(link.Name, out JointDef jdFrame) && jdFrame.HasMatePoint)
-                    frameOrigin = new Vector3((float)jdFrame.MatePointX, (float)jdFrame.MatePointY, (float)jdFrame.MatePointZ);
+                // truth all three now share (frameOrigins[link.Name] —
+                // same value, precomputed above so parents and children
+                // alike can look up ANY link's frame origin by name).
+                Vector3 frameOrigin = frameOrigins[link.Name];
 
                 MeshData meshLocal = link.Name == baseLinkName
                     ? UnionMeshInLocalFrame(tess, link.ComponentIds, Matrix3.Identity, frameOrigin, issues, link.Name)
@@ -175,11 +206,15 @@ namespace SW2GZ.URDFExport
                     Matrix3 rJoint = parentPose.R.Transpose() * linkR;
                     // Orientation stays the proven parent-relative rotation
                     // above regardless of frameOrigin — a mate point only
-                    // ever overrides position. Position is frameOrigin
-                    // expressed relative to the parent, same formula either
-                    // way (frameOrigin defaults to linkT, so this covers the
-                    // no-mate-point case identically to before).
-                    jointOrigins[link.Name] = parentPose.R.Transpose().Mul(frameOrigin - parentPose.T);
+                    // ever overrides position, and rotation always comes
+                    // from the raw poses either way. Position is THIS
+                    // link's frame origin expressed relative to the
+                    // PARENT's frame origin (not the parent's raw pose —
+                    // see the frameOrigins comment above) — same formula
+                    // either way (frameOrigin defaults to linkT, so this
+                    // covers the no-mate-point case identically to before).
+                    Vector3 parentFrameOrigin = frameOrigins.TryGetValue(link.ParentName, out Vector3 pfo) ? pfo : parentPose.T;
+                    jointOrigins[link.Name] = parentPose.R.Transpose().Mul(frameOrigin - parentFrameOrigin);
                     jointRpys[link.Name] = rJoint.ToRpy();
 
                     // Axis is stored in assembly frame (what the user sees/enters

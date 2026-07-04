@@ -646,5 +646,50 @@ namespace SW2GZ.Writers.Tests
             Assert.Equal(0.0, double.Parse(xyz[1]), 3);
             Assert.Equal(0.0, double.Parse(xyz[2]), 3);
         }
+
+        [Fact]
+        public void Export_GrandchildOrigin_IsRelativeToParentsFrameOrigin_NotParentsRawPose()
+        {
+            // Regression for the live bug where end_link rendered on top of
+            // the base_link joint: mid_link has a mate point (1,0,0) that
+            // differs from its own raw pose (5,0,0) — its ESTABLISHED frame
+            // sits at the mate point. leaf_link (mid_link's child, no mate
+            // point of its own) must compute its origin relative to THAT
+            // frame, not mid_link's raw pose — (5,3,0) - (1,0,0) = (4,3,0),
+            // not the buggy (5,3,0) - (5,0,0) = (0,3,0).
+            var links = new List<LinkDef>
+            {
+                new LinkDef { Name = "base_link", ComponentIds = { "base-1@asm" }, ParentName = "" },
+                new LinkDef { Name = "mid_link",  ComponentIds = { "mid-1@asm" },  ParentName = "base_link" },
+                new LinkDef { Name = "leaf_link", ComponentIds = { "leaf-1@asm" }, ParentName = "mid_link" },
+            };
+            var cfg = new Sw2gzExportConfig
+            {
+                Mode = SW2GZ.Ros2.ExportMode.RobotPackage,
+                PackageName = "my_robot",
+                RobotLinks = links,
+                RobotJoints = new List<JointDef>
+                {
+                    new JointDef { Name = "j1", ParentLink = "base_link", ChildLink = "mid_link", Type = UrdfJointType.Revolute, AxisX = 0, AxisY = 0, AxisZ = 1 },
+                    new JointDef { Name = "j2", ParentLink = "mid_link", ChildLink = "leaf_link", Type = UrdfJointType.Revolute, AxisX = 0, AxisY = 0, AxisZ = 1 },
+                },
+            };
+            cfg.RobotJoints[0].SetMatePoint(new Vector3(1, 0, 0));
+            var poses = new Dictionary<string, (Matrix3, Vector3)>
+            {
+                ["base-1@asm"] = (Matrix3.Identity, new Vector3(0, 0, 0)),
+                ["mid-1@asm"]  = (Matrix3.Identity, new Vector3(5, 0, 0)),
+                ["leaf-1@asm"] = (Matrix3.Identity, new Vector3(5, 3, 0)),
+            };
+
+            Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(poses), cfg, _dir, Matrix3.Identity);
+
+            XElement root = XElement.Load(Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "urdf", "my_robot.urdf.xacro"));
+            XElement leafJoint = root.Elements("joint").Single(j => (string)j.Attribute("name") == "j2");
+            string[] xyz = ((string)leafJoint.Element("origin").Attribute("xyz")).Split(' ');
+            Assert.Equal(4.0, double.Parse(xyz[0], CultureInfo.InvariantCulture), 3);
+            Assert.Equal(3.0, double.Parse(xyz[1], CultureInfo.InvariantCulture), 3);
+            Assert.Equal(0.0, double.Parse(xyz[2], CultureInfo.InvariantCulture), 3);
+        }
     }
 }

@@ -318,6 +318,11 @@ namespace SW2GZ.UI.Pmp
         // switching the selected list row (single shared control set, one
         // JointDef "checked out" at a time) and before leaving the Joints
         // step entirely (ShowStep) or reviewing it (RefreshReviewLabels).
+        // Axis is NOT committed here — see HandleAxisNumberboxChanged: a
+        // read-back-later commit of the axis boxes proved unreliable across
+        // listbox switches (a picked axis would occasionally revert), so
+        // axis writes straight to the JointDef the moment it changes
+        // instead of waiting for this commit pass.
         private void CommitSelectedJointFromControls()
         {
             if (_selectedJointIndex < 0 || _selectedJointIndex >= _liveDoc.Robot.Joints.Count) return;
@@ -331,17 +336,25 @@ namespace SW2GZ.UI.Pmp
             UrdfJointType type = ComboIndexToType(typeIdx);
             j.Type = type;
 
-            if (type != UrdfJointType.Fixed)
-            {
-                j.SetAxis(new System.Numerics.Vector3(
-                    (float)_jointAxisXBox.Value, (float)_jointAxisYBox.Value, (float)_jointAxisZBox.Value));
-            }
-
             if (type == UrdfJointType.Revolute || type == UrdfJointType.Prismatic)
             {
                 j.LimitLower = type == UrdfJointType.Revolute ? DegToRad(_jointLimitLowerBox.Value) : _jointLimitLowerBox.Value;
                 j.LimitUpper = type == UrdfJointType.Revolute ? DegToRad(_jointLimitUpperBox.Value) : _jointLimitUpperBox.Value;
             }
+        }
+
+        // Writes the axis boxes straight into the currently-selected
+        // joint the moment any of them changes (typing, or the picker's
+        // own programmatic set) — see CommitSelectedJointFromControls'
+        // comment for why this replaced a deferred read-back-at-switch-time
+        // commit.
+        private void HandleAxisNumberboxChanged()
+        {
+            if (_selectedJointIndex < 0 || _selectedJointIndex >= _liveDoc.Robot.Joints.Count) return;
+            JointDef j = _liveDoc.Robot.Joints[_selectedJointIndex];
+            if (j.Type == UrdfJointType.Fixed) return;
+            j.SetAxis(new System.Numerics.Vector3(
+                (float)_jointAxisXBox.Value, (float)_jointAxisYBox.Value, (float)_jointAxisZBox.Value));
         }
 
         private static double DegToRad(double deg) => deg * System.Math.PI / 180.0;

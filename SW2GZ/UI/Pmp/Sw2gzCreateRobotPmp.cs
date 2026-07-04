@@ -688,7 +688,11 @@ namespace SW2GZ.UI.Pmp
         }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutCreated(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxCalloutDestroyed(int Id) { }
-        void IPropertyManagerPage2Handler9.OnNumberboxChanged(int Id, double Value) { }
+        void IPropertyManagerPage2Handler9.OnNumberboxChanged(int Id, double Value)
+        {
+            if (Id == IdJointAxisXBox || Id == IdJointAxisYBox || Id == IdJointAxisZBox)
+                HandleAxisNumberboxChanged();
+        }
         void IPropertyManagerPage2Handler9.OnNumberBoxTrackingCompleted(int Id, double Value) { }
         void IPropertyManagerPage2Handler9.OnCheckboxCheck(int Id, bool Checked) { }
         void IPropertyManagerPage2Handler9.OnComboboxEditChanged(int Id, string Text) { }
