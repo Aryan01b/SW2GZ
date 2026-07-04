@@ -1,64 +1,30 @@
 /*
 Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
 
-Pure (COM-free) classifier: given a SolidWorks mate's type, its limit range,
-and already-extracted LOCAL (part-frame) face geometry + the owning
-component's pose, decides the resulting UrdfJointType and computes the
-assembly-frame axis/pivot-point. No SolidWorks types appear here — the
-COM-facing SwMateJointResolver extracts local geometry (ISurface.
-CylinderParams/PlaneParams) and component poses (IComponentPoses, already
-column-major-correct) and hands them to this pure layer, exactly the same
-split JointDefReconciler established for link-tree reconciliation.
+Pure (COM-free) classifier: given a SolidWorks mate's type and its limit
+range, decides the resulting UrdfJointType and limit. No geometry, no
+SolidWorks types — axis/pivot no longer come from mate geometry at all
+(see docs/superpowers/specs/2026-07-03-manual-axis-pivot-pick-design.md):
+three live-tested attempts at deriving an accurate axis from mate geometry
+each fixed one bug and surfaced another against FULL_ARM.SLDASM, so this
+phase replaces that mechanism with a direct user pick of a cylindrical
+face or straight edge (SwMateJointResolver.TryExtractAxisFromSelection)
+instead of patching the classifier's geometry guesses a fourth time.
 
 Classification:
   Lock                    → Fixed
   Concentric, no limit    → Continuous
   Concentric, limited     → Revolute
-  Angle,  limited         → Revolute
-  Distance, limited       → Prismatic
-  anything else           → Fixed (no fabricated axis)
+  Angle                   → Revolute
+  Distance                → Prismatic
+  anything else           → Fixed
 "Limited" means abs(lower) > 1e-9 || abs(upper) > 1e-9 — a plain Concentric
 mate always reports 0/0 (it never carries its own limit; confirmed against
 FULL_ARM.SLDASM's real mates during design — see
 docs/superpowers/specs/2026-07-03-robot-mate-joint-suggestion-design.md).
-
-Axis + pivot geometry, once local geometry is transformed into assembly
-frame via Matrix3.Mul (rotation) / Matrix3.Mul + translation (points) —
-NEVER via raw Transform2.ArrayData reads, see the plan's "Why not reuse
-AutoJointResolver.cs verbatim" section:
-  Concentric → cylinder axis direction + a point on that axis, preferring
-               the parent-side face's own geometry when both mated faces
-               are extractable cylinders (falls back to the child side
-               only if the parent's entity isn't a real cylindrical face).
-  Angle      → cross product of the two mated planes' normals; origin =
-               parent plane's point (the actual hinge sits on the shared
-               edge between the two faces — the parent point is a fair
-               anchor, good enough for the URDF, not required to be exact
-               to the millimeter for a first suggestion the user can edit).
-  Distance   → parent plane's normal as slide direction; origin = that
-               plane's point.
-  Lock       → no geometry needed.
-
-A movable classification (Continuous/Revolute/Prismatic) with no
-extractable geometry (e.g. a Concentric mate whose face somehow wasn't a
-real cylinder) demotes to Fixed rather than emit a zero-axis joint — same
-defensive rule the pre-gut AutoJointResolver used.
-
-Concentric agreement check: a satisfied Concentric mate forces both mated
-cylinders' axes onto the exact same 3D line — that's what the constraint
-solve guarantees. When both sides are extractable, Result.AxisAgreementDot
-(~1.0 = parallel) and Result.OriginPerpendicularDistance (~0 = coincident
-lines) record how well the two independently-transformed cylinders actually
-agree. This never changes which axis/origin gets used (still parent-
-preferred, unchanged) — it's a diagnostic the impure caller
-(SwMateJointResolver, which owns a logger) uses to flag a real bug (wrong
-entity/pose) instead of silently trusting one side. Both fields are null
-when only one side extracted a real cylinder — nothing to compare.
 */
 using System.Collections.Generic;
-using System.Numerics;
 using SW2GZ.Build.Urdf;
-using SW2GZ.Math;
 
 namespace SW2GZ.Build
 {
@@ -66,71 +32,19 @@ namespace SW2GZ.Build
 
     public static class MateJointClassification
     {
-        public sealed class PlanePair
-        {
-            public Vector3 ParentNormalLocal, ParentPointLocal, ParentTranslation;
-            public Matrix3 ParentRotation;
-            public Vector3 ChildNormalLocal, ChildPointLocal, ChildTranslation;
-            public Matrix3 ChildRotation;
-
-            public PlanePair(
-                Vector3 parentNormalLocal, Vector3 parentPointLocal, Matrix3 parentRotation, Vector3 parentTranslation,
-                Vector3 childNormalLocal, Vector3 childPointLocal, Matrix3 childRotation, Vector3 childTranslation)
-            {
-                ParentNormalLocal = parentNormalLocal; ParentPointLocal = parentPointLocal;
-                ParentRotation = parentRotation; ParentTranslation = parentTranslation;
-                ChildNormalLocal = childNormalLocal; ChildPointLocal = childPointLocal;
-                ChildRotation = childRotation; ChildTranslation = childTranslation;
-            }
-        }
-
-        public sealed class CylinderPair
-        {
-            public Vector3? ParentOriginLocal, ParentAxisLocal;
-            public Matrix3 ParentRotation;
-            public Vector3 ParentTranslation;
-            public Vector3? ChildOriginLocal, ChildAxisLocal;
-            public Matrix3 ChildRotation;
-            public Vector3 ChildTranslation;
-
-            public CylinderPair(
-                Vector3? parentOriginLocal, Vector3? parentAxisLocal, Matrix3 parentRotation, Vector3 parentTranslation,
-                Vector3? childOriginLocal, Vector3? childAxisLocal, Matrix3 childRotation, Vector3 childTranslation)
-            {
-                ParentOriginLocal = parentOriginLocal; ParentAxisLocal = parentAxisLocal;
-                ParentRotation = parentRotation; ParentTranslation = parentTranslation;
-                ChildOriginLocal = childOriginLocal; ChildAxisLocal = childAxisLocal;
-                ChildRotation = childRotation; ChildTranslation = childTranslation;
-            }
-        }
-
         public sealed class Result
         {
             public bool Found;
             public UrdfJointType Type = UrdfJointType.Fixed;
-            public Vector3 AxisAssembly = Vector3.Zero;
-            public Vector3? OriginAssembly;
             public double? LimitLower;
             public double? LimitUpper;
-            public double? AxisAgreementDot;
-            public double? OriginPerpendicularDistance;
             // Which SW mate produced this candidate — set by the impure
             // caller (SwMateJointResolver), not by Classify itself (pure,
-            // has no mate identity to give). Lets the Joints step UI offer
-            // a picker when a link pair has more than one plausible mate.
+            // has no mate identity to give).
             public string MateName;
-            // The mate type this candidate was classified from — lets
-            // ChooseBest prefer a Concentric candidate's exact cylinder
-            // axis over a limited Angle/Distance candidate's approximate
-            // plane-derived one when both exist for the same pair.
-            public SwMateTypeCode MateType;
         }
 
-        public static Result Classify(
-            SwMateTypeCode mateType,
-            double? limitLower, double? limitUpper,
-            CylinderPair cylinderGeometry,
-            PlanePair planeGeometry)
+        public static Result Classify(SwMateTypeCode mateType, double? limitLower, double? limitUpper)
         {
             bool hasLimit = (limitLower.HasValue && System.Math.Abs(limitLower.Value) > 1e-9)
                          || (limitUpper.HasValue && System.Math.Abs(limitUpper.Value) > 1e-9);
@@ -144,88 +58,12 @@ namespace SW2GZ.Build
                 _ => UrdfJointType.Fixed,
             };
 
-            Vector3 axis = Vector3.Zero;
-            Vector3? origin = null;
-            bool geometryOk = false;
-            double? axisAgreementDot = null;
-            double? originPerpendicularDistance = null;
-
-            if (mateType == SwMateTypeCode.Concentric && cylinderGeometry != null)
-            {
-                Vector3? parentAxisAsm = null, parentOriginAsm = null;
-                if (cylinderGeometry.ParentOriginLocal.HasValue && cylinderGeometry.ParentAxisLocal.HasValue)
-                {
-                    Vector3 a = NormalizeOrZero(cylinderGeometry.ParentRotation.Mul(cylinderGeometry.ParentAxisLocal.Value));
-                    if (a != Vector3.Zero)
-                    {
-                        parentAxisAsm = a;
-                        parentOriginAsm = cylinderGeometry.ParentRotation.Mul(cylinderGeometry.ParentOriginLocal.Value) + cylinderGeometry.ParentTranslation;
-                    }
-                }
-
-                Vector3? childAxisAsm = null, childOriginAsm = null;
-                if (cylinderGeometry.ChildOriginLocal.HasValue && cylinderGeometry.ChildAxisLocal.HasValue)
-                {
-                    Vector3 a = NormalizeOrZero(cylinderGeometry.ChildRotation.Mul(cylinderGeometry.ChildAxisLocal.Value));
-                    if (a != Vector3.Zero)
-                    {
-                        childAxisAsm = a;
-                        childOriginAsm = cylinderGeometry.ChildRotation.Mul(cylinderGeometry.ChildOriginLocal.Value) + cylinderGeometry.ChildTranslation;
-                    }
-                }
-
-                if (parentAxisAsm.HasValue) { axis = parentAxisAsm.Value; origin = parentOriginAsm; geometryOk = true; }
-                else if (childAxisAsm.HasValue) { axis = childAxisAsm.Value; origin = childOriginAsm; geometryOk = true; }
-
-                if (parentAxisAsm.HasValue && childAxisAsm.HasValue)
-                {
-                    axisAgreementDot = System.Math.Abs(Vector3.Dot(parentAxisAsm.Value, childAxisAsm.Value));
-                    Vector3 toChild = childOriginAsm.Value - parentOriginAsm.Value;
-                    double along = Vector3.Dot(toChild, parentAxisAsm.Value);
-                    double perpSq = System.Math.Max(0.0, toChild.LengthSquared() - along * along);
-                    originPerpendicularDistance = System.Math.Sqrt(perpSq);
-                }
-            }
-            else if (mateType == SwMateTypeCode.Angle && planeGeometry != null)
-            {
-                Vector3 parentNormalAsm = NormalizeOrZero(planeGeometry.ParentRotation.Mul(planeGeometry.ParentNormalLocal));
-                Vector3 childNormalAsm = NormalizeOrZero(planeGeometry.ChildRotation.Mul(planeGeometry.ChildNormalLocal));
-                Vector3 cross = Vector3.Cross(parentNormalAsm, childNormalAsm);
-                if (cross.LengthSquared() > 1e-12f)
-                {
-                    axis = Vector3.Normalize(cross);
-                    origin = planeGeometry.ParentRotation.Mul(planeGeometry.ParentPointLocal) + planeGeometry.ParentTranslation;
-                    geometryOk = true;
-                }
-            }
-            else if (mateType == SwMateTypeCode.Distance && planeGeometry != null)
-            {
-                axis = NormalizeOrZero(planeGeometry.ParentRotation.Mul(planeGeometry.ParentNormalLocal));
-                origin = planeGeometry.ParentRotation.Mul(planeGeometry.ParentPointLocal) + planeGeometry.ParentTranslation;
-                geometryOk = axis != Vector3.Zero;
-            }
-
-            if (!geometryOk && type != UrdfJointType.Fixed)
-            {
-                // Movable kind with no extractable geometry → would write a
-                // zero-axis joint. Demote to Fixed so the user can add a
-                // cleaner mate and re-trigger suggestion.
-                type = UrdfJointType.Fixed;
-                axis = Vector3.Zero;
-                origin = null;
-            }
-
             return new Result
             {
                 Found = true,
                 Type = type,
-                AxisAssembly = axis,
-                OriginAssembly = geometryOk ? origin : null,
                 LimitLower = hasLimit ? limitLower : null,
                 LimitUpper = hasLimit ? limitUpper : null,
-                AxisAgreementDot = axisAgreementDot,
-                OriginPerpendicularDistance = originPerpendicularDistance,
-                MateType = mateType,
             };
         }
 
@@ -233,52 +71,17 @@ namespace SW2GZ.Build
         // plain Continuous one when multiple mates span the same (parent,
         // child) pair; first-seen wins within a tie, same rank the pre-gut
         // AutoJointResolved.ChooseBest used.
-        //
-        // A limited Angle/Distance mate's axis is only an approximation
-        // (plane cross-product / normal — see Classify's own doc comment);
-        // a live FULL_ARM test surfaced exactly this: base_link<->link_1
-        // has both a plain Concentric mate (exact cylinder axis) and a
-        // limited Angle mate (for the rotation limit), and picking the
-        // Angle candidate wholesale threw away the accurate axis. When a
-        // Concentric candidate for the same pair also has real geometry,
-        // graft the winning candidate's Type/Limit onto the Concentric
-        // candidate's axis/origin instead — both describe the same
-        // physical hinge, Concentric's geometry is just more precise.
         public static Result ChooseBest(IReadOnlyList<Result> candidates)
         {
             if (candidates == null || candidates.Count == 0) return new Result { Found = false };
-            Result firstAny = null, firstLimit = null, firstConcentricGeometry = null;
+            Result firstAny = null, firstLimit = null;
             foreach (Result c in candidates)
             {
                 if (c == null || !c.Found) continue;
                 if (firstAny == null) firstAny = c;
                 if (firstLimit == null && (c.LimitLower.HasValue || c.LimitUpper.HasValue)) firstLimit = c;
-                if (firstConcentricGeometry == null && c.MateType == SwMateTypeCode.Concentric && c.OriginAssembly.HasValue)
-                    firstConcentricGeometry = c;
             }
-
-            Result winner = firstLimit ?? firstAny;
-            if (winner == null) return new Result { Found = false };
-
-            if (winner.MateType != SwMateTypeCode.Concentric && firstConcentricGeometry != null && winner != firstConcentricGeometry)
-            {
-                return new Result
-                {
-                    Found = true,
-                    Type = winner.Type,
-                    AxisAssembly = firstConcentricGeometry.AxisAssembly,
-                    OriginAssembly = firstConcentricGeometry.OriginAssembly,
-                    LimitLower = winner.LimitLower,
-                    LimitUpper = winner.LimitUpper,
-                    MateName = firstConcentricGeometry.MateName,
-                    MateType = firstConcentricGeometry.MateType,
-                };
-            }
-
-            return winner;
+            return firstLimit ?? firstAny ?? new Result { Found = false };
         }
-
-        private static Vector3 NormalizeOrZero(Vector3 v) =>
-            v.LengthSquared() > 1e-12f ? Vector3.Normalize(v) : Vector3.Zero;
     }
 }

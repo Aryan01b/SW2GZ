@@ -5,12 +5,14 @@ Sw2gzCreateRobotPmp — Joints step slice. One PMP listbox row per non-root
 link's joint plus a shared detail form (name/type/axis/limit) that is
 "checked out" for whichever row is selected and committed back via
 CommitSelectedJointFromControls before the selection changes or the wizard
-leaves the Joints step. See docs/superpowers/specs/2026-07-03-robot-joint-
-type-panel-design.md.
+leaves the Joints step. Type and Limit auto-suggest from mate classification
+(SwMateJointResolver.Resolve); Axis and pivot are a manual geometry pick
+(click a cylindrical face or straight edge) — see
+docs/superpowers/specs/2026-07-03-manual-axis-pivot-pick-design.md for why
+axis moved off mate-geometry guessing.
 */
 #if SW_INTEROP
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
@@ -31,40 +33,37 @@ namespace SW2GZ.UI.Pmp
         private const int IdJointTypeLabel     = 25;
         private const int IdJointTypeCombo     = 26;
         private const int IdJointAxisLabel     = 27;
-        private const int IdJointAxisXBox      = 28;
-        private const int IdJointAxisYBox      = 29;
-        private const int IdJointAxisZBox      = 30;
-        private const int IdJointLimitLabel    = 31;
-        private const int IdJointLimitLowerBox = 32;
-        private const int IdJointLimitUpperBox = 33;
-        private const int IdJointPivotSourceLabel = 34;
-        private const int IdJointPivotSourceCombo = 35;
+        private const int IdJointAxisPicker    = 28;
+        private const int IdJointAxisXBox      = 29;
+        private const int IdJointAxisYBox      = 30;
+        private const int IdJointAxisZBox      = 31;
+        private const int IdJointLimitLabel    = 32;
+        private const int IdJointLimitLowerBox = 33;
+        private const int IdJointLimitUpperBox = 34;
 
         private static readonly string[] JointTypeLabels =
             { "Fixed", "Revolute", "Continuous", "Prismatic" };
         private static readonly UrdfJointType[] JointTypeOptions =
             { UrdfJointType.Fixed, UrdfJointType.Revolute, UrdfJointType.Continuous, UrdfJointType.Prismatic };
 
+        // Distinct from Sw2gzCreateRobotPmp.MeshSelectionMark (0x4C0) — the
+        // two never coexist (ShowStep clears between steps) but keeping
+        // separate marks avoids a future foot-gun if that changes.
+        private const int AxisPickSelectionMark = 0x4C1;
+
         private PropertyManagerPageListbox _jointsList;
         private PropertyManagerPageTextbox _jointNameBox;
         private PropertyManagerPageCombobox _jointTypeCombo;
         private PropertyManagerPageLabel _jointAxisLabel;
+        private PropertyManagerPageSelectionbox _jointAxisPicker;
         private PropertyManagerPageNumberbox _jointAxisXBox;
         private PropertyManagerPageNumberbox _jointAxisYBox;
         private PropertyManagerPageNumberbox _jointAxisZBox;
         private PropertyManagerPageLabel _jointLimitLabel;
         private PropertyManagerPageNumberbox _jointLimitLowerBox;
         private PropertyManagerPageNumberbox _jointLimitUpperBox;
-        private PropertyManagerPageLabel _jointPivotSourceLabel;
-        private PropertyManagerPageCombobox _jointPivotSourceCombo;
 
         private int _selectedJointIndex = -1;
-
-        // Every real (non-Fixed) mate candidate found for whichever joint is
-        // currently loaded into the detail form — index-parallel to
-        // _jointPivotSourceCombo's items. Recomputed on every
-        // LoadJointIntoControls call; empty/stale between loads.
-        private List<MateJointClassification.Result> _currentJointCandidates = new List<MateJointClassification.Result>();
 
         private PropertyManagerPageGroup BuildJointsGroup(int grpOptions, int leftEdge, int visibleEnabled)
         {
@@ -99,6 +98,16 @@ namespace SW2GZ.UI.Pmp
                 IdJointAxisLabel,
                 (short)swPropertyManagerPageControlType_e.swControlType_Label,
                 "Axis (assembly frame X/Y/Z)", (short)leftEdge, visibleEnabled, "");
+            _jointAxisPicker = (PropertyManagerPageSelectionbox)grp.AddControl2(
+                IdJointAxisPicker,
+                (short)swPropertyManagerPageControlType_e.swControlType_Selectionbox,
+                "", (short)leftEdge, visibleEnabled,
+                "Click a cylindrical face (hole/pin) or a straight edge to read the axis and pivot off it");
+            _jointAxisPicker.SingleEntityOnly = true;
+            _jointAxisPicker.Height = 16;
+            _jointAxisPicker.Mark = AxisPickSelectionMark;
+            _jointAxisPicker.SetSelectionFilters((object)new swSelectType_e[]
+                { swSelectType_e.swSelFACES, swSelectType_e.swSelEDGES });
             _jointAxisXBox = NewAxisBox(grp, IdJointAxisXBox, leftEdge, visibleEnabled);
             _jointAxisYBox = NewAxisBox(grp, IdJointAxisYBox, leftEdge, visibleEnabled);
             _jointAxisZBox = NewAxisBox(grp, IdJointAxisZBox, leftEdge, visibleEnabled);
@@ -115,18 +124,6 @@ namespace SW2GZ.UI.Pmp
                 IdJointLimitUpperBox,
                 (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
                 "Upper", (short)leftEdge, visibleEnabled, "Upper motion limit");
-
-            _jointPivotSourceLabel = (PropertyManagerPageLabel)grp.AddControl2(
-                IdJointPivotSourceLabel,
-                (short)swPropertyManagerPageControlType_e.swControlType_Label,
-                "Pivot source", (short)leftEdge, visibleEnabled, "");
-            _jointPivotSourceCombo = (PropertyManagerPageCombobox)grp.AddControl2(
-                IdJointPivotSourceCombo,
-                (short)swPropertyManagerPageControlType_e.swControlType_Combobox,
-                "", (short)leftEdge, visibleEnabled,
-                "Which mate this joint's axis/pivot comes from — only shown when the link pair has more than one candidate");
-            _jointPivotSourceCombo.Height = 14;
-            _jointPivotSourceCombo.Style = (int)swPropMgrPageComboBoxStyle_e.swPropMgrPageComboBoxStyle_EditBoxReadOnly;
 
             RefreshJointsList();
             return grp;
@@ -145,8 +142,7 @@ namespace SW2GZ.UI.Pmp
 
         // The joint's parent/child link's own primary (first-assigned)
         // component — the same "first component defines the link's frame"
-        // convention used everywhere else. Shared by the auto-suggest pass
-        // and the pivot-source picker so both look up the identical pair.
+        // convention used everywhere else.
         private (string parentPrimary, string childPrimary) PrimaryComponentsFor(JointDef j)
         {
             LinkDef parentLink = _liveDoc.Robot.Links.FirstOrDefault(l => l.Name == j.ParentLink);
@@ -167,15 +163,16 @@ namespace SW2GZ.UI.Pmp
                 try { suggestion = _mateResolver.Resolve(parentPrimary, childPrimary); }
                 catch (Exception ex) { logger.Warn("Mate suggestion failed for " + j.Name, ex); continue; }
 
+                // Type + Limit only — axis/pivot is always a manual pick
+                // now (see file header); IsSuggested stays false so a
+                // moving joint the mate walk found still prompts the user
+                // to pick its axis, rather than silently looking "done".
                 if (!suggestion.Found || suggestion.Type == UrdfJointType.Fixed) continue;
 
                 j.Type = suggestion.Type;
-                j.SetAxis(suggestion.AxisAssembly);
-                if (suggestion.OriginAssembly.HasValue) j.SetMatePoint(suggestion.OriginAssembly.Value);
                 if (suggestion.LimitLower.HasValue) j.LimitLower = suggestion.LimitLower;
                 if (suggestion.LimitUpper.HasValue) j.LimitUpper = suggestion.LimitUpper;
                 j.MateName = suggestion.MateName;
-                j.IsSuggested = true;
             }
 
             _jointsList.Clear();
@@ -208,109 +205,46 @@ namespace SW2GZ.UI.Pmp
             _jointLimitLowerBox.Value = j.Type == UrdfJointType.Revolute ? RadToDeg(j.LimitLower ?? 0.0) : (j.LimitLower ?? 0.0);
             _jointLimitUpperBox.Value = j.Type == UrdfJointType.Revolute ? RadToDeg(j.LimitUpper ?? 0.0) : (j.LimitUpper ?? 0.0);
             UpdateJointFieldVisibility(j.Type);
-            LoadPivotSourceCombo(j);
-            HighlightJointPivotAxis(j);
+            // Drop whatever was selected for the PREVIOUS joint row — the
+            // axis picker itself is the live highlight now (no separate
+            // re-select-by-mate-name step), so a stale pick lingering here
+            // would look like it belongs to the newly loaded joint.
+            try { _modelDoc.ClearSelection2(true); }
+            catch (Exception ex) { logger.Warn("LoadJointIntoControls: clearing axis-picker selection failed", ex); }
         }
 
-        // Populates the "Pivot source" picker with every real (non-Fixed)
-        // mate candidate found for this joint's link pair — only shown when
-        // there are 2+, since a single candidate has nothing to choose
-        // between. Lets the user override which mate's geometry the
-        // suggestion used (e.g. a link with two similar holes, only one of
-        // which is the actual hinge — see docs/superpowers/specs/2026-07-03-
-        // mate-pivot-dual-cylinder-agreement-design.md's follow-up).
-        private void LoadPivotSourceCombo(JointDef j)
-        {
-            _currentJointCandidates = new List<MateJointClassification.Result>();
-            if (_jointPivotSourceCombo == null) return;
-
-            (string parentPrimary, string childPrimary) = PrimaryComponentsFor(j);
-            if (!string.IsNullOrEmpty(parentPrimary) && !string.IsNullOrEmpty(childPrimary))
-            {
-                try
-                {
-                    _currentJointCandidates = _mateResolver
-                        .ResolveAllCandidates(parentPrimary, childPrimary)
-                        .Where(c => c.Found && c.Type != UrdfJointType.Fixed)
-                        .ToList();
-                }
-                catch (Exception ex) { logger.Warn("LoadPivotSourceCombo: candidate lookup failed for " + j.Name, ex); }
-            }
-
-            bool show = j.Type != UrdfJointType.Fixed && _currentJointCandidates.Count > 1;
-            ((IPropertyManagerPageControl)_jointPivotSourceLabel).Visible = show;
-            ((IPropertyManagerPageControl)_jointPivotSourceCombo).Visible = show;
-            if (!show) return;
-
-            _jointPivotSourceCombo.Clear();
-            foreach (MateJointClassification.Result c in _currentJointCandidates)
-                _jointPivotSourceCombo.AddItems(c.MateName + " (" + c.Type + ")");
-
-            int selIdx = string.IsNullOrEmpty(j.MateName)
-                ? -1
-                : _currentJointCandidates.FindIndex(c => c.MateName == j.MateName);
-            if (selIdx < 0)
-            {
-                MateJointClassification.Result best = MateJointClassification.ChooseBest(_currentJointCandidates);
-                selIdx = _currentJointCandidates.FindIndex(c => c == best);
-            }
-            _jointPivotSourceCombo.CurrentSelection = (short)System.Math.Max(0, selIdx);
-        }
-
-        // User picked a different candidate mate for this joint's pivot —
-        // re-derive type/axis/pivot/limit from THAT mate instead of whatever
-        // ChooseBest's tie-break originally guessed, tag it so the choice
-        // sticks (RefreshJointsList never touches an already-IsSuggested
-        // joint), and re-highlight so the change is visible immediately.
-        private void HandlePivotSourceChanged(int item)
+        // User clicked a cylindrical face or straight edge in the Axis
+        // picker — read axis direction + pivot point directly off it and
+        // write them into this joint. Replaces mate-geometry guessing
+        // entirely (see file header).
+        private void HandleAxisPicked()
         {
             if (_selectedJointIndex < 0 || _selectedJointIndex >= _liveDoc.Robot.Joints.Count) return;
-            if (item < 0 || item >= _currentJointCandidates.Count) return;
-
-            JointDef j = _liveDoc.Robot.Joints[_selectedJointIndex];
-            MateJointClassification.Result chosen = _currentJointCandidates[item];
-
-            j.Type = chosen.Type;
-            j.SetAxis(chosen.AxisAssembly);
-            if (chosen.OriginAssembly.HasValue) j.SetMatePoint(chosen.OriginAssembly.Value);
-            else j.ClearMatePoint();
-            j.LimitLower = chosen.LimitLower;
-            j.LimitUpper = chosen.LimitUpper;
-            j.MateName = chosen.MateName;
-            j.IsSuggested = true;
-
-            LoadJointIntoControls(j);
-        }
-
-        // Highlights the selected joint's pivot by selecting the EXACT SW
-        // face the suggestion's geometry came from (via j.MateName), not a
-        // guessed nearby point — see docs/superpowers/specs/2026-07-03-mate-
-        // pivot-dual-cylinder-agreement-design.md. Reuses the same "only the
-        // active selection" pattern as HighlightLinkMesh. No color
-        // distinction (pending vs confirmed) — SW has no confirmed
-        // per-entity color setter for an arbitrary face selection in this
-        // interop version (grepped the repo: no precedent), so this relies
-        // on SW's own default selection highlight, same as before.
-        private void HighlightJointPivotAxis(JointDef j)
-        {
             try
             {
-                _modelDoc.ClearSelection2(true);
-                if (j == null || j.Type == UrdfJointType.Fixed || !j.HasMatePoint || string.IsNullOrEmpty(j.MateName))
-                    return;
+                var selMgr = (ISelectionMgr)_modelDoc.SelectionManager;
+                if (selMgr == null || selMgr.GetSelectedObjectCount2(AxisPickSelectionMark) != 1) return;
 
-                (string parentPrimary, string childPrimary) = PrimaryComponentsFor(j);
-                if (string.IsNullOrEmpty(parentPrimary) || string.IsNullOrEmpty(childPrimary)) return;
+                object entity = selMgr.GetSelectedObject6(1, AxisPickSelectionMark);
+                Component2 owner = selMgr.GetSelectedObjectsComponent3(1, AxisPickSelectionMark);
+                if (entity == null || owner == null) return;
 
-                bool selected = _mateResolver.SelectPivotFace(j.MateName, parentPrimary, childPrimary);
-                if (!selected)
+                if (!_mateResolver.TryExtractAxisFromSelection(entity, owner, out var axis, out var origin))
                 {
-                    logger.Warn("HighlightJointPivotAxis: could not re-select the pivot face for mate '" +
-                        j.MateName + "' (joint '" + j.Name + "') — mate may have been renamed/deleted since " +
-                        "the suggestion was made.");
+                    logger.Warn("HandleAxisPicked: picked entity wasn't a cylindrical face or straight edge, or its geometry couldn't be read.");
+                    return;
                 }
+
+                JointDef j = _liveDoc.Robot.Joints[_selectedJointIndex];
+                j.SetAxis(axis);
+                j.SetMatePoint(origin);
+                j.IsSuggested = true;
+
+                _jointAxisXBox.Value = SnapNearZero(axis.X);
+                _jointAxisYBox.Value = SnapNearZero(axis.Y);
+                _jointAxisZBox.Value = SnapNearZero(axis.Z);
             }
-            catch (Exception ex) { logger.Warn("HighlightJointPivotAxis failed", ex); }
+            catch (Exception ex) { logger.Warn("HandleAxisPicked failed", ex); }
         }
 
         private void ClearJointControls()
@@ -321,9 +255,6 @@ namespace SW2GZ.UI.Pmp
             _jointAxisXBox.Value = 0; _jointAxisYBox.Value = 0; _jointAxisZBox.Value = 1;
             _jointLimitLowerBox.Value = 0; _jointLimitUpperBox.Value = 0;
             UpdateJointFieldVisibility(UrdfJointType.Fixed);
-            _currentJointCandidates = new List<MateJointClassification.Result>();
-            ((IPropertyManagerPageControl)_jointPivotSourceLabel).Visible = false;
-            ((IPropertyManagerPageControl)_jointPivotSourceCombo).Visible = false;
         }
 
         // Axis is only meaningful for a moving joint; limits only for
@@ -337,6 +268,7 @@ namespace SW2GZ.UI.Pmp
             bool showAxis = type != UrdfJointType.Fixed;
             bool showLimit = type == UrdfJointType.Revolute || type == UrdfJointType.Prismatic;
             ((IPropertyManagerPageControl)_jointAxisLabel).Visible = showAxis;
+            ((IPropertyManagerPageControl)_jointAxisPicker).Visible = showAxis;
             ((IPropertyManagerPageControl)_jointAxisXBox).Visible = showAxis;
             ((IPropertyManagerPageControl)_jointAxisYBox).Visible = showAxis;
             ((IPropertyManagerPageControl)_jointAxisZBox).Visible = showAxis;
@@ -393,7 +325,6 @@ namespace SW2GZ.UI.Pmp
 
         void IPropertyManagerPage2Handler9.OnComboboxSelectionChanged(int Id, int Item)
         {
-            if (Id == IdJointPivotSourceCombo) { HandlePivotSourceChanged(Item); return; }
             if (Id != IdJointTypeCombo) return;
             UrdfJointType type = ComboIndexToType(Item);
             // Suggest a sane default axis the first time a joint leaves

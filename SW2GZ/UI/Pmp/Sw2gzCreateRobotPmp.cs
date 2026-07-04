@@ -650,6 +650,12 @@ namespace SW2GZ.UI.Pmp
         void IPropertyManagerPage2Handler9.OnSelectionboxFocusChanged(int Id) { }
         void IPropertyManagerPage2Handler9.OnSelectionboxListChanged(int Id, int Count)
         {
+            if (Id == IdJointAxisPicker)
+            {
+                if (Count == 1) HandleAxisPicked();
+                return;
+            }
+
             if (Id != IdMeshPicker) return;
             try { AutoFillLinkName(); } catch (Exception e) { logger.Warn("AutoFillLinkName failed", e); }
 
