@@ -102,9 +102,11 @@ namespace SW2GZ.UI.Pmp
                 IdJointAxisPicker,
                 (short)swPropertyManagerPageControlType_e.swControlType_Selectionbox,
                 "", (short)leftEdge, visibleEnabled,
-                "Click a cylindrical face (hole/pin) or a straight edge to read the axis and pivot off it");
-            _jointAxisPicker.SingleEntityOnly = true;
-            _jointAxisPicker.Height = 16;
+                "Click a cylindrical face or straight edge. For a revolute/continuous joint, pick BOTH the " +
+                "parent's and child's hole to confirm their axes coincide.");
+            _jointAxisPicker.SingleEntityOnly = false;
+            _jointAxisPicker.AllowMultipleSelectOfSameEntity = false;
+            _jointAxisPicker.Height = 30;
             _jointAxisPicker.Mark = AxisPickSelectionMark;
             _jointAxisPicker.SetSelectionFilters((object)new swSelectType_e[]
                 { swSelectType_e.swSelFACES, swSelectType_e.swSelEDGES });
@@ -213,36 +215,69 @@ namespace SW2GZ.UI.Pmp
             catch (Exception ex) { logger.Warn("LoadJointIntoControls: clearing axis-picker selection failed", ex); }
         }
 
-        // User clicked a cylindrical face or straight edge in the Axis
-        // picker — read axis direction + pivot point directly off it and
-        // write them into this joint. Replaces mate-geometry guessing
-        // entirely (see file header).
+        // ~2.5deg / 1mm — same tolerance the earlier mate-geometry
+        // agreement check used. Two independently-picked holes that
+        // actually share a hinge should agree far tighter than this.
+        private const double AxisAgreementDotMin = 0.999;
+        private const double OriginPerpendicularDistanceMaxMeters = 0.001;
+
+        // User clicked 1-2 cylindrical faces or straight edges in the Axis
+        // picker — read axis direction + pivot point directly off each and
+        // write them into this joint. Picking BOTH the parent's and
+        // child's hole for a revolute/continuous joint lets us confirm the
+        // two axes actually coincide instead of trusting one side blindly
+        // (replaces mate-geometry guessing entirely — see file header).
         private void HandleAxisPicked()
         {
             if (_selectedJointIndex < 0 || _selectedJointIndex >= _liveDoc.Robot.Joints.Count) return;
             try
             {
                 var selMgr = (ISelectionMgr)_modelDoc.SelectionManager;
-                if (selMgr == null || selMgr.GetSelectedObjectCount2(AxisPickSelectionMark) != 1) return;
+                if (selMgr == null) return;
+                int count = selMgr.GetSelectedObjectCount2(AxisPickSelectionMark);
+                if (count < 1 || count > 2) return;
 
-                object entity = selMgr.GetSelectedObject6(1, AxisPickSelectionMark);
-                Component2 owner = selMgr.GetSelectedObjectsComponent3(1, AxisPickSelectionMark);
-                if (entity == null || owner == null) return;
-
-                if (!_mateResolver.TryExtractAxisFromSelection(entity, owner, out var axis, out var origin))
+                var picks = new System.Collections.Generic.List<(System.Numerics.Vector3 axis, System.Numerics.Vector3 origin)>();
+                for (int i = 1; i <= count; i++)
+                {
+                    object entity = selMgr.GetSelectedObject6(i, AxisPickSelectionMark);
+                    Component2 owner = selMgr.GetSelectedObjectsComponent3(i, AxisPickSelectionMark);
+                    if (entity != null && owner != null &&
+                        _mateResolver.TryExtractAxisFromSelection(entity, owner, out var axis, out var origin))
+                        picks.Add((axis, origin));
+                }
+                if (picks.Count == 0)
                 {
                     logger.Warn("HandleAxisPicked: picked entity wasn't a cylindrical face or straight edge, or its geometry couldn't be read.");
                     return;
                 }
 
+                (System.Numerics.Vector3 axis, System.Numerics.Vector3 origin) chosen = picks[0];
+
+                if (picks.Count == 2)
+                {
+                    double dot = System.Math.Abs(System.Numerics.Vector3.Dot(picks[0].axis, picks[1].axis));
+                    System.Numerics.Vector3 toSecond = picks[1].origin - picks[0].origin;
+                    double along = System.Numerics.Vector3.Dot(toSecond, picks[0].axis);
+                    double perpDist = System.Math.Sqrt(System.Math.Max(0.0,
+                        toSecond.LengthSquared() - along * along));
+
+                    if (dot < AxisAgreementDotMin || perpDist > OriginPerpendicularDistanceMaxMeters)
+                    {
+                        logger.Warn("HandleAxisPicked: the two picked faces' axes disagree (dot=" +
+                            dot.ToString("F6") + ", perp dist=" + perpDist.ToString("F6") +
+                            "m) — double-check you picked the matching holes.");
+                    }
+                }
+
                 JointDef j = _liveDoc.Robot.Joints[_selectedJointIndex];
-                j.SetAxis(axis);
-                j.SetMatePoint(origin);
+                j.SetAxis(chosen.axis);
+                j.SetMatePoint(chosen.origin);
                 j.IsSuggested = true;
 
-                _jointAxisXBox.Value = SnapNearZero(axis.X);
-                _jointAxisYBox.Value = SnapNearZero(axis.Y);
-                _jointAxisZBox.Value = SnapNearZero(axis.Z);
+                _jointAxisXBox.Value = SnapNearZero(chosen.axis.X);
+                _jointAxisYBox.Value = SnapNearZero(chosen.axis.Y);
+                _jointAxisZBox.Value = SnapNearZero(chosen.axis.Z);
             }
             catch (Exception ex) { logger.Warn("HandleAxisPicked failed", ex); }
         }

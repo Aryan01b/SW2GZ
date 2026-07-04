@@ -298,7 +298,20 @@ namespace SW2GZ.UI.Pmp
             AddFieldLabel(grp, IdLinksListLabel, "Hierarchy — drag to reparent, click to select",
                 leftEdge, visibleEnabled);
             _linkTree = new LinkTreeView { Width = 260, Height = 220 };
-            _linkTree.ActiveLinkChanged += (s, link) => { RefreshSelectedInfo(link); HighlightLinkMesh(link); };
+            _linkTree.ActiveLinkChanged += (s, link) =>
+            {
+                RefreshSelectedInfo(link);
+                HighlightLinkMesh(link);
+                // HighlightLinkMesh re-selects the link's own mesh with
+                // MeshSelectionMark, which fires OnSelectionboxListChanged
+                // and calls AutoFillLinkName — overwriting the name box
+                // with the MESH's sanitized component name (e.g.
+                // "end_link_1") instead of the LINK's actual name
+                // ("end_link"). Set it back afterward so the box always
+                // shows what Rename would actually apply to.
+                if (link != null && _linkNameBox != null) _linkNameBox.Text = link.Name;
+                else SetLinkNamePlaceholder();
+            };
             _linkTree.LinksChanged += (s, e) => RebuildJoints();
             _linkTree.SetLinks(_liveDoc.Robot.Links);
             _treeHandle = (PropertyManagerPageWindowFromHandle)grp.AddControl2(
@@ -652,7 +665,7 @@ namespace SW2GZ.UI.Pmp
         {
             if (Id == IdJointAxisPicker)
             {
-                if (Count == 1) HandleAxisPicked();
+                if (Count == 1 || Count == 2) HandleAxisPicked();
                 return;
             }
 
