@@ -6,6 +6,83 @@ branch below is on an older base, 470 green there).
 Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
+## Done — Robot mode v3: Joints step (type/axis/limit) shipped + live-tested, MILESTONE (branch `feat/robot-mode-v3`, 2026-07-04)
+
+**User-confirmed working on FULL_ARM.SLDASM: "link is modeled properly."**
+Both link positioning (base_link/link_1/end_link chain, correct relative
+pose down the whole tree) and joint pivot (axis + rotation point) are
+accurate. Two-phase build this session, phase 2 pivoted architecture mid-
+stream after 3 straight live-test failures on the automatic approach:
+
+**Phase 1 (shipped, stable):** manual Type/Axis/Limit editing in a new
+Joints step — one row per non-root link, `JointDefReconciler` merge-
+preserves user edits across Links-step tree mutations. Spec/plan:
+`docs/superpowers/specs/2026-07-03-robot-joint-type-panel-design.md`.
+
+**Phase 2, attempt A (reverted in spirit, not code-deleted — superseded):**
+mate-based auto-suggestion (`SwMateJointResolver` walking `MateGroup`,
+`MateJointClassification` pure classifier). Three live-test rounds, each
+fixing one real bug and surfacing another against FULL_ARM's real mates:
+1. Mesh not rebased with the mate-pivot override → mesh/joint frame at two
+   different points → fixed (`frameOrigin` single source of truth for
+   mesh/mass/joint-origin).
+2. Pivot axis direction right, position off → traced to trusting one
+   cylinder side blindly → added (then later removed) a dual-cylinder
+   cross-check.
+3. `ChooseBest` picked a limited Angle mate wholesale for its limit,
+   discarding a co-existing Concentric mate's exact cylinder axis for its
+   approximate plane-cross-product one → fixed via a graft (then later
+   removed with the rest of the geometry-guessing code).
+
+**Phase 2, attempt B (what actually shipped):** per systematic-debugging's
+"3+ fixes on one mechanism → question the architecture" — replaced mate-
+geometry-guessing entirely with a **manual axis/pivot pick**. Spec:
+`docs/superpowers/specs/2026-07-03-manual-axis-pivot-pick-design.md`.
+- Type + Limit **stay automatic** from mate classification (never the
+  source of any of the 3 bugs above) — `MateJointClassification` shrunk to
+  a pure `(mateType, limit) → (Type, Limit)` mapping, no geometry at all.
+- Axis + pivot are now a **Selectionbox pick** in the Joints step: click a
+  cylindrical face (axis = cylinder axis) or straight edge (axis =
+  endpoint direction) — `SwMateJointResolver.TryExtractAxisFromSelection`,
+  owning component resolved via `ISelectionMgr.GetSelectedObjectsComponent3`.
+  Accepts up to 2 picks (parent's + child's hole) for a revolute/
+  continuous joint, cross-checking the two axes actually coincide.
+- Net -653 lines in the mate-geometry commit alone (deleted CylinderPair/
+  PlanePair/agreement-check/ChooseBest-graft/pivot-source-combo).
+
+**Two more real bugs found + fixed during this same live-test cycle:**
+- **Axis lost when switching joint rows.** `CommitSelectedJointFromControls`
+  re-read the axis numberboxes at listbox-switch time; that read proved
+  unreliable across switches (PMP control-timing quirk). Fixed: axis now
+  writes straight to the `JointDef` the instant it changes
+  (`OnNumberboxChanged` → `HandleAxisNumberboxChanged`), not deferred.
+- **Grandchild link mispositioned** (`end_link` rendered on top of the
+  `base_link` joint instead of its own location). Root cause:
+  `Sw2gzRobotExporter` computed a child's joint origin relative to its
+  parent's RAW pose, not the parent's own established FRAME ORIGIN (mate
+  pivot if the parent has one) — those differ whenever the parent itself
+  has a mate-derived pivot. Fixed: `frameOrigins` dict precomputed for
+  every link up front (alongside `linkPoses`), children read the parent's
+  frame origin. Regression test:
+  `Export_GrandchildOrigin_IsRelativeToParentsFrameOrigin_NotParentsRawPose`.
+
+**Also fixed, smaller UX bugs found live:**
+- Mesh selection/highlight persisting across Links/Joints wizard steps.
+- Ribbon Create/Edit label bug resurfaced from branch divergence (`main`
+  had the fix, `feat/robot-mode-v3` branched before it existed) — cherry-
+  picked, then merged `main` into this branch to stop future drift.
+- Clicking empty viewport space in Links step didn't clear the tree's
+  remembered selection or the Mesh box.
+- Renaming an existing link silently did nothing (the "Link name" box was
+  only ever wired to name the NEXT Add, never the selected link) — added
+  an explicit Rename button.
+
+**503 tests green**, addin compiles clean, deployed + live-tested
+repeatedly this session (final deploy confirmed working by user).
+**Pending, not yet built:** Phase2 Task 7 full manual verification
+checklist walkthrough (mostly superseded by the live milestone above,
+but not formally closed out as a task).
+
 ## Done — Robot mode v3: joint/link relative pose + multi-mesh links, live-tested (branch `feat/robot-mode-v3`)
 
 **2026-07-02, closing out this session's robot-mode work.** Two pieces,
