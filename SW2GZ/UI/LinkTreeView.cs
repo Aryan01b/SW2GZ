@@ -159,13 +159,31 @@ namespace SW2GZ.UI
         private void OnAfterLabelEdit(object sender, NodeLabelEditEventArgs e)
         {
             if (!(e.Node.Tag is LinkDef link) || e.Label == null) { e.CancelEdit = true; return; }
-            string sanitized = RosNameSanitizer.Sanitize(e.Label).Value;
-            if (string.IsNullOrEmpty(sanitized)) { e.CancelEdit = true; return; }
+            e.CancelEdit = true;   // we set text via Rebuild to keep the "(base)" badge
+            ApplyRename(link, e.Label);
+        }
+
+        // Renames the currently selected link — the same operation the
+        // tree's own inline F2/label-edit performs, exposed for the Links
+        // step's "Rename" button (typing a new name into the top text box
+        // only ever named the NEXT link to Add; it was never wired to rename
+        // whatever's already selected, which read as "rename doesn't work").
+        // No-op if nothing is selected or the name is empty/unchanged.
+        public void RenameActiveLink(string newName)
+        {
+            LinkDef link = ActiveLink;
+            if (link == null) return;
+            ApplyRename(link, newName);
+        }
+
+        private void ApplyRename(LinkDef link, string newLabel)
+        {
+            string sanitized = RosNameSanitizer.Sanitize(newLabel).Value;
+            if (string.IsNullOrEmpty(sanitized) || sanitized == link.Name) return;
             // Re-point children that referenced the old name.
             string old = link.Name;
             foreach (LinkDef l in links) if (l.ParentName == old) l.ParentName = sanitized;
             link.Name = sanitized;
-            e.CancelEdit = true;   // we set text via Rebuild to keep the "(base)" badge
             Rebuild();
             LinksChanged(this, EventArgs.Empty);
         }

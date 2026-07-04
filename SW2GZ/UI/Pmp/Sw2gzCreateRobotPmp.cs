@@ -106,6 +106,7 @@ namespace SW2GZ.UI.Pmp
         private PropertyManagerPageWindowFromHandle _linksBarHandle;
         private System.Windows.Forms.Panel _linksBar;
         private System.Windows.Forms.Button _addLinkBtn;
+        private System.Windows.Forms.Button _renameLinkBtn;
         private System.Windows.Forms.Button _removeLinkBtn;
         private System.Windows.Forms.Button _clearLinksBtn;
 
@@ -269,16 +270,19 @@ namespace SW2GZ.UI.Pmp
 
             _linksBar       = NewBar(260, 32);
             _addLinkBtn     = NewBarButton("Add link", 80);
+            _renameLinkBtn  = NewBarButton("Rename", 70);
             _removeLinkBtn  = NewBarButton("Remove", 70);
             _clearLinksBtn  = NewBarButton("Clear all", 80);
             _addLinkBtn.Click     += (s, e) => HandleAddLink();
+            _renameLinkBtn.Click  += (s, e) => HandleRenameLink();
             _removeLinkBtn.Click  += (s, e) => HandleRemoveLink();
             _clearLinksBtn.Click  += (s, e) => HandleClearLinks();
             _linksBar.Controls.Add(_addLinkBtn);
+            _linksBar.Controls.Add(_renameLinkBtn);
             _linksBar.Controls.Add(_removeLinkBtn);
             _linksBar.Controls.Add(_clearLinksBtn);
-            _linksBar.Resize += (s, e) => CenterRow(_linksBar, _addLinkBtn, _removeLinkBtn, _clearLinksBtn);
-            CenterRow(_linksBar, _addLinkBtn, _removeLinkBtn, _clearLinksBtn);
+            _linksBar.Resize += (s, e) => CenterRow(_linksBar, _addLinkBtn, _renameLinkBtn, _removeLinkBtn, _clearLinksBtn);
+            CenterRow(_linksBar, _addLinkBtn, _renameLinkBtn, _removeLinkBtn, _clearLinksBtn);
             _linksBarHandle = (PropertyManagerPageWindowFromHandle)grp.AddControl2(
                 IdLinksBtnBar,
                 (short)swPropertyManagerPageControlType_e.swControlType_WindowFromHandle,
@@ -386,6 +390,19 @@ namespace SW2GZ.UI.Pmp
                 _modelDoc.ClearSelection2(true);
             }
             catch (Exception e) { logger.Warn("HandleAddLink failed", e); }
+        }
+
+        // Renames the SELECTED link to whatever's typed in the Link name
+        // box. Distinct from Add: the box's text there names a NEW child;
+        // this button applies that same text to the already-selected link
+        // instead. (The tree's own F2/inline-edit does the identical
+        // rename — this is just a more discoverable path to it.)
+        private void HandleRenameLink()
+        {
+            string newName = LinkNameBoxValue();
+            if (string.IsNullOrEmpty(newName)) return;
+            _linkTree?.RenameActiveLink(newName);
+            SetLinkNamePlaceholder();
         }
 
         private void HandleRemoveLink()
