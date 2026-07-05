@@ -1,9 +1,13 @@
 # Progress
 
 Current: world mode + asset mode + World GUI/camera (v2.4.0) + World Settings
-(v2.5.0) shipped on `main`. Tests: **797 green** (on `main`; the v3 rebuild
-branch below is on an older base, 470 green there).
-Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0.
+(v2.5.0) shipped on `main`. **Robot mode v3 tagged v2.7.0 on
+`feat/robot-mode-enhancements`** (2026-07-05, live-confirmed working in
+SolidWorks — link/joint modeling + SW→ROS/Gz frame conversion) — not yet
+merged to `main`; work continues on this branch. Tests: 500 green on this
+branch (797 on `main`, which predates the robot-v3 rebuild's test churn).
+Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0/v2.6.0
+on `main`, v2.7.0 on `feat/robot-mode-enhancements`.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
 ## Done — Robot mode: SW→ROS/Gz frame conversion always applied (branch `feat/robot-mode-enhancements`)
