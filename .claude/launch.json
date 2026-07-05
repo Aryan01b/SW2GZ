@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "preview-scaffold",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/preview/serve-web.ps1", "-Port", "8090", "-OpenWith", "none"],
+      "port": 8090
+    }
+  ]
+}

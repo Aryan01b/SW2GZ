@@ -1,31 +1,23 @@
 <!doctype html>
 <!--
-Copyright (c) 2026 Aryan Arlikar. MIT License — see CONTRIBUTING.md.
-
-In-addin browser preview for SW2GZ exports. Loads /robot.urdf, fetches
-DAE / STL meshes from /meshes/, parses the URDF for inertial / joint
-metadata, and renders via three.js + urdf-loader.
-
-Layout: fixed-WIDTH left panel (Links shown as a real parent/child
-tree + Joints, each section collapsible) + 3D viewport + fixed-WIDTH
-right panel (Details of the current selection, plus Settings: COM
-markers, TF frame size, live SW joint sync). Dark charcoal theme, no
-HUD/toggle clutter — just meshes (colored from a curated palette
-cycled by tree position), per-link TF frame (axes triad + origin
-dot), and orbit-drag to rotate.
-
-Conventions:
-  - Z-up world (REP-103). Camera up = +Z. Axes overlay X red / Y green / Z blue.
-  - Mouse: left-drag orbit, wheel zoom, right-drag (or shift+drag) pan.
-
-Hosted from the SW2GZ addin's PreviewServer (HttpListener) on 127.0.0.1.
-Modules load from ./vendor/* — zero network calls at runtime.
+Design scaffold — NOT wired to production. Revamp target for
+SW2GZ/UI/PreviewWeb/index.html: fixed-WIDTH left panel (Links shown as
+a real parent/child tree + Joints, each section collapsible) +
+fixed-WIDTH right panel (Details of the current selection, plus a
+Settings section: COM markers, TF frame size). Dark charcoal theme
+(VSCode/Claude-dark register), no HUD/data clusters, no display-mode
+toggles, responsive down to narrow widths. Viewport shows meshes
+(colored from a curated palette cycled by tree position — no real
+per-part color data to key off), per-link TF frame (axes triad +
+origin dot), orbit-drag to rotate. Served by tools/preview/serve-web.ps1
+at /scaffold.html against the same /robot.urdf, /meshes/*, /vendor/*
+routes the real preview uses.
 -->
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>SW2GZ — 3D preview</title>
+  <title>SW2GZ — preview scaffold</title>
   <style>
     :root {
       --bg:        #1e1e1e;
@@ -38,7 +30,6 @@ Modules load from ./vendor/* — zero network calls at runtime.
       --muted:     #767676;
       --accent:    #5a9bd4;
       --accent-bg: #2a3742;
-      --bad:       #d86060;
       --mono: "Cascadia Code", Consolas, "SF Mono", monospace;
       --t-revolute:   #5a9bd4;
       --t-continuous: #5fb8a8;
@@ -71,11 +62,10 @@ Modules load from ./vendor/* — zero network calls at runtime.
       display: flex; align-items: center; gap: 8px; padding: 0 14px;
       border-bottom: 1px solid var(--edge);
       font-weight: 600; font-size: 13px; color: var(--fore); letter-spacing: 0.2px;
-      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
     }
     .side .brand .mark {
       width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
-      box-shadow: 0 0 6px var(--accent); flex-shrink: 0;
+      box-shadow: 0 0 6px var(--accent);
     }
     .side .section { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; }
     .side .section.collapsed { flex: 0 0 auto; }
@@ -177,20 +167,6 @@ Modules load from ./vendor/* — zero network calls at runtime.
       font-size: 11px; color: var(--fore-2);
       background: rgba(35,35,35,0.75); padding: 4px 8px; border-radius: 4px;
     }
-    #status {
-      position: absolute; right: 14px; bottom: 12px;
-      font-size: 11px; color: var(--muted);
-      background: rgba(35,35,35,0.75); padding: 4px 8px; border-radius: 4px;
-    }
-
-    .err {
-      position: fixed; top: 12px; right: 12px;
-      max-width: 520px; z-index: 9999;
-      background: #3a1414; border: 1px solid var(--bad);
-      color: #ffcfcf; padding: 8px 12px;
-      font: 11px/1.4 Consolas, monospace;
-      white-space: pre-wrap; word-break: break-word;
-    }
 
     /* ── Responsive: narrow viewports stack both panels around the
        viewport instead of beside it. ─────────────────────────────── */
@@ -204,46 +180,11 @@ Modules load from ./vendor/* — zero network calls at runtime.
       #hint { display: none; }
     }
   </style>
-
-  <!-- Offline-first importmap: every module resolves under ./vendor/.
-       No network calls at runtime. Pinned versions match
-       scripts/FetchPreviewVendor.ps1; bump both together. -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "./vendor/three/build/three.module.js",
-      "three/addons/": "./vendor/three/examples/jsm/",
-      "three/examples/jsm/": "./vendor/three/examples/jsm/",
-      "urdf-loader": "./vendor/urdf-loader/src/URDFLoader.js"
-    }
-  }
-  </script>
 </head>
 <body>
-
-<!-- Surface any uncaught error directly on the page so the user doesn't
-     need DevTools open to diagnose. -->
-<script>
-  (function () {
-    function pin(msg) {
-      var box = document.createElement('div');
-      box.className = 'err';
-      box.textContent = msg;
-      (document.body || document.documentElement).appendChild(box);
-    }
-    window.addEventListener('error', function (e) {
-      var src = e.filename ? (e.filename + ':' + e.lineno + ':' + e.colno) : '';
-      pin('JS error: ' + (e.message || e.error) + (src ? '\n' + src : ''));
-    });
-    window.addEventListener('unhandledrejection', function (e) {
-      pin('Promise rejection: ' + (e.reason && e.reason.stack ? e.reason.stack : e.reason));
-    });
-  })();
-</script>
-
   <div id="app">
     <aside id="panel" class="side">
-      <div class="brand"><span class="mark"></span><span id="brand-title">SW2GZ preview</span></div>
+      <div class="brand"><span class="mark"></span>SW2GZ preview</div>
       <div class="section" data-section="links">
         <div class="section-h"><span class="chev">▾</span>Links<span class="count" id="links-count"></span></div>
         <div class="section-body"><div id="links-list"></div></div>
@@ -256,7 +197,6 @@ Modules load from ./vendor/* — zero network calls at runtime.
     <div id="viewport">
       <canvas id="corner-axes"></canvas>
       <div id="hint">drag to orbit · scroll to zoom</div>
-      <div id="status">loading…</div>
     </div>
     <aside id="details-panel" class="side">
       <div class="section" data-section="details">
@@ -276,13 +216,22 @@ Modules load from ./vendor/* — zero network calls at runtime.
             <div class="row-label"><span>tf frame size</span><span class="readout" id="frame-size-readout">0.08</span></div>
             <input type="range" id="frame-size-slider" min="0.02" max="0.3" step="0.01" value="0.08"/>
           </div>
-          <div class="setting">
-            <label class="check"><input type="checkbox" id="live-toggle" checked/>live sync from SolidWorks</label>
-          </div>
         </div>
       </div>
     </aside>
   </div>
+
+  <!-- Offline-first importmap, same vendor tree as the real preview. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/build/three.module.js",
+      "three/addons/": "./vendor/three/examples/jsm/",
+      "three/examples/jsm/": "./vendor/three/examples/jsm/",
+      "urdf-loader": "./vendor/urdf-loader/src/URDFLoader.js"
+    }
+  }
+  </script>
 
   <script type="module">
     import * as THREE from 'three';
@@ -292,16 +241,6 @@ Modules load from ./vendor/* — zero network calls at runtime.
     import URDFLoader from 'urdf-loader';
 
     const viewport = document.getElementById('viewport');
-    const statusEl = document.getElementById('status');
-    function setStatus(txt) { statusEl.textContent = txt; }
-
-    // The preview pipeline always emits a `<link name="world"/>` and a
-    // `world_to_<root>` fixed joint carrying the SW→ROS rotation (so the
-    // browser renders the robot in REP-103 Z-up regardless of the user's
-    // SW up/forward convention). These two URDF nodes are framework
-    // plumbing, not user-modelled links/joints — hide them everywhere.
-    const isFrameAnchorLink  = (name) => name === 'world';
-    const isFrameAnchorJoint = (name) => name && name.startsWith('world_to_');
 
     // ── Scene ──────────────────────────────────────────────────────
     const scene = new THREE.Scene();
@@ -347,7 +286,6 @@ Modules load from ./vendor/* — zero network calls at runtime.
       renderer.setSize(w, h);
     }
     window.addEventListener('resize', resize);
-    resize();
 
     // ── Corner orientation gizmo (view-only, not a transform tool) ──
     const gizmoScene = new THREE.Scene();
@@ -372,8 +310,7 @@ Modules load from ./vendor/* — zero network calls at runtime.
     // ── Link hierarchy — DFS over the parent/child map from jointMeta,
     // starting at whichever link(s) never appear as a joint's child.
     // Gives both a display order (children right after their parent)
-    // and a depth (for indentation + the palette index below). The
-    // world anchor link is excluded before this ever runs. ──────────
+    // and a depth (for indentation + the palette index below). ──────
     function buildLinkTree(linkNames) {
       const childrenOf = {}; linkNames.forEach(n => childrenOf[n] = []);
       const hasParent = new Set();
@@ -389,7 +326,8 @@ Modules load from ./vendor/* — zero network calls at runtime.
     // ── Mesh loading ─────────────────────────────────────────────────
     // MeshStandardMaterial is fully unlit (renders pure black,
     // indistinguishable from --bg) on any geometry missing vertex
-    // normals, so always fall back to computing them. Tagged
+    // normals, so always fall back to computing them (production's
+    // paintMeshes does the same, see PreviewWeb/index.html). Tagged
     // userData.bodyMesh so the per-link recolor pass (below) can find
     // real body meshes without also recoloring origin dots/COM markers.
     const collada = new ColladaLoader();
@@ -399,25 +337,23 @@ Modules load from ./vendor/* — zero network calls at runtime.
       o.userData.bodyMesh = true;
       if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
     }
-    const loader = new URDFLoader();
-    loader.loadMeshCb = (path, manager, onLoad) => {
+    function loadMeshCb(path, manager, onComplete) {
       const ext = path.split('.').pop().toLowerCase();
       if (ext === 'dae') {
         collada.load(path, dae => {
           dae.scene.traverse(o => { if (o.isMesh) shadeMesh(o); });
-          onLoad(dae.scene);
-        }, undefined, err => { console.warn('DAE load fail', path, err); onLoad(new THREE.Object3D()); });
+          onComplete(dae.scene);
+        }, undefined, () => onComplete(new THREE.Object3D()));
       } else if (ext === 'stl') {
         stl.load(path, geom => {
           const mesh = new THREE.Mesh(geom, null);
           shadeMesh(mesh);
-          onLoad(mesh);
-        }, undefined, err => { console.warn('STL load fail', path, err); onLoad(new THREE.Object3D()); });
+          onComplete(mesh);
+        }, undefined, () => onComplete(new THREE.Object3D()));
       } else {
-        console.warn('Unknown mesh format:', path);
-        onLoad(new THREE.Object3D());
+        onComplete(new THREE.Object3D());
       }
-    };
+    }
 
     // ── TF-frame + origin-dot helpers — grouped + uniformly scaled so
     // the "tf frame size" slider can resize every frame at once. ────
@@ -448,14 +384,13 @@ Modules load from ./vendor/* — zero network calls at runtime.
       comMarkers.push(marker);
     }
 
-    // ── URDF metadata (mass/com/origin/axis/limit) — parsed straight
-    // from the XML, independent of urdf-loader's kinematic robot object.
+    // ── URDF metadata (mass/inertia/origin/axis/limit) — parsed straight
+    // from the XML, independent of urdf-loader's kinematic robot object,
+    // same approach as production's parseUrdfMeta. ───────────────────
     const linkMeta = {};
     const jointMeta = {};
     function parseUrdfMeta(urdfText) {
       const doc = new DOMParser().parseFromString(urdfText, 'application/xml');
-      const err = doc.querySelector('parsererror');
-      if (err) { showError('URDF XML parse error: ' + err.textContent.slice(0, 200)); return; }
       const vec = s => (s || '').trim().split(/\s+/).map(Number);
 
       for (const link of doc.getElementsByTagName('link')) {
@@ -495,19 +430,11 @@ Modules load from ./vendor/* — zero network calls at runtime.
 
     function fmt(n, d = 3) { return (typeof n === 'number' && !Number.isNaN(n)) ? n.toFixed(d) : '—'; }
     function vecStr(v) { return v ? v.map(n => fmt(n)).join(', ') : '—'; }
-    function showError(msg) {
-      const div = document.createElement('div');
-      div.className = 'err';
-      div.textContent = msg;
-      document.body.appendChild(div);
-      setStatus('error');
-      console.error('[sw2gz-preview]', msg);
-    }
 
     function populatePanel(robot, linkTree) {
       const linksList = document.getElementById('links-list');
       const jointsList = document.getElementById('joints-list');
-      const jointNames = Object.keys(robot.joints).filter(n => !isFrameAnchorJoint(n));
+      const jointNames = Object.keys(robot.joints);
 
       linkTree.forEach(({ name, depth }, i) => {
         const row = document.createElement('div');
@@ -554,10 +481,6 @@ Modules load from ./vendor/* — zero network calls at runtime.
       `);
     }
 
-    // Currently-open joint control, so the live SW poll (below) can keep
-    // its slider + readout in sync while its Details panel is open.
-    let openJointName = null, openJointSlider = null, openJointReadout = null, openJointIsAngular = true;
-
     function selectJoint(name, row) {
       markActive(document.getElementById('joints-list'), row);
       const meta = jointMeta[name] || {};
@@ -586,17 +509,10 @@ Modules load from ./vendor/* — zero network calls at runtime.
         </div>
       `);
 
-      openJointName = name; openJointIsAngular = isAngular;
-      openJointSlider = null; openJointReadout = null;
       if (hasDof) {
         const slider = document.getElementById('jv-slider');
         const readout = document.getElementById('jv-readout');
-        openJointSlider = slider; openJointReadout = readout;
         slider.addEventListener('input', () => {
-          // Manual drag switches the preview into manual-pose mode: the
-          // live SW poll otherwise samples every 100ms and would snap
-          // this slider straight back to SW's current mate value.
-          if (liveSync) { liveSync = false; liveToggle.checked = false; }
           const v = parseFloat(slider.value);
           robot.setJointValue(name, v);
           readout.textContent = fmt(isAngular ? v * 180 / Math.PI : v, 1) + (isAngular ? '°' : ' m');
@@ -620,93 +536,48 @@ Modules load from ./vendor/* — zero network calls at runtime.
       frameGroups.forEach(g => g.scale.setScalar(v));
     });
 
-    // ── Live SW joint poll ───────────────────────────────────────────
-    // liveSync is the single source of truth for whether joint poses track
-    // SolidWorks. On: every poll response drives robot.setJointValue AND
-    // (if that joint's Details panel is open) its slider/readout. Off
-    // (auto-set the moment any slider is manually dragged, or toggled off
-    // by the user): nothing overwrites manual poses until re-checked.
-    let liveSync = true;
-    const liveToggle = document.getElementById('live-toggle');
-    liveToggle.addEventListener('change', e => { liveSync = e.target.checked; });
-
-    async function pollJoints() {
-      if (!robot || !liveSync) return;
-      try {
-        const r = await fetch('/joint_states');
-        if (!r.ok) return;
-        const states = await r.json();
-        for (const [name, value] of Object.entries(states)) {
-          if (!robot.joints[name]) continue;
-          robot.setJointValue(name, value);
-          if (name === openJointName && openJointSlider) {
-            openJointSlider.value = value;
-            openJointReadout.textContent = fmt(openJointIsAngular ? value * 180 / Math.PI : value, 1) + (openJointIsAngular ? '°' : ' m');
-          }
-        }
-      } catch (e) { /* swallow — SW/PreviewServer may be between exports */ }
-    }
-    setInterval(pollJoints, 100);
-
     // ── Load robot.urdf ──────────────────────────────────────────────
     let robot;
+    const loader = new URDFLoader();
+    loader.loadMeshCb = loadMeshCb;
     loader.workingPath = '.';
 
-    fetch('/robot.urdf').then(r => {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.text();
-    }).then(urdfText => {
+    fetch('/robot.urdf').then(r => r.text()).then(urdfText => {
       parseUrdfMeta(urdfText);
       // Mesh filenames are package://<pkg>/meshes/*; map that package name
-      // to '' so it resolves against PreviewServer's flat /meshes/<name>
-      // route (mirrors the pre-existing `loader.packages = { [pkg]: '' }`).
+      // to '' so it resolves against our server's flat /meshes/<name> route
+      // (mirrors production's `loader.packages = { [pkg]: '' }`).
       const pkgMatch = urdfText.match(/package:\/\/([^\/]+)\//);
-      const pkg = pkgMatch ? pkgMatch[1] : (urdfText.match(/<robot[^>]*\sname="([^"]+)"/)?.[1] || 'robot');
-      loader.packages = { [pkg]: '' };
-      document.getElementById('brand-title').textContent = pkg;
-
-      let robotParsed;
-      try {
-        robotParsed = loader.parse(urdfText);
-      } catch (e) {
-        showError('URDF parse failed: ' + e.message);
-        return;
-      }
-      robot = robotParsed;
+      loader.packages = pkgMatch ? { [pkgMatch[1]]: '' } : { '': '' };
+      robot = loader.parse(urdfText);
       scene.add(robot);
-
-      const linkNames = Object.keys(robot.links).filter(n => !isFrameAnchorLink(n));
-      const linkTree = buildLinkTree(linkNames);
-      for (const name of linkNames) {
+      const linkTree = buildLinkTree(Object.keys(robot.links));
+      for (const name in robot.links) {
         addFrame(robot.links[name]);
         if (linkMeta[name]?.com) addComMarker(robot.links[name], linkMeta[name].com);
       }
       populatePanel(robot, linkTree);
-      setStatus('ready');
 
-      // Recolor per-link (palette index = tree position) + frame the
-      // camera, retried a few times while async mesh loads settle —
-      // loadMeshCb resolves independently of loader.parse() returning,
-      // so a mesh can still be mid-fetch the first time this runs.
-      function refreshAfterLoad() {
+      // Recolor per-link (palette index = tree position, so sibling
+      // links land on visually distinct entries) + frame the camera,
+      // once meshes have actually finished loading — loadMeshCb resolves
+      // async, so doing either right here misses the real meshes.
+      requestAnimationFrame(() => setTimeout(() => {
         linkTree.forEach(({ name }, i) => {
           const color = colorForLink(i);
           robot.links[name].traverse(o => { if (o.isMesh && o.userData.bodyMesh) o.material.color.copy(color); });
         });
-        const box = new THREE.Box3();
-        let any = false;
-        robot.traverse(o => { if (o.isMesh && o.geometry) { box.expandByObject(o); any = true; } });
-        if (!any || !isFinite(box.min.x)) return;
+        const box = new THREE.Box3().setFromObject(robot);
         const size = box.getSize(new THREE.Vector3()).length() || 1;
         const center = box.getCenter(new THREE.Vector3());
         controls.target.copy(center);
         camera.position.copy(center).add(new THREE.Vector3(size * 0.9, -size * 0.9, size * 0.7));
         camera.near = size / 100; camera.far = size * 20;
         camera.updateProjectionMatrix();
-      }
-      [150, 500, 1200].forEach(ms => setTimeout(refreshAfterLoad, ms));
-    }).catch(e => showError('Could not load /robot.urdf: ' + e.message));
+      }, 150));
+    });
 
+    resize();
     (function animate() {
       requestAnimationFrame(animate);
       controls.update();
