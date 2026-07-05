@@ -50,16 +50,25 @@ established frame sat at the base_link pivot instead).
     R_joint(parent->child) = R_parent^T * R_child
     t_joint(parent->child) = R_parent^T * (t_child - t_parent)
 
-Base link is the one exception: its own frame is treated as identity (a
-common, valid URDF convention for the root link — nothing above it to be
-"relative" to), so its mesh is only re-centered (t_base subtracted), not
-un-rotated — mass combination does NOT get this same treatment (it rebases
-into the root's REAL pose, not forced identity; see CombineMass's own doc
-comment for why). This matches FULL_ARM's own base_link (already
-identity-rotated in SW) exactly; a base_link with a genuinely rotated
-native frame would show that rotation baked into its mesh rather than
-reflected in its own TF triad — a known simplification, not a bug, for
-this validating cut.
+Base link is the one exception: instead of its own native SW rotation, its
+mesh reference frame is swToRos^T (transpose == inverse for an orthonormal
+rotation) — every OTHER link's per-link math (mesh, joint origin/rpy,
+axis, inertia) is expressed relative to that link's own frame, and is
+therefore invariant to swToRos: rotating every absolute SW-frame quantity
+(component poses, tessellated vertices, picked axis vectors) uniformly by
+the same matrix cancels out in every RELATIVE computation (parent^T*child,
+R*I*R^T, etc.) — the transposes meet in the middle. Base_link is the sole
+exception because it has no parent to be relative to; its mesh reference
+would otherwise default to Matrix3.Identity (SW's raw, arbitrary, usually
+Y-up assembly axes) instead of ROS's Z-up convention. Using swToRos^T here
+is exactly the substitution that makes the un-bake formula
+(p_local = refR^T * (v_world - refT)) resolve to REP-103 Z-up:
+p_local = (swToRos^T)^T * (v_world - t_base) = swToRos * (v_world - t_base).
+Mass combination does NOT get this same treatment (it rebases into the
+root's REAL native pose, not swToRos^T; see CombineMass's own doc comment)
+— a pre-existing, documented simplification (mesh vs. inertia reference
+frames can diverge for a base_link with a non-identity native rotation)
+that predates this change and is out of scope for it.
 
 Output layout (no ament package yet — deliberately out of scope for this
 validating cut):
@@ -187,7 +196,7 @@ namespace SW2GZ.URDFExport
                 Vector3 frameOrigin = frameOrigins[link.Name];
 
                 MeshData meshLocal = link.Name == baseLinkName
-                    ? UnionMeshInLocalFrame(tess, link.ComponentIds, Matrix3.Identity, frameOrigin, issues, link.Name)
+                    ? UnionMeshInLocalFrame(tess, link.ComponentIds, swToRos.Transpose(), frameOrigin, issues, link.Name)
                     : UnionMeshInLocalFrame(tess, link.ComponentIds, linkR, frameOrigin, issues, link.Name);
 
                 if (meshLocal != null)
@@ -241,8 +250,8 @@ namespace SW2GZ.URDFExport
             }
 
             string urdfPath = Path.Combine(urdfDir, pkg + ".urdf.xacro");
-            WriteUrdf(urdfPath, pkg, baseLinkName, links, meshFiles, masses, jointOrigins, jointRpys,
-                jointByChild, jointAxesLocal, config.EmitWorldLink, swToRos);
+            WriteUrdf(urdfPath, pkg, links, meshFiles, masses, jointOrigins, jointRpys,
+                jointByChild, jointAxesLocal);
 
             return new ValidationReport(issues);
         }
@@ -351,40 +360,16 @@ namespace SW2GZ.URDFExport
         }
 
         private static void WriteUrdf(
-            string path, string pkg, string baseLinkName, List<LinkDef> links,
+            string path, string pkg, List<LinkDef> links,
             Dictionary<string, string> meshFiles, Dictionary<string, MassProps> masses,
             Dictionary<string, Vector3> jointOrigins, Dictionary<string, (double, double, double)> jointRpys,
-            Dictionary<string, JointDef> jointByChild, Dictionary<string, Vector3> jointAxesLocal,
-            bool emitWorldLink, Matrix3 swToRos)
+            Dictionary<string, JointDef> jointByChild, Dictionary<string, Vector3> jointAxesLocal)
         {
             var uw = new URDFWriter(path);
             System.Xml.XmlWriter w = uw.writer;
             w.WriteStartDocument();
             w.WriteStartElement("robot");
             w.WriteAttributeString("name", pkg);
-
-            // Same mechanism Sw2gzModelPreviewer already uses for the browser
-            // preview: a synthetic world link + fixed joint carrying the SW→ROS
-            // rotation, only emitted when the caller opts in (preview forces
-            // this on; real exports honour the user's saved EmitWorldLink).
-            if (emitWorldLink)
-            {
-                w.WriteStartElement("link");
-                w.WriteAttributeString("name", "world");
-                w.WriteEndElement();
-
-                (double roll, double pitch, double yaw) = swToRos.ToRpy();
-                w.WriteStartElement("joint");
-                w.WriteAttributeString("name", "world_to_" + baseLinkName);
-                w.WriteAttributeString("type", "fixed");
-                w.WriteStartElement("parent"); w.WriteAttributeString("link", "world"); w.WriteEndElement();
-                w.WriteStartElement("child"); w.WriteAttributeString("link", baseLinkName); w.WriteEndElement();
-                w.WriteStartElement("origin");
-                w.WriteAttributeString("xyz", "0 0 0");
-                w.WriteAttributeString("rpy", Fmt(roll) + " " + Fmt(pitch) + " " + Fmt(yaw));
-                w.WriteEndElement();
-                w.WriteEndElement();
-            }
 
             foreach (LinkDef link in links)
             {
