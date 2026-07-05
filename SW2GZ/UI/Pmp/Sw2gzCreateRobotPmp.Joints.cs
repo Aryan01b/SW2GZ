@@ -34,9 +34,7 @@ namespace SW2GZ.UI.Pmp
         private const int IdJointTypeCombo     = 26;
         private const int IdJointAxisLabel     = 27;
         private const int IdJointAxisPicker    = 28;
-        private const int IdJointAxisXBox      = 29;
-        private const int IdJointAxisYBox      = 30;
-        private const int IdJointAxisZBox      = 31;
+        private const int IdJointAxisValueLabel = 29;
         private const int IdJointLimitLabel    = 32;
         private const int IdJointLimitLowerBox = 33;
         private const int IdJointLimitUpperBox = 34;
@@ -56,9 +54,7 @@ namespace SW2GZ.UI.Pmp
         private PropertyManagerPageCombobox _jointTypeCombo;
         private PropertyManagerPageLabel _jointAxisLabel;
         private PropertyManagerPageSelectionbox _jointAxisPicker;
-        private PropertyManagerPageNumberbox _jointAxisXBox;
-        private PropertyManagerPageNumberbox _jointAxisYBox;
-        private PropertyManagerPageNumberbox _jointAxisZBox;
+        private PropertyManagerPageLabel _jointAxisValueLabel;
         private PropertyManagerPageLabel _jointLimitLabel;
         private PropertyManagerPageNumberbox _jointLimitLowerBox;
         private PropertyManagerPageNumberbox _jointLimitUpperBox;
@@ -110,9 +106,15 @@ namespace SW2GZ.UI.Pmp
             _jointAxisPicker.Mark = AxisPickSelectionMark;
             _jointAxisPicker.SetSelectionFilters((object)new swSelectType_e[]
                 { swSelectType_e.swSelFACES, swSelectType_e.swSelEDGES });
-            _jointAxisXBox = NewAxisBox(grp, IdJointAxisXBox, leftEdge, visibleEnabled);
-            _jointAxisYBox = NewAxisBox(grp, IdJointAxisYBox, leftEdge, visibleEnabled);
-            _jointAxisZBox = NewAxisBox(grp, IdJointAxisZBox, leftEdge, visibleEnabled);
+            // Read-only — the picker above is the only way to set the axis;
+            // typing coordinates by hand was rarely used and mostly read as
+            // clutter (three always-visible spinner rows under a picker that
+            // already fills them in). This single line just confirms what
+            // got picked.
+            _jointAxisValueLabel = (PropertyManagerPageLabel)grp.AddControl2(
+                IdJointAxisValueLabel,
+                (short)swPropertyManagerPageControlType_e.swControlType_Label,
+                "", (short)leftEdge, visibleEnabled, "");
 
             _jointLimitLabel = (PropertyManagerPageLabel)grp.AddControl2(
                 IdJointLimitLabel,
@@ -129,17 +131,6 @@ namespace SW2GZ.UI.Pmp
 
             RefreshJointsList();
             return grp;
-        }
-
-        private static PropertyManagerPageNumberbox NewAxisBox(
-            PropertyManagerPageGroup grp, int id, int leftEdge, int visibleEnabled)
-        {
-            var box = (PropertyManagerPageNumberbox)grp.AddControl2(
-                id, (short)swPropertyManagerPageControlType_e.swControlType_Numberbox,
-                "", (short)leftEdge, visibleEnabled, "Axis component");
-            box.SetRange2((int)swNumberboxUnitType_e.swNumberBox_UnitlessDouble,
-                -1.0, 1.0, true, 0.0, 0.05, 0.05);
-            return box;
         }
 
         // The joint's parent/child link's own primary (first-assigned)
@@ -198,12 +189,7 @@ namespace SW2GZ.UI.Pmp
             _jointNameBox.Text = j.Name;
             int typeIdx = Array.IndexOf(JointTypeOptions, j.Type);
             _jointTypeCombo.CurrentSelection = (short)(typeIdx >= 0 ? typeIdx : 0);
-            _jointAxisXBox.Value = SnapNearZero(j.AxisX);
-            _jointAxisYBox.Value = SnapNearZero(j.AxisY);
-            // !HasAxis means X/Y/Z are all still 0 (never set) — X/Y correctly stay 0,
-            // only Z needs the (0,0,1) default substituted in, matching the same
-            // default OnComboboxSelectionChanged applies when a joint first leaves Fixed.
-            _jointAxisZBox.Value = j.HasAxis ? SnapNearZero(j.AxisZ) : 1.0;
+            SetAxisValueLabel(j);
             _jointLimitLowerBox.Value = j.Type == UrdfJointType.Revolute ? RadToDeg(j.LimitLower ?? 0.0) : (j.LimitLower ?? 0.0);
             _jointLimitUpperBox.Value = j.Type == UrdfJointType.Revolute ? RadToDeg(j.LimitUpper ?? 0.0) : (j.LimitUpper ?? 0.0);
             UpdateJointFieldVisibility(j.Type);
@@ -275,9 +261,7 @@ namespace SW2GZ.UI.Pmp
                 j.SetMatePoint(chosen.origin);
                 j.IsSuggested = true;
 
-                _jointAxisXBox.Value = SnapNearZero(chosen.axis.X);
-                _jointAxisYBox.Value = SnapNearZero(chosen.axis.Y);
-                _jointAxisZBox.Value = SnapNearZero(chosen.axis.Z);
+                SetAxisValueLabel(j);
             }
             catch (Exception ex) { logger.Warn("HandleAxisPicked failed", ex); }
         }
@@ -287,7 +271,7 @@ namespace SW2GZ.UI.Pmp
             if (_jointNameBox == null) return;
             _jointNameBox.Text = string.Empty;
             _jointTypeCombo.CurrentSelection = 0;
-            _jointAxisXBox.Value = 0; _jointAxisYBox.Value = 0; _jointAxisZBox.Value = 1;
+            _jointAxisValueLabel.Caption = string.Empty;
             _jointLimitLowerBox.Value = 0; _jointLimitUpperBox.Value = 0;
             UpdateJointFieldVisibility(UrdfJointType.Fixed);
         }
@@ -304,9 +288,7 @@ namespace SW2GZ.UI.Pmp
             bool showLimit = type == UrdfJointType.Revolute || type == UrdfJointType.Prismatic;
             ((IPropertyManagerPageControl)_jointAxisLabel).Visible = showAxis;
             ((IPropertyManagerPageControl)_jointAxisPicker).Visible = showAxis;
-            ((IPropertyManagerPageControl)_jointAxisXBox).Visible = showAxis;
-            ((IPropertyManagerPageControl)_jointAxisYBox).Visible = showAxis;
-            ((IPropertyManagerPageControl)_jointAxisZBox).Visible = showAxis;
+            ((IPropertyManagerPageControl)_jointAxisValueLabel).Visible = showAxis;
             ((IPropertyManagerPageControl)_jointLimitLabel).Visible = showLimit;
             _jointLimitLabel.Caption = type == UrdfJointType.Revolute ? "Limit (degrees)" : "Limit (meters)";
             ((IPropertyManagerPageControl)_jointLimitLowerBox).Visible = showLimit;
@@ -318,11 +300,10 @@ namespace SW2GZ.UI.Pmp
         // switching the selected list row (single shared control set, one
         // JointDef "checked out" at a time) and before leaving the Joints
         // step entirely (ShowStep) or reviewing it (RefreshReviewLabels).
-        // Axis is NOT committed here — see HandleAxisNumberboxChanged: a
-        // read-back-later commit of the axis boxes proved unreliable across
-        // listbox switches (a picked axis would occasionally revert), so
-        // axis writes straight to the JointDef the moment it changes
-        // instead of waiting for this commit pass.
+        // Axis is NOT committed here — HandleAxisPicked writes it straight
+        // to the JointDef the moment a face/edge is picked (the axis
+        // display is now read-only, so there's nothing else that could
+        // change it).
         private void CommitSelectedJointFromControls()
         {
             if (_selectedJointIndex < 0 || _selectedJointIndex >= _liveDoc.Robot.Joints.Count) return;
@@ -343,19 +324,20 @@ namespace SW2GZ.UI.Pmp
             }
         }
 
-        // Writes the axis boxes straight into the currently-selected
-        // joint the moment any of them changes (typing, or the picker's
-        // own programmatic set) — see CommitSelectedJointFromControls'
-        // comment for why this replaced a deferred read-back-at-switch-time
-        // commit.
-        private void HandleAxisNumberboxChanged()
-        {
-            if (_selectedJointIndex < 0 || _selectedJointIndex >= _liveDoc.Robot.Joints.Count) return;
-            JointDef j = _liveDoc.Robot.Joints[_selectedJointIndex];
-            if (j.Type == UrdfJointType.Fixed) return;
-            j.SetAxis(new System.Numerics.Vector3(
-                (float)_jointAxisXBox.Value, (float)_jointAxisYBox.Value, (float)_jointAxisZBox.Value));
-        }
+        // Read-only display of the joint's current axis (see HandleAxisPicked
+        // and LoadJointIntoControls) — the picker is the only way to set it
+        // now, so there's no "commit on change" path to maintain here.
+        // Mirrors the (0,0,1) fallback Sw2gzRobotExporter already applies
+        // for an unset axis (see its jointAxesLocal.TryGetValue default),
+        // so the display and the exported default always agree without
+        // this label ever forcing a commit itself.
+        private void SetAxisValueLabel(JointDef j) =>
+            _jointAxisValueLabel.Caption = j.HasAxis
+                ? FormatAxis(j.AxisX, j.AxisY, j.AxisZ)
+                : FormatAxis(0, 0, 1);
+
+        private static string FormatAxis(double x, double y, double z) =>
+            SnapNearZero(x).ToString("0.###") + ", " + SnapNearZero(y).ToString("0.###") + ", " + SnapNearZero(z).ToString("0.###");
 
         private static double DegToRad(double deg) => deg * System.Math.PI / 180.0;
         private static double RadToDeg(double rad) => rad * 180.0 / System.Math.PI;
@@ -375,12 +357,12 @@ namespace SW2GZ.UI.Pmp
         {
             if (Id != IdJointTypeCombo) return;
             UrdfJointType type = ComboIndexToType(Item);
-            // Suggest a sane default axis the first time a joint leaves
-            // Fixed, instead of leaving it at (0,0,0) — a zero-vector axis
-            // is meaningless in URDF.
-            if (type != UrdfJointType.Fixed && _jointAxisXBox.Value == 0 && _jointAxisYBox.Value == 0 && _jointAxisZBox.Value == 0)
-                _jointAxisZBox.Value = 1;
             UpdateJointFieldVisibility(type);
+            // Refresh the axis display in case it's showing the (0,0,1)
+            // fallback for a not-yet-picked axis — same suggestion whether
+            // arrived at via Fixed->Revolute or already non-Fixed.
+            if (_selectedJointIndex >= 0 && _selectedJointIndex < _liveDoc.Robot.Joints.Count)
+                SetAxisValueLabel(_liveDoc.Robot.Joints[_selectedJointIndex]);
         }
 
         void IPropertyManagerPage2Handler9.OnListboxSelectionChanged(int Id, int Item)
