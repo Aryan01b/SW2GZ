@@ -691,5 +691,82 @@ namespace SW2GZ.Writers.Tests
             Assert.Equal(3.0, double.Parse(xyz[1], CultureInfo.InvariantCulture), 3);
             Assert.Equal(0.0, double.Parse(xyz[2], CultureInfo.InvariantCulture), 3);
         }
+
+        [Fact]
+        public void Export_BranchingTree_BothChildrenJointOriginsComputedIndependentlyFromSharedParent()
+        {
+            // base_link has TWO children (arm_link, wheel_link) — the shape of
+            // a gripper's two fingers or a torso's two arms. Both children read
+            // the SAME parentPose/frameOrigins entry for "base_link"; a bug that
+            // mutated or cached that lookup per-visit (instead of a pure
+            // dictionary read) would corrupt the second child's origin.
+            var links = new List<LinkDef>
+            {
+                new LinkDef { Name = "base_link",   ComponentIds = { "base-1@asm" },   ParentName = "" },
+                new LinkDef { Name = "arm_link",    ComponentIds = { "arm-1@asm" },    ParentName = "base_link" },
+                new LinkDef { Name = "wheel_link",  ComponentIds = { "wheel-1@asm" },  ParentName = "base_link" },
+            };
+            var cfg = new Sw2gzExportConfig
+            {
+                Mode = SW2GZ.Ros2.ExportMode.RobotPackage,
+                PackageName = "my_robot",
+                RobotLinks = links,
+            };
+            var poses = new Dictionary<string, (Matrix3, Vector3)>
+            {
+                ["base-1@asm"]  = (Matrix3.Identity, new Vector3(0, 0, 0)),
+                ["arm-1@asm"]   = (Matrix3.Identity, new Vector3(1, 0, 0)),
+                ["wheel-1@asm"] = (Matrix3.Identity, new Vector3(0, 0, 2)),
+            };
+
+            Sw2gzRobotExporter.Export(
+                new FakeTess(), new FakeMassProps(), new FakePoses(poses), cfg, _dir, Matrix3.Identity);
+
+            XElement root = XElement.Load(Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "urdf", "my_robot.urdf.xacro"));
+
+            XElement armJoint = root.Elements("joint").Single(j => (string)j.Attribute("name") == "base_link_to_arm_link");
+            Assert.Equal("base_link", (string)armJoint.Element("parent").Attribute("link"));
+            string[] armXyz = ((string)armJoint.Element("origin").Attribute("xyz")).Split(' ');
+            Assert.Equal(1.0, double.Parse(armXyz[0], CultureInfo.InvariantCulture), 3);
+            Assert.Equal(0.0, double.Parse(armXyz[1], CultureInfo.InvariantCulture), 3);
+            Assert.Equal(0.0, double.Parse(armXyz[2], CultureInfo.InvariantCulture), 3);
+
+            XElement wheelJoint = root.Elements("joint").Single(j => (string)j.Attribute("name") == "base_link_to_wheel_link");
+            Assert.Equal("base_link", (string)wheelJoint.Element("parent").Attribute("link"));
+            string[] wheelXyz = ((string)wheelJoint.Element("origin").Attribute("xyz")).Split(' ');
+            Assert.Equal(0.0, double.Parse(wheelXyz[0], CultureInfo.InvariantCulture), 3);
+            Assert.Equal(0.0, double.Parse(wheelXyz[1], CultureInfo.InvariantCulture), 3);
+            Assert.Equal(2.0, double.Parse(wheelXyz[2], CultureInfo.InvariantCulture), 3);
+        }
+
+        [Fact]
+        public void Export_WritesObliqueAxisRotatedIntoChildLocalFrame()
+        {
+            // Prior axis-frame test only covers an axis-aligned (1,0,0) input.
+            // This proves the same linkR.Transpose().Mul(axisAssembly) formula
+            // holds for an arbitrary (non X/Y/Z) unit vector, e.g. a picked
+            // face whose normal isn't aligned to any principal axis.
+            // Child rotated 90 deg about Z; R^T maps assembly (x,y,z) -> (y,-x,z).
+            // axisAssembly = normalize(1,1,1) = (s,s,s), s = 1/sqrt(3) ~ 0.57735.
+            // Expected local axis = (s, -s, s).
+            var poses = new Dictionary<string, (Matrix3, Vector3)>
+            {
+                ["base-1@asm"] = (Matrix3.Identity, Vector3.Zero),
+                ["arm-1@asm"]  = (RotZ(System.Math.PI / 2), Vector3.Zero),
+            };
+            double s = 1.0 / System.Math.Sqrt(3.0);
+            var cfg = Cfg();
+            cfg.RobotJoints = new List<JointDef>
+            {
+                new JointDef { Name = "j1", ParentLink = "base_link", ChildLink = "arm_link", Type = UrdfJointType.Revolute, AxisX = s, AxisY = s, AxisZ = s },
+            };
+            Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(poses), cfg, _dir, Matrix3.Identity);
+
+            XElement joint = UrdfRoot().Elements("joint").Single();
+            string[] xyz = ((string)joint.Element("axis").Attribute("xyz")).Split(' ');
+            Assert.Equal(s, double.Parse(xyz[0], CultureInfo.InvariantCulture), 3);
+            Assert.Equal(-s, double.Parse(xyz[1], CultureInfo.InvariantCulture), 3);
+            Assert.Equal(s, double.Parse(xyz[2], CultureInfo.InvariantCulture), 3);
+        }
     }
 }
