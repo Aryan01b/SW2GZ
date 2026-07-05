@@ -6,42 +6,6 @@ branch below is on an older base, 470 green there).
 Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
-## Done — Robot mode: SW→ROS/Gz frame conversion now ALWAYS baked in (branch `feat/robot-mode-enhancements`)
-
-**Real bug fixed:** Robot/URDF exports previously shipped in raw SolidWorks
-frame by default — `Sw2gzExportConfig.EmitWorldLink` defaulted `false`, so
-the already-computed `SwToRosRotation` was silently discarded unless a
-(UI-less, never-surfaced) flag was flipped. World mode (per-model `<pose>`)
-and Asset mode (baked into mesh verts) were both already unconditional and
-correct — only Robot mode had this gap.
-
-**Fix (`Sw2gzRobotExporter.cs`):** one substantive line — base_link's mesh
-reference rotation changed from `Matrix3.Identity` to `swToRos.Transpose()`.
-Proven by derivation (see the file's updated header comment) that every
-OTHER per-link quantity (joint origin/rpy, axis-in-child-frame, inertia
-tensor) is mathematically INVARIANT to a uniform global rotation applied to
-every link — only base_link's mesh (the one place an absolute, non-relative
-frame commitment exists) needed to change. Removed the now-dead
-`EmitWorldLink` config field + `WithEmitWorldLink` clone helper + the
-`world`/`world_to_<root>` wrapper-joint writer code entirely (no UI ever
-exposed the flag; its only purpose was this exact gap). Preview
-(`Sw2gzModelPreviewer.RunPreview`) dropped its special-case override —
-it now renders the exact same permanently-correct URDF a real export
-produces, no divergence possible by construction.
-
-Deleted `Test/URDFExport/Sw2gzExportConfigCloneTests.cs` (tested only the
-removed clone helper). Replaced `Sw2gzRobotExporterTests`'s
-`Export_EmitWorldLink_AddsWorldJointWithRotation` with two tests: one
-proving base_link's mesh vertex now rotates by a non-identity `swToRos`,
-one proving `swToRos=Identity` (every other existing test's value) stays
-byte-identical — zero regression. **501 green** (was 505; −5 clone tests,
-−1 replaced, +2 new). Addin compiles clean (`SW2GZ.dll` built fresh).
-
-**Not yet done:** live SolidWorks re-test on FULL_ARM.SLDASM to visually
-confirm the exported robot now spawns upright in Gz/RViz — this landed via
-tests + a from-scratch mathematical proof of the invariance argument, not
-a live check yet. Do that before tagging.
-
 ## Done — Robot mode v3: Joints step (type/axis/limit) shipped + live-tested, MILESTONE (branch `feat/robot-mode-v3`, 2026-07-04)
 
 **User-confirmed working on FULL_ARM.SLDASM: "link is modeled properly."**

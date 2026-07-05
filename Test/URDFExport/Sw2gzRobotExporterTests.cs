@@ -293,53 +293,19 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
-        public void Export_NeverEmitsWorldLink_RotationIsAlwaysBakedIntoBaseLinkMesh()
+        public void Export_EmitWorldLink_AddsWorldJointWithRotation()
         {
-            // Replaces the old opt-in EmitWorldLink wrapper joint: the SW->ROS
-            // rotation is now ALWAYS baked directly into base_link's mesh
-            // (matching Asset mode) — there is no flag, and no synthetic
-            // "world" link/joint should ever appear.
-            var swToRos = SwToRosRotation.Build(SW2GZ.Build.Model.AxisDirection.PlusY, SW2GZ.Build.Model.AxisDirection.PlusZ);
+            var cfg = Cfg(); cfg.EmitWorldLink = true;
             Sw2gzRobotExporter.Export(
-                new FakeTess(), new FakeMassProps(), new FakePoses(), Cfg(), _dir, swToRos);
+                new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir,
+                SwToRosRotation.Build(SW2GZ.Build.Model.AxisDirection.PlusY, SW2GZ.Build.Model.AxisDirection.PlusZ));
 
             XElement root = UrdfRoot();
-            Assert.DoesNotContain("world", root.Elements("link").Select(l => (string)l.Attribute("name")));
-            Assert.DoesNotContain(root.Elements("joint"), j => ((string)j.Attribute("name")).StartsWith("world_to_"));
-
-            // base_link's mesh (FakeTess's fixed triangle at world (0,0,0),(1,0,0),(0,1,0))
-            // should come out rotated by swToRos, not left in raw SW frame.
-            string daePath = Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "meshes", "base_link.dae");
-            XNamespace ns = "http://www.collada.org/2005/11/COLLADASchema";
-            XDocument dae = XDocument.Load(daePath);
-            double[] floats = dae.Descendants(ns + "float_array")
-                .Single(e => (string)e.Attribute("id") == "g0-pos-array")
-                .Value.Split(' ').Select(s => double.Parse(s, CultureInfo.InvariantCulture)).ToArray();
-            var v1 = new Vector3((float)floats[3], (float)floats[4], (float)floats[5]); // (1,0,0) un-rotated
-            Vector3 expected = swToRos.Mul(new Vector3(1, 0, 0));
-            Assert.Equal(expected.X, v1.X, 3);
-            Assert.Equal(expected.Y, v1.Y, 3);
-            Assert.Equal(expected.Z, v1.Z, 3);
-        }
-
-        [Fact]
-        public void Export_IdentitySwToRos_BaseLinkMeshUnchanged_NoRegression()
-        {
-            // swToRos = Identity (what every other test in this file passes)
-            // must produce byte-identical base_link mesh output to before this
-            // change — Matrix3.Identity.Transpose() == Matrix3.Identity.
-            Sw2gzRobotExporter.Export(
-                new FakeTess(), new FakeMassProps(), new FakePoses(), Cfg(), _dir, Matrix3.Identity);
-
-            string daePath = Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "meshes", "base_link.dae");
-            XNamespace ns = "http://www.collada.org/2005/11/COLLADASchema";
-            XDocument dae = XDocument.Load(daePath);
-            double[] floats = dae.Descendants(ns + "float_array")
-                .Single(e => (string)e.Attribute("id") == "g0-pos-array")
-                .Value.Split(' ').Select(s => double.Parse(s, CultureInfo.InvariantCulture)).ToArray();
-            Assert.Equal(1.0, floats[3], 3);
-            Assert.Equal(0.0, floats[4], 3);
-            Assert.Equal(0.0, floats[5], 3);
+            Assert.Contains("world", root.Elements("link").Select(l => (string)l.Attribute("name")));
+            XElement worldJoint = root.Elements("joint").Single(j => (string)j.Attribute("name") == "world_to_base_link");
+            Assert.Equal("fixed", (string)worldJoint.Attribute("type"));
+            Assert.Equal("world", (string)worldJoint.Element("parent").Attribute("link"));
+            Assert.Equal("base_link", (string)worldJoint.Element("child").Attribute("link"));
         }
 
         [Fact]

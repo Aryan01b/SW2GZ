@@ -79,14 +79,24 @@ namespace SW2GZ.URDFExport
                 "sw2gz_preview_" + Guid.NewGuid().ToString("N").Substring(0, 8));
             Directory.CreateDirectory(tempBase);
 
-            // Robot mode's exporter always bakes the SW→ROS rotation directly
-            // into base_link's mesh (matching Asset/World mode), so preview
-            // needs no special-case override — it renders the exact same
-            // already-Z-up URDF a real export produces.
+            // Preview-only override: force EmitWorldLink so the URDF served
+            // to the browser has the SW→ROS rotation baked into a
+            // world_to_<root> fixed joint. The browser can't run
+            // gz_sim.launch.py (which is where the rotation rides for the
+            // REP-105 path the user picked on disk), so without this
+            // override a default Y-up SW assembly appears tilted 90° in
+            // the Z-up preview viewport — joints, axes, and link positions
+            // all look rotated even though the model is correct.
+            //
+            // Real exports still honour `config.EmitWorldLink` — we only
+            // patch the preview's temp-workspace URDF, never the user's
+            // saved config.
+            Sw2gzExportConfig previewConfig = config.WithEmitWorldLink(true);
+
             SW2GZ.Validate.ValidationReport report;
             try
             {
-                report = Sw2gzModelExporter.RunCore(swApp, model, config, tempBase);
+                report = Sw2gzModelExporter.RunCore(swApp, model, previewConfig, tempBase);
             }
             catch
             {
