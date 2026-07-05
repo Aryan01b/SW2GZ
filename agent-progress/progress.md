@@ -1,15 +1,14 @@
 # Progress
 
-Current: world mode + asset mode + World GUI/camera (v2.4.0) + World Settings
-(v2.5.0) shipped on `main`. **Robot mode v3 tagged v2.7.0 on
-`feat/robot-mode-enhancements`** (2026-07-05, live-confirmed working in
-SolidWorks — link/joint modeling + SW→ROS/Gz frame conversion) — not yet
-merged to `main`; work continues on this branch (real COM now written to
-`<inertial><origin>` on top of v2.7.0, not yet re-tagged). Tests: 501 green
-on this branch (797 on `main`, which predates the robot-v3 rebuild's test
-churn).
-Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0/v2.6.0
-on `main`, v2.7.0 on `feat/robot-mode-enhancements`.
+Current: `feat/robot-mode-enhancements` fast-forward merged into `main`
+(2026-07-05) — Robot mode v3 (link/joint modeling, SW→ROS/Gz frame
+conversion, real COM in `<inertial><origin>`, read-only axis display) is
+now on trunk. Both branches point at `a314319`. Tests: 501 green on
+`main`. Not yet re-tagged past v2.7.0 (v2.7.0 was cut before this merge's
+last two commits — inertia fix + axis-display cleanup).
+Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0/v2.6.0/v2.7.0
+all on `main` now. `feat/robot-mode-enhancements` kept alive on origin (not
+deleted) in case work continues there — currently identical to `main`.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
 ## Done — Robot mode: SW→ROS/Gz frame conversion always applied (branch `feat/robot-mode-enhancements`)
