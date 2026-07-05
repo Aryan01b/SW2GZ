@@ -427,12 +427,13 @@ namespace SW2GZ.Writers.Tests
             // linkR/linkT for every part — both produce the same answer
             // when every part's pose already equals the link frame).
             //
-            // <inertial><origin> is hardcoded to "0 0 0" in WriteUrdf (a
-            // separate, pre-existing simplification — COM is not written),
-            // and mass is pose-invariant, so the only pose-sensitive value
-            // that reaches the URDF is the combined inertia tensor: with
-            // both parts spread away from arm_link's own frame (arm-a's
-            // pose), the parallel-axis contribution is nonzero. A
+            // Both parts here share a COM of Vector3.Zero, so <inertial>
+            // <origin> stays at "0 0 0" regardless (see
+            // Export_WritesRealComOffset_NotHardcodedToOrigin for that path)
+            // — the only pose-sensitive value reaching the URDF in THIS test
+            // is the combined inertia tensor: with both parts spread away
+            // from arm_link's own frame (arm-a's pose), the parallel-axis
+            // contribution is nonzero. A
             // shared-frame bug would instead evaluate every part AT
             // arm_link's own frame (d = 0 for every part), so parallel-axis
             // contributes nothing and izz stays at the parts' own identity
@@ -477,6 +478,32 @@ namespace SW2GZ.Writers.Tests
             // A shared-frame bug (both parts evaluated at arm_link's own
             // pose, d=0 for both) would instead report izz = 1 + 1 = 2.
             Assert.True(izz > 5.0, "izz=" + izz + " — expected > 5 (parallel-axis from per-component pose); a shared-frame bug would report izz=2.");
+        }
+
+        [Fact]
+        public void Export_WritesRealComOffset_NotHardcodedToOrigin()
+        {
+            var massProps = new FakeMultiMassProps(new Dictionary<string, MassProps>
+            {
+                ["base-1@asm"] = new MassProps(5.0, new Vector3(1, 2, 3), Matrix3.Identity),
+                ["arm-1@asm"]  = new MassProps(0.1, Vector3.Zero, Matrix3.Identity),
+            });
+
+            Sw2gzRobotExporter.Export(
+                new FakeTess(), massProps, new FakePoses(), Cfg(), _dir, Matrix3.Identity);
+
+            XElement baseLink = UrdfRoot().Elements("link").Single(l => (string)l.Attribute("name") == "base_link");
+            string[] xyz = ((string)baseLink.Element("inertial").Element("origin").Attribute("xyz")).Split(' ');
+            Assert.Equal(1.0, double.Parse(xyz[0], CultureInfo.InvariantCulture), 3);
+            Assert.Equal(2.0, double.Parse(xyz[1], CultureInfo.InvariantCulture), 3);
+            Assert.Equal(3.0, double.Parse(xyz[2], CultureInfo.InvariantCulture), 3);
+
+            // The COM fix touches only <inertial><origin> — visual/collision
+            // mesh placement must not shift as a side effect.
+            string[] visualXyz = ((string)baseLink.Element("visual").Element("origin").Attribute("xyz")).Split(' ');
+            Assert.Equal("0", visualXyz[0]);
+            Assert.Equal("0", visualXyz[1]);
+            Assert.Equal("0", visualXyz[2]);
         }
 
         [Fact]

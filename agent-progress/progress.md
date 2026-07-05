@@ -4,8 +4,10 @@ Current: world mode + asset mode + World GUI/camera (v2.4.0) + World Settings
 (v2.5.0) shipped on `main`. **Robot mode v3 tagged v2.7.0 on
 `feat/robot-mode-enhancements`** (2026-07-05, live-confirmed working in
 SolidWorks — link/joint modeling + SW→ROS/Gz frame conversion) — not yet
-merged to `main`; work continues on this branch. Tests: 500 green on this
-branch (797 on `main`, which predates the robot-v3 rebuild's test churn).
+merged to `main`; work continues on this branch (real COM now written to
+`<inertial><origin>` on top of v2.7.0, not yet re-tagged). Tests: 501 green
+on this branch (797 on `main`, which predates the robot-v3 rebuild's test
+churn).
 Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0/v2.6.0
 on `main`, v2.7.0 on `feat/robot-mode-enhancements`.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
@@ -50,6 +52,34 @@ correctly off it as one rigid rotation. **Still needs a real live SW
 re-test** on an actual assembly (FULL_ARM or similar) before trusting this
 fully — the synthetic check proves the mechanism, not the live SW→ROS
 axis mapping against a real assembly's up/forward convention.
+
+## Done — Robot mode: real COM written to `<inertial><origin>` (branch `feat/robot-mode-enhancements`, 2026-07-05)
+
+**Real bug fixed:** `WriteUrdf` hardcoded every link's `<inertial><origin>`
+to `"0 0 0"` even though the mass pipeline (`SolidWorksMassProperties` →
+`InertialAggregator.Combine`) already computed a real, correctly-rebased
+COM in the link's own local frame — it was just discarded at the last step
+(`Sw2gzRobotExporter.cs`, was ~line 409-417). The inertia tensor itself was
+always correct (computed about the true COM); pinning the paired `<origin>`
+to zero made physics engines read it as "about the link origin" instead —
+wrong dynamics for any off-center mass.
+
+**Fix:** write `mp.ComLocal` instead of the hardcoded zero. No pipeline to
+build — `IMassProperties`/`InertialAggregator` were already correct and
+already wired in; this was purely a discarded-value bug. Visual/collision
+`<origin>` (mesh placement) is untouched — only the `<inertial>` block
+changes. Added `Export_WritesRealComOffset_NotHardcodedToOrigin` asserting
+an off-center mass produces a non-zero URDF origin and that mesh placement
+doesn't move. **501 green.** Verified against a regenerated synthetic demo
+export (3-link arm, off-center COM per link) — `<inertial><origin>` now
+shows the real offsets (`0.05 0 0`, `0.2 0 0`, `0.15 0 0`), visual/collision
+origins stay `0 0 0`, joint origins unaffected.
+
+**Left out of scope (flagged, not fixed):** `SetCoordinateSystem`/
+`AddBodies` (legacy per-body-subset mass API, marked [legacy] in
+`docs/reference/solidworks-api.md`) — only matters if a link is ever
+defined as a subset of bodies within one multi-body part rather than whole
+components, which Robot mode doesn't currently do.
 
 ## Done — Robot mode v3: Joints step (type/axis/limit) shipped + live-tested, MILESTONE (branch `feat/robot-mode-v3`, 2026-07-04)
 

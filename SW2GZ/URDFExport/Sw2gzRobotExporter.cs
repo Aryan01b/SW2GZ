@@ -315,9 +315,7 @@ namespace SW2GZ.URDFExport
         // directly: InertialAggregator's rebase exactly cancels when a
         // part's own frame equals the anchor (see
         // CombineWithLinkAnchor_SinglePartAtAnchor_RebasesBackToPartLocal /
-        // its Matrix3 twin). Mass/inertia physical accuracy beyond this is
-        // already out of scope for this validating cut (see the ponytail
-        // note this replaces) — this does not force the base_link
+        // its Matrix3 twin). This does not force the base_link
         // identity-orientation convention the way mesh un-baking does,
         // since that would only matter for a multi-component root with a
         // non-identity native rotation, which isn't exercised yet.
@@ -406,14 +404,8 @@ namespace SW2GZ.URDFExport
                 if (masses.TryGetValue(link.Name, out MassProps mp))
                 {
                     w.WriteStartElement("inertial");
-                    // ponytail: COM held at the link origin rather than the SW
-                    // mass-property centroid re-expressed in this link's local
-                    // frame. Physical accuracy is out of scope for this
-                    // validating cut (no actuation/physics sim runs on the
-                    // export yet); revisit once Robot mode gets a real
-                    // inertia pipeline.
                     w.WriteStartElement("origin");
-                    w.WriteAttributeString("xyz", "0 0 0");
+                    w.WriteAttributeString("xyz", Fmt(mp.ComLocal.X) + " " + Fmt(mp.ComLocal.Y) + " " + Fmt(mp.ComLocal.Z));
                     w.WriteEndElement();
                     w.WriteStartElement("mass");
                     w.WriteAttributeString("value", Fmt(mp.Mass));
