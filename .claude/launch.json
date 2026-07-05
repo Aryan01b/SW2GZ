@@ -6,6 +6,12 @@
       "runtimeExecutable": "powershell",
       "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/preview/serve-web.ps1", "-Port", "8090", "-OpenWith", "none"],
       "port": 8090
+    },
+    {
+      "name": "preview-demo",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/preview/serve-web.ps1", "-Root", "tools/preview/demo_export/demo_arm_ws/src/demo_arm", "-Port", "8091", "-OpenWith", "none"],
+      "port": 8091
     }
   ]
 }

@@ -242,7 +242,7 @@ namespace SW2GZ.URDFExport
 
             string urdfPath = Path.Combine(urdfDir, pkg + ".urdf.xacro");
             WriteUrdf(urdfPath, pkg, baseLinkName, links, meshFiles, masses, jointOrigins, jointRpys,
-                jointByChild, jointAxesLocal, config.EmitWorldLink, swToRos);
+                jointByChild, jointAxesLocal, swToRos);
 
             return new ValidationReport(issues);
         }
@@ -355,7 +355,7 @@ namespace SW2GZ.URDFExport
             Dictionary<string, string> meshFiles, Dictionary<string, MassProps> masses,
             Dictionary<string, Vector3> jointOrigins, Dictionary<string, (double, double, double)> jointRpys,
             Dictionary<string, JointDef> jointByChild, Dictionary<string, Vector3> jointAxesLocal,
-            bool emitWorldLink, Matrix3 swToRos)
+            Matrix3 swToRos)
         {
             var uw = new URDFWriter(path);
             System.Xml.XmlWriter w = uw.writer;
@@ -363,28 +363,34 @@ namespace SW2GZ.URDFExport
             w.WriteStartElement("robot");
             w.WriteAttributeString("name", pkg);
 
-            // Same mechanism Sw2gzModelPreviewer already uses for the browser
-            // preview: a synthetic world link + fixed joint carrying the SW→ROS
-            // rotation, only emitted when the caller opts in (preview forces
-            // this on; real exports honour the user's saved EmitWorldLink).
-            if (emitWorldLink)
-            {
-                w.WriteStartElement("link");
-                w.WriteAttributeString("name", "world");
-                w.WriteEndElement();
+            // A synthetic world link + fixed joint carrying the SW→ROS
+            // rotation, ALWAYS emitted — every export ships in REP-103 Z-up.
+            // This must be a real joint (not just a mesh-orientation tweak):
+            // rotating only base_link's mesh reference leaves base_link's own
+            // FRAME unrotated, so every joint downstream (computed relative
+            // to that frame, and provably invariant to a uniform rotation —
+            // see the file header) stays in native SW orientation while only
+            // base_link's mesh visibly rotates — an inconsistent robot where
+            // the body reorients but the arm hanging off it doesn't follow.
+            // A wrapper joint instead rotates base_link's actual FRAME
+            // relative to world, so every descendant inherits the rotation
+            // through ordinary FK composition, exactly like Asset mode's
+            // vertex bake achieves for a single rigid mesh.
+            w.WriteStartElement("link");
+            w.WriteAttributeString("name", "world");
+            w.WriteEndElement();
 
-                (double roll, double pitch, double yaw) = swToRos.ToRpy();
-                w.WriteStartElement("joint");
-                w.WriteAttributeString("name", "world_to_" + baseLinkName);
-                w.WriteAttributeString("type", "fixed");
-                w.WriteStartElement("parent"); w.WriteAttributeString("link", "world"); w.WriteEndElement();
-                w.WriteStartElement("child"); w.WriteAttributeString("link", baseLinkName); w.WriteEndElement();
-                w.WriteStartElement("origin");
-                w.WriteAttributeString("xyz", "0 0 0");
-                w.WriteAttributeString("rpy", Fmt(roll) + " " + Fmt(pitch) + " " + Fmt(yaw));
-                w.WriteEndElement();
-                w.WriteEndElement();
-            }
+            (double worldRoll, double worldPitch, double worldYaw) = swToRos.ToRpy();
+            w.WriteStartElement("joint");
+            w.WriteAttributeString("name", "world_to_" + baseLinkName);
+            w.WriteAttributeString("type", "fixed");
+            w.WriteStartElement("parent"); w.WriteAttributeString("link", "world"); w.WriteEndElement();
+            w.WriteStartElement("child"); w.WriteAttributeString("link", baseLinkName); w.WriteEndElement();
+            w.WriteStartElement("origin");
+            w.WriteAttributeString("xyz", "0 0 0");
+            w.WriteAttributeString("rpy", Fmt(worldRoll) + " " + Fmt(worldPitch) + " " + Fmt(worldYaw));
+            w.WriteEndElement();
+            w.WriteEndElement();
 
             foreach (LinkDef link in links)
             {

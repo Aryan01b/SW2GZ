@@ -93,6 +93,13 @@ namespace SW2GZ.Writers.Tests
         private XElement UrdfRoot() =>
             XElement.Load(Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "urdf", "my_robot.urdf.xacro"));
 
+        // The world_to_<root> wrapper joint is now ALWAYS emitted alongside
+        // whatever real joint(s) a test defines — filter it out so existing
+        // "there's exactly one joint" assertions keep meaning "one real
+        // (non-wrapper) joint", not "one joint total".
+        private static IEnumerable<XElement> RealJoints(XElement root) =>
+            root.Elements("joint").Where(j => !((string)j.Attribute("name")).StartsWith("world_to_"));
+
         [Fact]
         public void Export_WritesUrdfWithLinksMeshesAndFixedJoint()
         {
@@ -112,7 +119,7 @@ namespace SW2GZ.Writers.Tests
             Assert.Contains("base_link", linkNames);
             Assert.Contains("arm_link", linkNames);
 
-            XElement joint = root.Elements("joint").Single();
+            XElement joint = RealJoints(root).Single();
             Assert.Equal("base_link_to_arm_link", (string)joint.Attribute("name"));
             Assert.Equal("fixed", (string)joint.Attribute("type"));
             Assert.Equal("base_link", (string)joint.Element("parent").Attribute("link"));
@@ -133,7 +140,7 @@ namespace SW2GZ.Writers.Tests
             Sw2gzRobotExporter.Export(
                 new FakeTess(), new FakeMassProps(), new FakePoses(poses), Cfg(), _dir, Matrix3.Identity);
 
-            XElement joint = UrdfRoot().Elements("joint").Single();
+            XElement joint = RealJoints(UrdfRoot()).Single();
             string[] xyz = ((string)joint.Element("origin").Attribute("xyz")).Split(' ');
             Assert.Equal(1.0, double.Parse(xyz[0]), 3);
             Assert.Equal(2.0, double.Parse(xyz[1]), 3);
@@ -153,7 +160,7 @@ namespace SW2GZ.Writers.Tests
             Sw2gzRobotExporter.Export(
                 new FakeTess(), new FakeMassProps(), new FakePoses(poses), Cfg(), _dir, Matrix3.Identity);
 
-            XElement joint = UrdfRoot().Elements("joint").Single();
+            XElement joint = RealJoints(UrdfRoot()).Single();
             string[] rpy = ((string)joint.Element("origin").Attribute("rpy")).Split(' ');
             Assert.Equal(0.0, double.Parse(rpy[0]), 3);
             Assert.Equal(0.0, double.Parse(rpy[1]), 3);
@@ -226,7 +233,7 @@ namespace SW2GZ.Writers.Tests
                 new FakeTess(), new FakeMassProps(), new FakePoses(poses), cfg, _dir, Matrix3.Identity);
 
             XElement root = XElement.Load(Path.Combine(_dir, "my_robot_ws", "src", "my_robot", "urdf", "my_robot.urdf.xacro"));
-            XElement joint = root.Elements("joint").Single();
+            XElement joint = RealJoints(root).Single();
             Assert.Equal("mid_link", (string)joint.Element("parent").Attribute("link"));
             Assert.Equal("leaf_link", (string)joint.Element("child").Attribute("link"));
 
@@ -293,11 +300,12 @@ namespace SW2GZ.Writers.Tests
         }
 
         [Fact]
-        public void Export_EmitWorldLink_AddsWorldJointWithRotation()
+        public void Export_AlwaysEmitsWorldJointWithRotation_NoOptOut()
         {
-            var cfg = Cfg(); cfg.EmitWorldLink = true;
+            // No flag to flip any more — the world_to_<root> wrapper joint
+            // carrying the SW→ROS rotation is unconditional, on every export.
             Sw2gzRobotExporter.Export(
-                new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir,
+                new FakeTess(), new FakeMassProps(), new FakePoses(), Cfg(), _dir,
                 SwToRosRotation.Build(SW2GZ.Build.Model.AxisDirection.PlusY, SW2GZ.Build.Model.AxisDirection.PlusZ));
 
             XElement root = UrdfRoot();
@@ -481,7 +489,7 @@ namespace SW2GZ.Writers.Tests
             };
             Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir, Matrix3.Identity);
 
-            XElement joint = UrdfRoot().Elements("joint").Single();
+            XElement joint = RealJoints(UrdfRoot()).Single();
             Assert.Equal("shoulder", (string)joint.Attribute("name"));
             Assert.Equal("continuous", (string)joint.Attribute("type"));
         }
@@ -506,7 +514,7 @@ namespace SW2GZ.Writers.Tests
             };
             Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(poses), cfg, _dir, Matrix3.Identity);
 
-            XElement joint = UrdfRoot().Elements("joint").Single();
+            XElement joint = RealJoints(UrdfRoot()).Single();
             string[] xyz = ((string)joint.Element("axis").Attribute("xyz")).Split(' ');
             Assert.Equal(0.0, double.Parse(xyz[0]), 3);
             Assert.Equal(-1.0, double.Parse(xyz[1]), 3);
@@ -528,7 +536,7 @@ namespace SW2GZ.Writers.Tests
             };
             Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir, Matrix3.Identity);
 
-            XElement joint = UrdfRoot().Elements("joint").Single();
+            XElement joint = RealJoints(UrdfRoot()).Single();
             Assert.Equal(-0.5, double.Parse((string)joint.Element("limit").Attribute("lower"), CultureInfo.InvariantCulture), 3);
             Assert.Equal(0.5, double.Parse((string)joint.Element("limit").Attribute("upper"), CultureInfo.InvariantCulture), 3);
         }
@@ -543,7 +551,7 @@ namespace SW2GZ.Writers.Tests
             };
             Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir, Matrix3.Identity);
 
-            XElement joint = UrdfRoot().Elements("joint").Single();
+            XElement joint = RealJoints(UrdfRoot()).Single();
             Assert.Null(joint.Element("axis"));
             Assert.Null(joint.Element("limit"));
         }
@@ -560,7 +568,7 @@ namespace SW2GZ.Writers.Tests
 
             Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir, Matrix3.Identity);
 
-            XElement joint = UrdfRoot().Elements("joint").Single();
+            XElement joint = RealJoints(UrdfRoot()).Single();
             string[] xyz = ((string)joint.Element("origin").Attribute("xyz")).Split(' ');
             Assert.Equal(2.0, double.Parse(xyz[0]), 3);
             Assert.Equal(3.0, double.Parse(xyz[1]), 3);
@@ -588,7 +596,7 @@ namespace SW2GZ.Writers.Tests
 
             Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(poses), cfg, _dir, Matrix3.Identity);
 
-            XElement joint = UrdfRoot().Elements("joint").Single();
+            XElement joint = RealJoints(UrdfRoot()).Single();
             string[] xyz = ((string)joint.Element("origin").Attribute("xyz")).Split(' ');
             Assert.Equal(2.0, double.Parse(xyz[0]), 3);
             Assert.Equal(0.0, double.Parse(xyz[1]), 3);
@@ -640,7 +648,7 @@ namespace SW2GZ.Writers.Tests
             };
             Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(), cfg, _dir, Matrix3.Identity);
 
-            XElement joint = UrdfRoot().Elements("joint").Single();
+            XElement joint = RealJoints(UrdfRoot()).Single();
             string[] xyz = ((string)joint.Element("origin").Attribute("xyz")).Split(' ');
             Assert.Equal(0.0, double.Parse(xyz[0]), 3);
             Assert.Equal(0.0, double.Parse(xyz[1]), 3);
@@ -762,7 +770,7 @@ namespace SW2GZ.Writers.Tests
             };
             Sw2gzRobotExporter.Export(new FakeTess(), new FakeMassProps(), new FakePoses(poses), cfg, _dir, Matrix3.Identity);
 
-            XElement joint = UrdfRoot().Elements("joint").Single();
+            XElement joint = RealJoints(UrdfRoot()).Single();
             string[] xyz = ((string)joint.Element("axis").Attribute("xyz")).Split(' ');
             Assert.Equal(s, double.Parse(xyz[0], CultureInfo.InvariantCulture), 3);
             Assert.Equal(-s, double.Parse(xyz[1], CultureInfo.InvariantCulture), 3);

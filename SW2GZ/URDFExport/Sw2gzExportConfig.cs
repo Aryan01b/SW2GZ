@@ -27,21 +27,20 @@ namespace SW2GZ.URDFExport
         // treats as "up" (gravity-opposed) and which axis the robot "faces".
         // Defaults match the stock SW template: Y up, Z out of the screen.
         // SwToRosRotation.Build(SwUpAxis, SwForwardAxis) yields the rotation
-        // applied on the world_to_<root> joint in the URDF (and the include
-        // pose / spawn -R -P -Y in SDF modes).
+        // ALWAYS applied on a synthetic world/world_to_<root> fixed joint
+        // (Robot mode), each model's &lt;pose&gt; (World mode), or baked into
+        // mesh vertices (Asset mode) — every export ships in REP-103 Z-up
+        // regardless of the source assembly's native axes, with no opt-in
+        // flag. Robot mode's rotation must ride on a real joint, not just a
+        // mesh-orientation tweak: rotating a link's mesh without rotating its
+        // FRAME leaves every joint downstream (computed relative to that
+        // frame) anchored to the un-rotated native pose, so only that one
+        // link's body would visually reorient while the rest of the chain
+        // doesn't follow it.
         [DataMember] public SW2GZ.Build.Model.AxisDirection SwUpAxis { get; set; }
             = SW2GZ.Build.Model.AxisDirection.PlusY;
         [DataMember] public SW2GZ.Build.Model.AxisDirection SwForwardAxis { get; set; }
             = SW2GZ.Build.Model.AxisDirection.PlusZ;
-
-        // Whether to emit a synthetic <link name="world"/> + world_to_<root>
-        // fixed joint that anchors the robot to a known ROS frame. False by
-        // default (REP-105 convention: base_link IS the root; an external
-        // static_transform_publisher handles world placement if needed). Set
-        // true for fixed-base manipulators where you want the world frame in
-        // the URDF itself (Gz still anchors via Gazebo &lt;static&gt; or a
-        // separate fixed joint when off).
-        [DataMember] public bool EmitWorldLink { get; set; } = false;
 
         // Step 2 — output destination, package identity, and package metadata.
         [DataMember] public string OutputFolder { get; set; } = string.Empty;
@@ -157,53 +156,6 @@ namespace SW2GZ.URDFExport
             // SW-default convention here so old checkpoints behave correctly.
             SwUpAxis = SW2GZ.Build.Model.AxisDirection.PlusY;
             SwForwardAxis = SW2GZ.Build.Model.AxisDirection.PlusZ;
-            EmitWorldLink = false;
-        }
-
-        /// Returns a shallow clone of this config with `EmitWorldLink`
-        /// overridden. Used by `Sw2gzModelPreviewer` to bake the SW→ROS
-        /// rotation into the preview URDF without mutating the user's
-        /// saved config — real exports still honour the user's setting.
-        /// Lists are shared by reference; the pipeline never mutates
-        /// Links / Joints / Stacks so the shallow share is safe.
-        public Sw2gzExportConfig WithEmitWorldLink(bool emitWorldLink)
-        {
-            return new Sw2gzExportConfig
-            {
-                Mode          = this.Mode,
-                SwUpAxis      = this.SwUpAxis,
-                SwForwardAxis = this.SwForwardAxis,
-                EmitWorldLink = emitWorldLink,
-                OutputFolder  = this.OutputFolder,
-                PackageName   = this.PackageName,
-                Author        = this.Author,
-                Email         = this.Email,
-                License       = this.License,
-                LastStep      = this.LastStep,
-                RobotLinks    = this.RobotLinks,
-                RobotJoints   = this.RobotJoints,
-                WorldGround        = this.WorldGround,
-                WorldAssets        = this.WorldAssets,
-                WorldPhysicsEngine = this.WorldPhysicsEngine,
-                WorldMaxStepSize   = this.WorldMaxStepSize,
-                WorldRealTimeFactor = this.WorldRealTimeFactor,
-                WorldFriction      = this.WorldFriction,
-                WorldInitialView   = this.WorldInitialView,
-                WorldScene         = this.WorldScene,
-                WorldSensorPlugins = this.WorldSensorPlugins,
-                AssetBodyPart   = this.AssetBodyPart,
-                AssetFrictionMu = this.AssetFrictionMu,
-                AssetIsStatic   = this.AssetIsStatic,
-                AssetJointType  = this.AssetJointType,
-                AssetJointAxisX = this.AssetJointAxisX,
-                AssetJointAxisY = this.AssetJointAxisY,
-                AssetJointAxisZ = this.AssetJointAxisZ,
-                AssetJointLower = this.AssetJointLower,
-                AssetJointUpper = this.AssetJointUpper,
-                AssetSensorKind  = this.AssetSensorKind,
-                AssetSensorTopic = this.AssetSensorTopic,
-                AssetCollision   = this.AssetCollision,
-            };
         }
     }
 }

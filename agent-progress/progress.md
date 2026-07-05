@@ -6,6 +6,47 @@ branch below is on an older base, 470 green there).
 Branch model: `main` is trunk; tags v2.1.0/v2.2.0/v2.3.1/v2.4.0/v2.5.0.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
+## Done — Robot mode: SW→ROS/Gz frame conversion always applied (branch `feat/robot-mode-enhancements`)
+
+**Real bug fixed:** Robot/URDF exports shipped in raw SolidWorks frame by
+default — `Sw2gzExportConfig.EmitWorldLink` defaulted `false` with no UI to
+flip it, so the already-computed `SwToRosRotation` was silently discarded.
+World mode (per-model `<pose>`) and Asset mode (baked into mesh verts) were
+already unconditional and correct; only Robot mode had this gap.
+
+**First attempt was wrong, caught by user live-checking the preview
+(commit reverted, see reflog / commit `0a2ccac`):** tried baking the
+rotation directly into `base_link`'s own mesh reference (`Matrix3.Identity`
+→ `swToRos.Transpose()`), reasoning from a true-but-misapplied proof that
+every OTHER per-link quantity is invariant to a uniform global rotation.
+The bug: rotating a link's MESH doesn't rotate its FRAME — and every joint
+downstream is computed relative to that (unrotated) frame. Result: only
+`base_link`'s body visually reoriented; `mid_link`/`end_link` stayed in
+native SW orientation and didn't follow along — an inconsistent robot.
+User caught this by generating a real export and looking at it, exactly
+the "live-test before trusting a coordinate-math change" lesson this
+codebase has already paid for twice (`sw-mathtransform-column-major`,
+the mate-classification bug).
+
+**Correct fix:** the pre-existing `world_to_<root>` wrapper-joint mechanism
+was right all along — a fixed joint's rpy actually rotates `base_link`'s
+real FRAME relative to world, so every descendant inherits the rotation
+through ordinary FK composition. It just needed to be unconditional instead
+of gated behind `EmitWorldLink` (which had no UI and defaulted off). Removed
+`EmitWorldLink` + its clone helper entirely; the world link/joint is now
+always emitted, `Sw2gzModelPreviewer.RunPreview` needs no override anymore.
+**500 green** (505 baseline − 5 clone tests for the removed helper), addin
+compiles clean, DLL + preview assets deployed.
+
+**Verified via a synthetic export** (3-link arm, real `Sw2gzRobotExporter`
+code path, throwaway test-generated fixture — no live SW available this
+session): `world_to_base_link` now carries `rpy="1.570796 0 1.570796"`
+(matches `SwToRosRotation.Build(PlusY, PlusZ)`), and the whole chain hangs
+correctly off it as one rigid rotation. **Still needs a real live SW
+re-test** on an actual assembly (FULL_ARM or similar) before trusting this
+fully — the synthetic check proves the mechanism, not the live SW→ROS
+axis mapping against a real assembly's up/forward convention.
+
 ## Done — Robot mode v3: Joints step (type/axis/limit) shipped + live-tested, MILESTONE (branch `feat/robot-mode-v3`, 2026-07-04)
 
 **User-confirmed working on FULL_ARM.SLDASM: "link is modeled properly."**
