@@ -1240,8 +1240,14 @@ namespace SW2GZ.SW
 
             if (_ribbonRegistrar.ActiveMode != mode || _ribbonRegistrar.ActiveSaved != saved)
             {
+                // Rebuild the ribbon boxes only — do NOT force ActiveCommandTab
+                // here. This runs passively on every doc open/activation
+                // (including SW startup), so grabbing tab focus made SW2GZ
+                // steal the tab from the user's normal default (Features/
+                // Sketch/Assembly) every single time. Unlike PersistDoc/SetMode
+                // (which force the tab right after a direct user click inside
+                // SW2GZ's own UI), there's no user intent to be on this tab here.
                 _ribbonRegistrar.RefreshTabForMode(mode, saved);
-                try { modeldoc.Extension.ActiveCommandTab = "SW2GZ"; } catch { }
             }
         }
 
