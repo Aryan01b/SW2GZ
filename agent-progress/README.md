@@ -1,6 +1,6 @@
 # agent-progress
 
-Local scratchpad for the coding agent (Claude) to track in-flight work on SW2GZ.
+Local scratchpad for the coding agent to track in-flight work on SW2GZ.
 
 Not authoritative — `CHANGELOG.md` is. This folder is for short notes the agent
 writes/reads across sessions so it doesn't lose the thread.

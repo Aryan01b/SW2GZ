@@ -1,8 +1,16 @@
 ; SW2GZ installer — auto-removes previous install, kills SolidWorks if running,
 ; deploys + registers in one click.
-; Build: ISCC.exe installer\SW2GZ.iss
+; Build: ISCC.exe /DMyAppVersion=<version> installer\SW2GZ.iss (see BUILD.md)
 #define MyAppName        "SW2GZ"
-#define MyAppVersion     "2.1.0"
+; MyAppVersion drives AppVersion + the output filename. Pass it explicitly at
+; build time so it tracks the git tag being released, e.g.:
+;   ISCC.exe /DMyAppVersion=2.8.0 installer\SW2GZ.iss
+; (BUILD.md and .github/workflows/release.yml derive this from `git describe
+; --tags`.) The fallback below is only for ad-hoc local builds without /D —
+; bump it when it drifts too far behind the latest tag.
+#ifndef MyAppVersion
+  #define MyAppVersion "2.8.0"
+#endif
 #define MyAppPublisher   "Aryan Arlikar"
 ; SW2GZ COM addin GUID (matches HKLM\SOFTWARE\SolidWorks\Addins\{...}).
 #define AddinGuid        "{34fad620-2a46-4ba6-9f5f-1dfefde894c7}"

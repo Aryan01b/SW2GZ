@@ -11,6 +11,18 @@ all on `main` now. `feat/robot-mode-enhancements` kept alive on origin (not
 deleted) in case work continues there — currently identical to `main`.
 Addin compiles clean (SW closed for MSBuild; regasm MSB3216 is non-fatal).
 
+## Done — installer version drift fixed
+
+`installer/SW2GZ.iss` had `MyAppVersion` hardcoded to `2.1.0` (untouched since
+v2.1.0) while git tags had moved to v2.8.0 — AppVersion + the output filename
+were badly stale. Fixed by making `MyAppVersion` an overridable ISPP define
+(`#ifndef` fallback bumped to 2.8.0) and passing it explicitly from
+`git describe --tags` at build time — `BUILD.md`'s installer step and
+`.github/workflows/release.yml` both derive it now instead of relying on the
+hardcoded default. Bump the fallback in the `.iss` occasionally so ad-hoc
+local builds (no `/D` flag) don't drift too far, but the real source of truth
+going forward is the tag being built against.
+
 ## Done — Robot mode: SW→ROS/Gz frame conversion always applied (branch `feat/robot-mode-enhancements`)
 
 **Real bug fixed:** Robot/URDF exports shipped in raw SolidWorks frame by

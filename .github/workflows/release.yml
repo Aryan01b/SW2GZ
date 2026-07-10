@@ -15,17 +15,29 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need full tag history for `git describe` version fallback
       - uses: microsoft/setup-msbuild@v2
       - name: Build Release (requires SolidWorks API — only succeeds on a runner that has it)
         continue-on-error: true
         run: msbuild SW2GZ.sln /t:Restore;Build /p:Configuration=Release /v:minimal
       - name: Install Inno Setup
         run: choco install innosetup -y
+      - name: Determine release version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $ver = "${{ github.ref_name }}" -replace '^v', ''
+          } else {
+            $ver = (git describe --tags --abbrev=0) -replace '^v', ''
+          }
+          echo "version=$ver" >> $env:GITHUB_OUTPUT
       - name: Build installer
         continue-on-error: true
         shell: pwsh
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\SW2GZ.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=${{ steps.version.outputs.version }}" installer\SW2GZ.iss
       - uses: softprops/action-gh-release@v2
         if: ${{ github.ref_type == 'tag' }}
         with:

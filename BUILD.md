@@ -45,11 +45,18 @@ profiles.
 
 ## Build the installer
 
+`installer/SW2GZ.iss` takes its version from the `MyAppVersion` preprocessor
+define, not a hardcoded value — pass it explicitly so the output filename and
+AppVersion match the git tag you're releasing:
+
 ```powershell
-& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\SW2GZ.iss
+$version = (git describe --tags --abbrev=0) -replace '^v', ''
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" installer\SW2GZ.iss
 ```
 
-Output: `installer\Output\SW2GZ-Setup-1.0.0.exe`.
+Output: `installer\Output\SW2GZ-Setup-2.8.0.exe` (for example, if the latest
+tag is `v2.8.0`). Omitting `/DMyAppVersion` falls back to whatever default is
+hardcoded in the `.iss` file, which may lag behind the latest tag.
 
 ## Phase 5 — add the UI controls in Visual Studio Designer
 
