@@ -19,7 +19,7 @@
 
 .EXAMPLE
   pwsh -NoProfile -File tools\preview\serve.ps1 `
-       -Root  "C:\Users\arlik\Downloads\full_arm_ws\src\full_arm" `
+       -Root  "C:\path\to\full_arm_ws\src\full_arm" `
        -Port  8080
 #>
 param(

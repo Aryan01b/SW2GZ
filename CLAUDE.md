@@ -50,4 +50,4 @@ member is already used elsewhere first. Local offline API browser:
   `solidworks_urdf_exporter` only.
 - **Legacy csproj.** New `.cs` / content files must be added to **both**
   `SW2GZ\SW2GZ.csproj` and `Test\SW2GZ.Writers.Test.csproj`.
-- **Tests must stay green** (currently 751).
+- **Tests must stay green** (currently 501 — `dotnet test Test\SW2GZ.Writers.Test.csproj`).

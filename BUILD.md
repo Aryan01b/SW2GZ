@@ -39,9 +39,8 @@ Output: `SW2GZ\bin\Release\SW2GZ.dll` plus referenced DLLs.
 dotnet test Test\SW2GZ.Writers.Test.csproj --filter "Category=Unit"
 ```
 
-50/50 tests pass on `dotnet 8` on Windows or Linux. These verify the
-ROS 2 / Gz writers + golden file regression across all three target
-profiles.
+These verify the ROS 2 / Gz writers + golden file regression across all
+three target profiles. All tests must stay green.
 
 ## Build the installer
 
@@ -54,59 +53,13 @@ $version = (git describe --tags --abbrev=0) -replace '^v', ''
 & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" installer\SW2GZ.iss
 ```
 
-Output: `installer\Output\SW2GZ-Setup-2.8.0.exe` (for example, if the latest
-tag is `v2.8.0`). Omitting `/DMyAppVersion` falls back to whatever default is
-hardcoded in the `.iss` file, which may lag behind the latest tag.
-
-## Phase 5 — add the UI controls in Visual Studio Designer
-
-The Profile binding code (mode radio + ROS 2 distro / Gz version combos
-+ author / email / license text fields) is already wired in
-`SW2GZ\UI\AssemblyExportFormSw2gz.cs` as a partial class extension.
-You need to add the matching controls in the WinForms Designer so the
-field names line up.
-
-Steps (Visual Studio 2022):
-
-1. Open `SW2GZ.sln`.
-2. Solution Explorer → `SW2GZ` → `UI` → double-click
-   `AssemblyExportForm.cs` to open the Designer.
-3. From the Toolbox, drag a **GroupBox** onto the form. Name it
-   `groupBoxSw2gzTarget`, Text `Export Target`. Place it near the top.
-4. Inside the GroupBox, drop three **RadioButton** controls. Set their
-   `(Name)` and `Text`:
-   - `rbRobotPackage` — Text `Robot Package (URDF + xacro)` — Checked = True
-   - `rbSdfModel`     — Text `SDF Model (asset)`
-   - `rbSdfWorld`     — Text `SDF World`
-5. Drop two **Label** + **ComboBox** pairs:
-   - Label `ROS 2 Distro:` + ComboBox `cmbRos2Distro` —
-     Items: `Humble`, `Jazzy`, `Kilted`, `Rolling`. DropDownStyle = DropDownList.
-     Wire `SelectedIndexChanged` event to existing `cmbRos2Distro_SelectedIndexChanged` handler.
-   - Label `Gz Version:` + ComboBox `cmbGzVersion` —
-     Items: `Fortress`, `Harmonic`, `Ionic`. DropDownStyle = DropDownList.
-6. Drop three **Label** + **TextBox** pairs:
-   - Label `Author:` + TextBox `txtAuthor`
-   - Label `Email:` + TextBox `txtEmail`
-   - Label `License:` + TextBox `txtLicense` — Text default `Apache-2.0`
-7. Save the form. Visual Studio regenerates
-   `AssemblyExportForm.Designer.cs` with the new controls.
-8. Open `AssemblyExportForm.cs` (the non-Designer partial). Find the
-   existing **Finish Export** button click handler. Immediately before
-   the call to `exportHelper.ExportRobot(...)`, insert:
-
-   ```csharp
-   ApplyProfileToExporter(exportHelper);
-   ```
-
-   `ApplyProfileToExporter` lives in `AssemblyExportFormSw2gz.cs` —
-   already in the same partial class.
-9. Rebuild. The Profile (Mode + Distro + Gz + author/email/license)
-   now flows from the UI through ExportHelper into Ros2Package /
-   SdfModelWriter / SdfWorldWriter.
+Output: `installer\Output\SW2GZ-Setup-<version>.exe`. Omitting
+`/DMyAppVersion` falls back to whatever default is hardcoded in the `.iss`
+file, which may lag behind the latest tag.
 
 ## Install the add-in into SolidWorks
 
-1. Right-click `SW2GZ-Setup-1.0.0.exe` → **Run as administrator**.
+1. Right-click the downloaded `SW2GZ-Setup-<version>.exe` → **Run as administrator**.
 2. Default install path: `C:\Program Files\SW2GZ\`.
 3. The installer runs `regasm /codebase SW2GZ.dll` automatically (registers
    the COM add-in under `HKLM\SOFTWARE\SolidWorks\AddIns\{34fad620-2a46-4ba6-9f5f-1dfefde894c7}`).

@@ -1,5 +1,50 @@
 # Contributing to SW2GZ
 
+Bug reports, feature requests, and PRs are welcome.
+
+## Getting started
+
+1. Fork the repo, clone your fork.
+2. Set up a build per [BUILD.md](BUILD.md).
+3. Branch off `main`: `feat/<short-name>` or `fix/<short-name>`.
+4. Make your change, add/update tests (see below).
+5. Open a PR against `main`. Describe *why*, not just *what* — link the issue
+   if there is one. CI (build + tests) must pass before merge.
+
+## Architecture
+
+Robot Package mode runs a layered pipeline: SolidWorks I/O sits behind
+interfaces (`SwSurface`), so the Build → Write → Validate layers are fully
+unit-testable without SolidWorks installed. See
+[`docs/reference/solidworks-api.md`](docs/reference/solidworks-api.md) for
+the SolidWorks COM API surface this codebase calls.
+
+## Commits
+
+Conventional Commits format:
+- `feat:` new feature
+- `fix:` bug fix
+- `chore:` housekeeping (deps, build, ignored files)
+- `refactor:` no behavior change
+- `test:` tests only
+- `docs:` documentation
+- `ci:` CI workflow changes
+
+## Tests
+
+Pure-C# writer tests run anywhere — no SolidWorks needed:
+
+```bash
+dotnet test Test/SW2GZ.Writers.Test.csproj --filter "Category=Unit"
+```
+
+New `.cs` files go in **both** `SW2GZ/SW2GZ.csproj` and
+`Test/SW2GZ.Writers.Test.csproj`. All tests must stay green.
+
+SolidWorks-dependent integration tests require a workstation with SolidWorks
+installed and run via the `TestRunner/` standalone exe (see
+`TestRunner/README.md`).
+
 ## License header for new files
 
 Any new .cs file added in this fork uses this header:
@@ -31,86 +76,3 @@ THE SOFTWARE.
 Files inherited from upstream `ros/solidworks_urdf_exporter` keep their
 original `Copyright (c) 2015 Stephen Brawner` header verbatim per the MIT
 license. Never delete or alter those headers.
-
-## Branching
-
-- `main` — stable, releases tagged `v1.0.0`, `v1.1.0`, …
-- Feature branches: `feat/<short-name>`
-- Bug branches: `fix/<short-name>`
-
-## Commits
-
-Conventional Commits format:
-- `feat:` new feature
-- `fix:` bug fix
-- `chore:` housekeeping (deps, build, ignored files)
-- `refactor:` no behavior change
-- `test:` tests only
-- `docs:` documentation
-- `ci:` CI workflow changes
-
-## Tests
-
-Pure-C# writer tests run anywhere — no SolidWorks needed:
-
-```bash
-dotnet test Test/SW2GZ.Writers.Test.csproj --filter "Category=Unit"
-# 50/50 passing
-```
-
-SolidWorks-dependent integration tests require a workstation with SolidWorks installed and run via the `TestRunner/` standalone exe (see `TestRunner/README.md`).
-
-## Architecture
-
-Robot Package mode runs a layered pipeline. SolidWorks I/O sits behind interfaces, so the
-Build / Write / Validate layers are fully unit-testable without SolidWorks installed.
-
-```mermaid
-flowchart TD
-    subgraph SwSurface["SwSurface · SolidWorks I/O"]
-        S1[IMassProperties]
-        S2[IAssemblyWalker]
-        S3[IMeshTessellator]
-    end
-    subgraph Build["Build · geometry & model"]
-        B1[PackageNameSanitizer]
-        B2[InertialAggregator<br/>parallel-axis theorem]
-        B3[LinkBuilder / JointBuilder]
-        B4[DaeWriter · StlWriter]
-    end
-    subgraph Write["Write · code generators"]
-        W1[PackageXml · AmentCMake]
-        W2[LaunchPy · Xacro]
-        W3[Ros2Control · RViz]
-        W4[ModelConfig · SdfWorld · RosGzBridge]
-    end
-    subgraph Validate["Validate · lint"]
-        V1[PackageNameChecker]
-        V2[UrdfXmlValidator]
-        V3[PluginNameChecker]
-        V4[MeshFileChecker]
-    end
-    SwSurface --> Build --> Write --> Validate --> OUT[(turn-key<br/>colcon workspace)]
-    style SwSurface fill:#e3242b,stroke:#fff,color:#fff
-    style OUT fill:#22314E,stroke:#fff,color:#fff
-```
-
-The pipeline emits `<outputDir>/<pkg>_ws/src/<pkg>/...`, so the output is a ready
-`colcon build` workspace.
-
-## Project status
-
-| Area | Status |
-|---|---|
-| Rebrand + remove ROS 1 / Gazebo Classic | done |
-| TargetProfile (ROS 2/Gz lookup tables) | done, 9 tests |
-| ROS 2 writers (PackageXml, AmentCMake, LaunchPy, Xacro, Ros2Control, RViz) | done, 19 tests |
-| Gz writers (ModelConfig, PluginTags, PhysicsBlock, SdfWorld, SdfModel, RosGzBridge) | done, 13 tests |
-| Sw2gzPipeline orchestrator + ExportHelper branching | done |
-| UI selectors (Sw2gzProfileDialog) | done |
-| OutputValidator + PreExportReport | done, 5 tests |
-| Golden-file tests | done, 3 profiles |
-| Inno Setup installer | done |
-| Example output package (3-DOF arm) | done |
-| GitHub Actions CI (build + ros2-validate + release) | done |
-| Acceptance: real assembly → build → spawn in Gz | manual — needs SolidWorks workstation |

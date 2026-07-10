@@ -4,29 +4,43 @@
 
 ### SolidWorks → ROS 2 + Gz Sim Exporter
 
+No more hand-writing URDF — export straight from your SolidWorks feature tree.
+
 Turn a SolidWorks assembly into a ready-to-launch ROS 2 package or Gz Sim model —
 meshes, URDF/Xacro, SDF, and launch files generated for you.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/Aryan01b/SW2GZ?include_prereleases&label=release)](https://github.com/Aryan01b/SW2GZ/releases/latest)
+[![Stars](https://img.shields.io/github/stars/Aryan01b/SW2GZ?style=flat&color=yellow)](https://github.com/Aryan01b/SW2GZ/stargazers)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D6?logo=windows&logoColor=white)](https://github.com/Aryan01b/SW2GZ/releases/latest)
-[![ROS 2](https://img.shields.io/badge/ROS%202-Humble·Jazzy·Kilted·Rolling-22314E?logo=ros&logoColor=white)](#supported-targets)
+[![ROS 2](https://img.shields.io/badge/ROS%202-Jazzy-22314E?logo=ros&logoColor=white)](#supported-targets)
 
 </div>
 
-```mermaid
-flowchart LR
-    A[SolidWorks<br/>model] -->|SW2GZ| B{Pick mode}
-    B --> C[Robot Package<br/>URDF · launch · control]
-    B --> D[SDF Model]
-    B --> E[SDF World]
-    C --> G[ros2 launch → Gz Sim]
-    D --> G
-    E --> G
-    style A fill:#e3242b,stroke:#fff,color:#fff
-    style B fill:#FB8C00,stroke:#fff,color:#fff
-    style G fill:#22314E,stroke:#fff,color:#fff
-```
+## Why SW2GZ
+
+- **No manual URDF authoring** — masses, inertias, joint frames, and mates are read straight from the SolidWorks model, not typed by hand.
+- **ROS 2 + Gz Sim, not just URDF** — the original `sw2urdf` stops at a URDF file; SW2GZ also emits SDF, launch files, and `ros2_control` config.
+- **Three export modes** — a full robot package, a standalone SDF model, or an SDF world, depending on what you need.
+
+## Export modes
+
+| Mode | What you get |
+|---|---|
+| **Robot Package** | Full ROS 2 package: URDF/Xacro, launch files, `ros2_control` config, RViz, a world |
+| **SDF Model** | Standalone Gz model: `model.config`, `model.sdf`, meshes |
+| **SDF World** | Standalone Gz world with physics, sun, and ground plane |
+
+## Supported targets
+
+ROS 2 distro and Gz version are paired automatically:
+
+| ROS 2 Distro | Gz Version |
+|---|---|
+| Humble | Fortress |
+| **Jazzy** | **Harmonic** *(default)* |
+| Kilted | Ionic |
+| Rolling | Harmonic |
 
 ## Install
 
@@ -50,35 +64,11 @@ cd <output>/<robot>_ws && colcon build
 ros2 launch <robot>_description gz_sim.launch.py
 ```
 
-## Export modes
-
-| Mode | What you get |
-|---|---|
-| **Robot Package** | Full ROS 2 package: URDF/Xacro, launch files, `ros2_control` config, RViz, a world |
-| **SDF Model** | Standalone Gz model: `model.config`, `model.sdf`, meshes |
-| **SDF World** | Standalone Gz world with physics, sun, and ground plane |
-
-## Supported targets
-
-ROS 2 distro and Gz version are paired automatically:
-
-| ROS 2 Distro | Gz Version |
-|---|---|
-| Humble | Fortress |
-| **Jazzy** | **Harmonic** *(default)* |
-| Kilted | Ionic |
-| Rolling | Harmonic |
-
-## Example
-
-[`examples/three_dof_arm_ros2/`](examples/three_dof_arm_ros2/) is a package SW2GZ produced
-from the bundled 3-DOF arm (Jazzy + Harmonic).
-
 ## More
 
+- **Release history:** [CHANGELOG.md](CHANGELOG.md)
 - **Build from source:** [BUILD.md](BUILD.md)
 - **Contributing & internals:** [CONTRIBUTING.md](CONTRIBUTING.md)
-- **Release history:** [CHANGELOG.md](CHANGELOG.md)
 
 ## Credits
 

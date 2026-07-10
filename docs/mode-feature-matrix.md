@@ -1,5 +1,7 @@
 # SW2GZ — Mode × Feature Matrix
 
+Last verified 2026-07-10 against `main` (tag `v2.8.0`).
+
 Maps every Gazebo SDF / sim-developer construct (the sim-dev-side modules:
 Sdformat, Sim, Sensors, Physics, Rendering, Gui, Transport, Launch) against the
 three SW2GZ export **modes**, and decides where each missing piece *should*
@@ -25,7 +27,8 @@ Legend: ✅ implemented · ⚠️ partial · ❌ absent · ➖ N/A by design ·
 | Mesh visual (DAE export) | ✅ | ✅ | ✅ | Core to all three. Done. |
 | SW color → `<material>` | ⚠️ neutral | ✅ | ✅ | ➕ carry SW color into Robot visuals (currently neutralized). |
 | Smooth/welded normals | ⚠️ | ✅ | ✅ | ➕ enable on Robot path too. |
-| Primitive geometry (box/sphere/cyl) | ❌ | ❌ | ❌ | ➕ **Asset** first (collision-primitive override), then World. Perf win. |
+| Primitive geometry (box/sphere/cyl) — **collision** | ❌ | ❌ | ✅ | Asset done (fit to mesh AABB). ➕ World next. |
+| Primitive geometry (box/sphere/cyl) — **visual** | ❌ | ❌ | ❌ | Not started anywhere — visual is always mesh. Low priority. |
 | PBR / textures / UV | ❌ | ❌ | ❌ | Deferred everywhere. Low priority. |
 
 ## B. Physics & collision
@@ -33,7 +36,7 @@ Legend: ✅ implemented · ⚠️ partial · ❌ absent · ➖ N/A by design ·
 | Component | Robot | World | Asset | Decision / where it belongs |
 |---|:--:|:--:|:--:|---|
 | Collision (mesh) | ✅ | ✅ | ✅ | Done. |
-| `<surface><friction>` (μ) | ⚠️ | ❌ | ✅ | ➕ add friction to **World** collisions; reuse Asset's μ field. |
+| `<surface><friction>` (μ) | ⚠️ | ✅ | ✅ | World done (tunable `WorldFriction`, incl. ground plane). |
 | Inertial (mass/COM/tensor) | ✅ | ➖ | ⚠️ dynamic-only | World is static → N/A. Asset emits inertial only when dynamic. |
 | Physics block (engine/step/RTF) | ✅ | ✅ | ➖ | Asset is a model fragment → no world physics. Done. |
 | Solver / contact params | ❌ | ❌ | ❌ | ➕ **World** advanced panel (low priority). |
@@ -42,8 +45,8 @@ Legend: ✅ implemented · ⚠️ partial · ❌ absent · ➖ N/A by design ·
 
 | Component | Robot | World | Asset | Decision / where it belongs |
 |---|:--:|:--:|:--:|---|
-| `<joint>` articulation | ✅ URDF | ❌ static | ❌ | ➕ **Asset** = dynamic/articulated prop (door, lift); World stays static. |
-| Dynamic (non-static) model | ✅ | ❌ | ⚠️ | ➕ expose dynamic toggle in **Asset**; spawn into World. |
+| `<joint>` articulation | ✅ URDF | ❌ static | ✅ | Asset done (1-DOF fixed/revolute/continuous/prismatic to world). |
+| Dynamic (non-static) model | ✅ | ❌ | ✅ | Asset done — a joint forces the model dynamic. |
 | DiffDrive / Ackermann | ❌ | ❌ | ➖ | ➕ **Robot** mode (it *is* the robot). |
 | JointController / PositionController | ❌ | ❌ | ➖ | ➕ **Robot** mode. |
 | ros2_control | ✅ | ➖ | ➖ | Robot only. Done. |
@@ -54,7 +57,7 @@ Legend: ✅ implemented · ⚠️ partial · ❌ absent · ➖ N/A by design ·
 |---|:--:|:--:|:--:|---|
 | Per-link `<sensor>` blocks | ✅ | ❌ | ❌ | Robot done (camera/lidar/imu on links). |
 | Sensor-family **systems** (toggles) | ⚠️ | ✅ | ➖ | World toggles the systems; done. |
-| Placed sensor on a world/asset model | ❌ | ❌ | ❌ | ➕ **Asset** = a sensor-equipped prop (fixed camera/lidar). World stays toggle-only. |
+| Placed sensor on a world/asset model | ❌ | ❌ | ✅ | Asset done (optional camera/gpu_lidar/imu on the asset link). |
 | `<noise>` model config | ⚠️ | ❌ | ❌ | ➕ surface noise in **Robot** sensor UI. |
 
 ## E. World environment
@@ -65,7 +68,7 @@ Legend: ✅ implemented · ⚠️ partial · ❌ absent · ➖ N/A by design ·
 | Spherical coords (geo) | ❌ | ✅ | ➖ | World only. Done. |
 | Scene (ambient/bg/grid/shadows/sky/fog) | ⚠️ default | ✅ | ➖ | World owns it. Done. |
 | Sun (parametric) | ✅ default | ✅ | ➖ | Done. |
-| Extra lights (point/spot/dir) | ❌ | ❌ | ➖ | ➕ **World** Settings panel. |
+| Extra lights (point/spot/dir) | ❌ | ✅ | ➖ | World done (2 configurable fill-light slots in Settings). |
 | Ground plane | ✅ | ✅ | ➖ | Done. |
 
 ## F. GUI / visualization
@@ -93,30 +96,28 @@ Legend: ✅ implemented · ⚠️ partial · ❌ absent · ➖ N/A by design ·
 | Component | Robot | World | Asset | Decision / where it belongs |
 |---|:--:|:--:|:--:|---|
 | URDF | ✅ | ➖ | ➖ | Robot only. Done. |
-| Launch file (ros_gz_sim) | ✅ | ❌ | ➖ | ➕ **World** launch (`gz sim` + bridge + optional robot spawn). Biggest gap. |
-| ros_gz bridge (YAML) | ✅ | ❌ | ➖ | ➕ **World** bridge for `/cmd_vel`, `/clock`, sensor topics. |
-| Clock bridge | ⚠️ | ❌ | ➖ | ➕ fold into the World launch/bridge. |
+| Launch file (ros_gz_sim) | ✅ | ✅ | ➖ | World done — standalone `launch_world.py`, no colcon needed. |
+| ros_gz bridge (YAML) | ✅ | ✅ | ➖ | World done — `ros_gz_bridge.yaml` (`/clock` always, `/cmd_vel` when teleop on). |
+| Clock bridge | ⚠️ | ✅ | ➖ | World done — folded into the launch+bridge above. |
 | Package layout (model.config) | ➖ | ➖ | ✅ | Asset only. Done. |
 
 ---
 
-## Summary — what to add, by mode
+## Summary — what's left, by mode
 
 **Robot** (make the robot a first-class sim citizen)
-1. ➕ Carry SW color + smooth normals into Robot visuals.
-2. ➕ Actuation systems: DiffDrive / JointController / JointPositionController.
-3. ➕ PosePublisher / OdometryPublisher.
-4. ➕ Sensor `<noise>` config in the sensor UI.
+1. ➕ Actuation systems: DiffDrive / JointController / JointPositionController
+   (`ActuationBackend.GzPlugin` — unimplemented enum value today).
+2. ➕ PosePublisher / OdometryPublisher.
+3. ➕ Sensor `<noise>` config in the sensor UI.
 
-**World** (go from "static picture" to "runnable scene") — *highest ROI*
-1. ➕ **World launch file + ros_gz bridge** (today World stops at a raw `.sdf`). #1 gap.
-2. ➕ Friction on world collisions.
-3. ➕ Extra lights + (optional) extra GUI plugins in the Settings panel.
+**World** (largely done — launch+bridge, friction, and lights all shipped)
+1. ➕ Solver / contact params advanced panel (low priority).
+2. ➕ Extra GUI plugins (Inspector/Transform/ViewAngle/ImageDisplay), optional.
+3. ➕ LogRecord / LogPlayback (optional, low priority).
 
-**Asset** (turn the building block into a *rich* building block)
-1. ➕ Primitive collision override (box/sphere/cyl) for perf.
-2. ➕ Dynamic/articulated asset: a single `<joint>` (door, lift, wheel) + dynamic toggle.
-3. ➕ Sensor-equipped asset (a fixed camera / lidar prop placed in a world).
+**Asset** (largely done — joints, sensors, and collision primitives all shipped)
+1. ➕ Primitive **visual** geometry (today only collision gets a primitive override; visual stays mesh).
 
 ### Design guardrails
 - **World stays static-environment**; articulation/sensors enter via **Asset**
@@ -124,5 +125,3 @@ Legend: ✅ implemented · ⚠️ partial · ❌ absent · ➖ N/A by design ·
 - **Robot owns articulation + control + ROS**; World owns environment + scene;
   Asset is the shared, reusable unit that can be static, dynamic, or
   sensor-bearing.
-- The single biggest unlock is the **World launch+bridge** — it makes every
-  other World/Asset feature actually drivable from ROS 2.
