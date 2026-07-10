@@ -2,44 +2,30 @@
 
 All notable changes documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [2.6.0] — 2026-06-30
+## [2.8.1] — 2026-07-10
 
-**World & Asset feature build-out** — completes the Robot/World/Asset
-mode×feature matrix and ships the wizard UI + persistence for the new knobs.
-Live-tested in SOLIDWORKS 2025.
-
-### Added
-
-- **World mode — runnable & richer.**
-  - Standalone launch + ros_gz bridge: every World export writes
-    `<pkg>/launch_world.py` + `<pkg>/ros_gz_bridge.yaml` (path-relative, no
-    colcon) so the world runs via `ros2 launch <pkg>/launch_world.py`. Bridge =
-    `/clock` always + `/cmd_vel` when keyboard teleop is on.
-  - Explicit collision friction (`<surface><friction>`, μ tunable, default 1.0)
-    so spawned robots grip the floor — exposed as **Ground friction μ** in the
-    World Settings panel.
-  - Extra fill lights (point/spot/directional) beyond the sun — **Lights**
-    section in World Settings (2 configurable slots).
-- **Asset mode — articulated / sensor-bearing / cheap-collision.**
-  - 1-DOF joint to the world (fixed/revolute/continuous/prismatic) → door/lift/
-    wheel/lever props.
-  - Optional sensor on the asset link (camera/gpu_lidar/imu), reusing the
-    robot-side sensor writer.
-  - Primitive collision override (box/sphere/cylinder fit to the mesh AABB);
-    visual stays mesh.
-  - All three exposed in the Create-Asset wizard Surface step; persisted in
-    `Sw2gzDoc`.
+**Pre-release cleanup**, found while local-testing the v2.8.0 installer.
 
 ### Fixed
 
-- Export-complete dialog showed the Robot ament-workspace run instructions
-  (`<pkg>_ws`, `colcon build`, `gz_sim.launch.py`) for **all** modes; World/Asset
-  now show their real self-contained run command.
+- **Export panel no longer carries over saved identity data.** Author/Email
+  stopped auto-seeding from the cross-doc `Sw2gzUserDefaults` registry cache;
+  fields now show a real greyed placeholder hint (`e.g. Jane Doe` /
+  `e.g. you@example.com`) instead of silently pre-filling whatever was typed
+  on a previous export. Nothing is fetched from anywhere, nothing is
+  persisted back.
+
+### Changed
+
+- **World mode: `launch_world.py` + `ros_gz_bridge.yaml` generation
+  disabled.** The generated structure was broken. World export is SDF +
+  meshes only for now (`<pkg>/<pkg>.sdf` + `<pkg>/meshes/*.dae`) until the
+  launch/bridge writers are fixed.
 
 ### Notes
 
-- 801 → 849 tests. All new knobs are opt-in/default-safe (unset = byte-identical
-  output). Pure writers/config source-linked into the net8 test project.
+- 498 tests green (501 − 4 obsolete launch/bridge assertions + 1 new
+  regression guard).
 
 ## [2.8.0] — 2026-07-05
 
@@ -124,6 +110,45 @@ World and Asset modes were untouched and kept working throughout.
   link positioning and joint pivots verified correct through the whole
   kinematic chain.
 - Test count: 853 (v2.6.0) → 464 (post-gut rebuild start) → ~500 by the tag.
+
+## [2.6.0] — 2026-06-30
+
+**World & Asset feature build-out** — completes the Robot/World/Asset
+mode×feature matrix and ships the wizard UI + persistence for the new knobs.
+Live-tested in SOLIDWORKS 2025.
+
+### Added
+
+- **World mode — runnable & richer.**
+  - Standalone launch + ros_gz bridge: every World export writes
+    `<pkg>/launch_world.py` + `<pkg>/ros_gz_bridge.yaml` (path-relative, no
+    colcon) so the world runs via `ros2 launch <pkg>/launch_world.py`. Bridge =
+    `/clock` always + `/cmd_vel` when keyboard teleop is on.
+  - Explicit collision friction (`<surface><friction>`, μ tunable, default 1.0)
+    so spawned robots grip the floor — exposed as **Ground friction μ** in the
+    World Settings panel.
+  - Extra fill lights (point/spot/directional) beyond the sun — **Lights**
+    section in World Settings (2 configurable slots).
+- **Asset mode — articulated / sensor-bearing / cheap-collision.**
+  - 1-DOF joint to the world (fixed/revolute/continuous/prismatic) → door/lift/
+    wheel/lever props.
+  - Optional sensor on the asset link (camera/gpu_lidar/imu), reusing the
+    robot-side sensor writer.
+  - Primitive collision override (box/sphere/cylinder fit to the mesh AABB);
+    visual stays mesh.
+  - All three exposed in the Create-Asset wizard Surface step; persisted in
+    `Sw2gzDoc`.
+
+### Fixed
+
+- Export-complete dialog showed the Robot ament-workspace run instructions
+  (`<pkg>_ws`, `colcon build`, `gz_sim.launch.py`) for **all** modes; World/Asset
+  now show their real self-contained run command.
+
+### Notes
+
+- 801 → 849 tests. All new knobs are opt-in/default-safe (unset = byte-identical
+  output). Pure writers/config source-linked into the net8 test project.
 
 ## [2.1.1] — 2026-06-04
 

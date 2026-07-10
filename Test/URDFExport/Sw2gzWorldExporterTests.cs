@@ -227,40 +227,14 @@ namespace SW2GZ.Writers.Tests
         // ─── W1: standalone launch + ros_gz bridge ──────────────────────────
 
         [Fact]
-        public void Export_WritesStandaloneLaunchAndBridge()
+        public void Export_WritesOnlySdfAndMeshes_NoLaunchOrBridge()
         {
+            // launch_world.py/ros_gz_bridge.yaml generation is disabled — the
+            // structure it produced was broken. World export is SDF + meshes only.
             Sw2gzWorldExporter.Export(new FakeTess("floor-1"), Cfg("floor-1"), _dir, 0, 0, 0);
-            Assert.True(File.Exists(Path.Combine(_dir, "my_env", "launch_world.py")));
-            Assert.True(File.Exists(Path.Combine(_dir, "my_env", "ros_gz_bridge.yaml")));
-        }
-
-        [Fact]
-        public void Export_LaunchLoadsTheExportedWorldFile()
-        {
-            Sw2gzWorldExporter.Export(new FakeTess("floor-1"), Cfg("floor-1"), _dir, 0, 0, 0);
-            string py = File.ReadAllText(Path.Combine(_dir, "my_env", "launch_world.py"));
-            Assert.Contains("my_env.sdf", py);
-            Assert.Contains("parameter_bridge", py);
-        }
-
-        [Fact]
-        public void Export_DefaultPlugins_BridgeIsClockOnly()
-        {
-            Sw2gzWorldExporter.Export(new FakeTess("floor-1"), Cfg("floor-1"), _dir, 0, 0, 0);
-            string yaml = File.ReadAllText(Path.Combine(_dir, "my_env", "ros_gz_bridge.yaml"));
-            Assert.Contains("/clock", yaml);
-            Assert.DoesNotContain("/cmd_vel", yaml);
-        }
-
-        [Fact]
-        public void Export_TeleopEnabled_BridgeAddsCmdVel()
-        {
-            var c = Cfg("floor-1");
-            c.WorldSensorPlugins = new Sw2gzWorldSensorsConfig { KeyPublisher = true, TriggeredPublisher = true };
-            Sw2gzWorldExporter.Export(new FakeTess("floor-1"), c, _dir, 0, 0, 0);
-            string yaml = File.ReadAllText(Path.Combine(_dir, "my_env", "ros_gz_bridge.yaml"));
-            Assert.Contains("/cmd_vel", yaml);
-            Assert.Contains("direction: ROS_TO_GZ", yaml);
+            Assert.True(File.Exists(Path.Combine(_dir, "my_env", "my_env.sdf")));
+            Assert.False(File.Exists(Path.Combine(_dir, "my_env", "launch_world.py")));
+            Assert.False(File.Exists(Path.Combine(_dir, "my_env", "ros_gz_bridge.yaml")));
         }
 
         [Fact]

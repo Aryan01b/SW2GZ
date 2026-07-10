@@ -14,7 +14,6 @@ using System.Windows.Forms;
 using SolidWorks.Interop.sldworks;
 using SW2GZ.Build.Model;
 using SW2GZ.URDFExport;
-using SW2GZ.Utilities;
 
 namespace SW2GZ.UI
 {
@@ -40,15 +39,9 @@ namespace SW2GZ.UI
             StartPosition = FormStartPosition.CenterScreen;
             MaximizeBox = false; MinimizeBox = false;
 
-            // Fill empty per-doc fields from cross-assembly user defaults so a brand-new
-            // assembly inherits the user's identity instead of starting blank. The per-doc
-            // checkpoint still wins when populated; user defaults only paper over empties.
-            Sw2gzUserDefaults.Values defaults = Sw2gzUserDefaults.Load();
-            string seedOut    = !string.IsNullOrEmpty(config.OutputFolder) ? config.OutputFolder : defaults.LastOutputFolder;
-            string seedAuthor = !string.IsNullOrEmpty(config.Author)       ? config.Author       : defaults.Author;
-            string seedEmail  = !string.IsNullOrEmpty(config.Email)        ? config.Email        : defaults.Email;
-            string seedLic    = !string.IsNullOrEmpty(config.License)      ? config.License      : defaults.License;
-
+            // Fields show only this doc's own saved config — no cross-doc/registry
+            // lookup. Empty fields show a greyed placeholder hint instead of ever
+            // silently carrying over another export's Author/Email.
             int links = 0;   // robot link/joint counts removed for v2 rebuild
             int joints = 0;
             Controls.Add(new Label
@@ -58,15 +51,15 @@ namespace SW2GZ.UI
             });
 
             int y = 106;
-            _out    = Row("Output folder", seedOut,            ref y, browse: true);
-            _pkg    = Row("Package name",  config.PackageName, ref y);
-            _author = Row("Author",        seedAuthor,         ref y);
-            _email  = Row("Email",         seedEmail,          ref y);
+            _out    = Row("Output folder", config.OutputFolder, ref y, browse: true);
+            _pkg    = Row("Package name",  config.PackageName,  ref y);
+            _author = Row("Author",        config.Author,       ref y, placeholder: "e.g. Jane Doe");
+            _email  = Row("Email",         config.Email,        ref y, placeholder: "e.g. you@example.com");
 
             Controls.Add(new Label { Left = 12, Top = y + 3, Width = 110, Text = "License" });
             _lic = new ComboBox { Left = 128, Top = y, Width = 312 };
             _lic.Items.AddRange(new object[] { "", "MIT", "Apache-2.0", "BSD-3-Clause", "GPL-3.0-only", "Proprietary" });
-            _lic.Text = seedLic ?? "";
+            _lic.Text = config.License ?? "";
             Controls.Add(_lic);
             y += 38;
 
@@ -77,19 +70,7 @@ namespace SW2GZ.UI
             preview.Enabled = _swApp != null && _modelDoc != null;
             preview.Click += (s, e) => RunPreview();
 
-            export.Click += (s, e) =>
-            {
-                CollectFields();
-                // Persist user-stable fields across assemblies. PackageName is intentionally
-                // omitted — it should always be project-specific.
-                Sw2gzUserDefaults.Save(new Sw2gzUserDefaults.Values
-                {
-                    Author = _cfg.Author,
-                    Email = _cfg.Email,
-                    License = _cfg.License,
-                    LastOutputFolder = _cfg.OutputFolder,
-                });
-            };
+            export.Click += (s, e) => CollectFields();
             Controls.Add(preview);
             Controls.Add(export);
             Controls.Add(cancel);
@@ -103,10 +84,14 @@ namespace SW2GZ.UI
         {
             _cfg.OutputFolder = _out.Text.Trim();
             _cfg.PackageName  = _pkg.Text.Trim();
-            _cfg.Author       = _author.Text.Trim();
-            _cfg.Email        = _email.Text.Trim();
+            _cfg.Author       = FieldValue(_author);
+            _cfg.Email        = FieldValue(_email);
             _cfg.License      = _lic.Text.Trim();
         }
+
+        // A placeholder-hint textbox reads as empty, not as its grey hint text.
+        private static string FieldValue(TextBox tb) =>
+            tb.ForeColor == System.Drawing.Color.Gray ? string.Empty : tb.Text.Trim();
 
         private void RunPreview()
         {
@@ -206,10 +191,31 @@ namespace SW2GZ.UI
             return sb.ToString();
         }
 
-        private TextBox Row(string label, string value, ref int y, bool browse = false)
+        private TextBox Row(string label, string value, ref int y, bool browse = false, string placeholder = null)
         {
             Controls.Add(new Label { Left = 12, Top = y + 3, Width = 110, Text = label });
             var tb = new TextBox { Left = 128, Top = y, Width = browse ? 226 : 312, Text = value ?? "" };
+            if (placeholder != null && tb.Text.Length == 0)
+            {
+                tb.Text = placeholder;
+                tb.ForeColor = System.Drawing.Color.Gray;
+                tb.Enter += (s, e) =>
+                {
+                    if (tb.ForeColor == System.Drawing.Color.Gray)
+                    {
+                        tb.Text = "";
+                        tb.ForeColor = System.Drawing.SystemColors.WindowText;
+                    }
+                };
+                tb.Leave += (s, e) =>
+                {
+                    if (tb.Text.Length == 0)
+                    {
+                        tb.Text = placeholder;
+                        tb.ForeColor = System.Drawing.Color.Gray;
+                    }
+                };
+            }
             Controls.Add(tb);
             if (browse)
             {
