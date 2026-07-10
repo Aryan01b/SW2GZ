@@ -41,6 +41,90 @@ Live-tested in SOLIDWORKS 2025.
 - 801 → 849 tests. All new knobs are opt-in/default-safe (unset = byte-identical
   output). Pure writers/config source-linked into the net8 test project.
 
+## [2.8.0] — 2026-07-05
+
+**Stabilization patch on Robot mode v3.** Two small fixes on top of the
+v2.7.0 rebuild before merging `feat/robot-mode-enhancements` into `main`.
+
+### Fixed
+
+- **Real center of mass now written to `<inertial><origin>`.** It was
+  hardcoded to `"0 0 0"` even though the mass pipeline
+  (`SolidWorksMassProperties` → `InertialAggregator.Combine`) already
+  computed the correct COM — only the final write step discarded it. The
+  inertia tensor itself was always correct, so this silently produced wrong
+  dynamics for any link with off-center mass. Visual/collision origins are
+  untouched.
+
+### Changed
+
+- Joints step axis display made read-only — axis is set via the mate-derived
+  pick, not hand-typed, so the numberboxes no longer accept direct edits.
+
+### Notes
+
+- 501 tests green. `feat/robot-mode-enhancements` merged into `main`.
+
+## [2.7.0] — 2026-07-05
+
+**Robot mode v3 — full rebuild, live-verified in SolidWorks.** The inherited
+Robot/URDF pipeline (`Sw2gzPipeline`, `RobotModelBuilder`, `UrdfSerializer`,
+~8000 lines) had a coordinate-tilt bug an earlier fix attempt couldn't
+resolve live. Scrapped it and rebuilt Robot mode from scratch on the
+`SwSurface`-abstracted architecture already proven by World/Asset mode.
+World and Asset modes were untouched and kept working throughout.
+
+### Added
+
+- **Links step** — drag-to-reparent hierarchy tree (`LinkTreeView`), manual
+  mesh-component picking, multi-mesh union per link (mesh + mass/inertia
+  combined across every assigned component, not just the first).
+- **Joints step** — manual joint type/axis/limit editing, one row per
+  non-root link; edits survive Links-step tree mutations
+  (`JointDefReconciler`).
+- **Mate-derived joint classification** — `MateJointClassification` maps a
+  mate to a joint type + limit automatically (Lock→Fixed,
+  Concentric→Continuous/Revolute, Angle→Revolute, Distance→Prismatic). Axis
+  and pivot are a manual face/edge pick (`SwMateJointResolver`) after two
+  earlier fully-automatic geometry-guessing attempts failed live.
+- **SW→ROS/Gz frame conversion, always applied.** An unconditionally-emitted
+  `world_to_<root>` fixed joint rotates the whole kinematic chain from
+  SolidWorks' native frame into REP-103 Z-up — every descendant link
+  inherits the rotation through ordinary forward-kinematics composition.
+- **Real relative joint origin/rpy** — computed from each link's own
+  declared parent (not always root), honoring the parent's own frame origin
+  (mate pivot) when it has one.
+- **3D preview redesign** — fixed link-tree + joints panel, live joint
+  control synced to SolidWorks mate changes, per-link palette coloring, COM
+  markers, TF frame sizing, dark theme.
+
+### Fixed
+
+- **`Component2.Transform2.ArrayData`'s 3×3 rotation block is column-major,
+  not row-major** as every prior call site assumed — was silently inverting
+  rotation for any non-identity-rotated component in mesh tessellation and
+  assembly-tree walking. Affected World and Asset exports too, not just
+  Robot; both fixed.
+- Grandchild links positioned relative to a parent's raw pose instead of its
+  established frame origin (mate pivot), mispositioning multi-level chains.
+- Axis edits lost when switching between joint rows in the Joints step.
+- Assorted Links/Joints wizard UX bugs: mesh selection persisting across
+  steps, rename doing nothing, stale Create/Edit ribbon label.
+
+### Removed
+
+- The entire pre-rebuild Robot pipeline: `Sw2gzPipeline`, `RobotModelBuilder`,
+  `UrdfSerializer`, `RobotModelValidator`, and the Robot wizard MVVM
+  view-model stack. See [`docs/architecture.md`](docs/architecture.md) for
+  the replacement shape (`Sw2gzModelExporter` → `Sw2gzRobotExporter`).
+
+### Notes
+
+- User-confirmed live-tested end-to-end on a real assembly (FULL_ARM.SLDASM):
+  link positioning and joint pivots verified correct through the whole
+  kinematic chain.
+- Test count: 853 (v2.6.0) → 464 (post-gut rebuild start) → ~500 by the tag.
+
 ## [2.1.1] — 2026-06-04
 
 **Stabilization release** — bundles all Phase-1 work shipped in 2.1.0 with a
