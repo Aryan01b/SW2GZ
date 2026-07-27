@@ -37,6 +37,12 @@ shows `DisplayVersion 2.8.2`, `solidworkstools.dll` copied to
 `C:\Program Files\SW2GZ\`. Full chain (lookup → copy → RegAsm →
 `ComRegisterFunction`) works end-to-end, live, not simulated.
 
+**Also confirmed live in the SolidWorks UI itself** (not just registry):
+opened SOLIDWORKS 2025 on this machine, Tools > Add-Ins — **SW2GZ** now
+listed under "Other Add-Ins", Active + Start Up both checked, Last Load
+Time `< 1s` (loaded clean, no crash). This is the exact screen the
+reporter said was empty.
+
 **Still not the literal repro** — this machine's SolidWorks sits at the
 plain `SOLIDWORKS\` path, not a `SOLIDWORKS (2)\` one, so the wildcard-scan
 fallback's exact match against a suffixed folder is proven by logic +
