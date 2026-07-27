@@ -22,17 +22,32 @@ old fixed guesses. Both the DLL lookup and the RegAsm step now show an
 error `MsgBox` on failure instead of failing silently. CHANGELOG entry +
 version fallback bumped to 2.8.2.
 
-**NOT yet verified — no Inno Setup compiler on this machine** (`ISCC.exe`
-absent; searched `Program Files (x86)\Inno Setup 6` and broader). The
-`.iss` Pascal changes have not been compile-checked, let alone installed
-live on a real machine (this box has no SolidWorks install either). Needs,
-before merge/tag: (1) `ISCC.exe /DMyAppVersion=2.8.2 installer\SW2GZ.iss`
-compiles clean (CI has ISCC — a CI run would catch syntax errors), (2) a
-real install test, ideally against the reporter's own machine given the
-`SOLIDWORKS (2)` layout is exactly the repro case. Test suite (498) is
-unaffected (no C# touched) — reran to confirm baseline green before commit.
+**Verified, this session:** installed Inno Setup (`winget`, was already
+present under a per-user path `AppData\Local\Programs\Inno Setup 6`, not
+`Program Files` — that's why the earlier search missed it). `ISCC.exe
+/DMyAppVersion=2.8.2 installer\SW2GZ.iss` compiles clean. A standalone
+probe `.iss` (calls the three lookup functions verbatim, writes the result,
+aborts before installing — not part of the repo) confirmed on this
+machine's real SolidWorks install: the COM-based lookup AND the wildcard
+folder-scan fallback both correctly resolve `solidworkstools.dll`.
+**Then ran the real compiled installer** (elevated, `/VERYSILENT`) on this
+machine — confirmed live: `HKLM\SOFTWARE\SolidWorks\Addins\{34fad620-...}`
+now exists (the key SolidWorks' Tools > Add-Ins reads), uninstall registry
+shows `DisplayVersion 2.8.2`, `solidworkstools.dll` copied to
+`C:\Program Files\SW2GZ\`. Full chain (lookup → copy → RegAsm →
+`ComRegisterFunction`) works end-to-end, live, not simulated.
 
-**Not pushed, no PR yet** — waiting on go-ahead since push/PR is public.
+**Still not the literal repro** — this machine's SolidWorks sits at the
+plain `SOLIDWORKS\` path, not a `SOLIDWORKS (2)\` one, so the wildcard-scan
+fallback's exact match against a suffixed folder is proven by logic +
+probe script, not by an identical live folder layout. Reporter confirmation
+on their own machine is still the real closing evidence — issue #2 kept
+open (`Refs #2`, not `Fixes #2`) pending that.
+
+**Shipped:** merged to `main` (`cbbc466`), pushed, tagged **v2.8.2**, GitHub
+Release created with the installer attached:
+https://github.com/Aryan01b/SW2GZ/releases/tag/v2.8.2. Test suite (498)
+unaffected (no C# touched), reran to confirm baseline green before commit.
 
 Current: `feat/robot-mode-enhancements` fast-forward merged into `main`
 (2026-07-05) — Robot mode v3 (link/joint modeling, SW→ROS/Gz frame
