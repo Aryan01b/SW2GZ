@@ -2,6 +2,24 @@
 
 All notable changes documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.8.2] — 2026-07-27
+
+### Fixed
+
+- **Installer could silently fail to register the SolidWorks Add-In**
+  ([#2](https://github.com/Aryan01b/SW2GZ/issues/2)). `GetSolidWorksToolsDll`
+  only checked a hardcoded `SOLIDWORKS Corp\SOLIDWORKS\` path for Dassault's
+  `solidworkstools.dll`; on machines where Windows suffixed the install
+  folder (`SOLIDWORKS (2)\`, seen on a Student Edition upgrade over a
+  leftover older install) the lookup missed entirely, RegAsm couldn't
+  resolve the dependency, and the SW2GZ COM add-in never registered — with
+  no error shown anywhere, so the installer reported success while SW2GZ
+  silently never appeared in Tools > Add-Ins. Now resolves the DLL via the
+  actually-registered `SldWorks.Application` COM server first (immune to
+  folder naming/versioning), falls back to a wildcard folder scan, then the
+  old fixed guesses. Both this lookup and the RegAsm registration step now
+  surface a clear error dialog on failure instead of failing silently.
+
 ## [2.8.1] — 2026-07-10
 
 **Pre-release cleanup**, found while local-testing the v2.8.0 installer.

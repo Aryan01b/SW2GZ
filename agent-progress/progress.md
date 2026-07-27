@@ -1,5 +1,39 @@
 # Progress
 
+## Done — installer silently failed to register add-in on some machines (branch `fix/issue-2-installer-addin-registration`, 2026-07-27)
+
+**Real bug fixed, from [issue #2](https://github.com/Aryan01b/SW2GZ/issues/2):**
+`GetSolidWorksToolsDll` in `installer/SW2GZ.iss` only checked a hardcoded
+`SOLIDWORKS Corp\SOLIDWORKS\` path for Dassault's `solidworkstools.dll`
+(needed so RegAsm can resolve SW2GZ.dll's `SolidWorksTools` reference).
+Reporter confirmed via `regedit`/filesystem check: their SW 2025 Student
+Edition installed to `SOLIDWORKS Corp\SOLIDWORKS (2)\` (Windows suffixed it
+— an older/leftover install already occupied the plain folder name), so the
+lookup missed, RegAsm failed to load the assembly, `[ComRegisterFunction]`
+never ran, and `HKLM\SOFTWARE\SolidWorks\Addins\{GUID}` (what SW's Tools >
+Add-Ins list scans) never got created. Installer reported success anyway —
+the `Exec(...)` result was never checked.
+
+**Fix:** `GetSolidWorksToolsDllViaCom` resolves the DLL via the actually-
+registered `SldWorks.Application` COM server (`HKCR\SldWorks.Application\
+CLSID` → `HKCR\CLSID\{...}\LocalServer32`) — immune to folder naming/
+versioning — falling back to a wildcard `SOLIDWORKS*` folder scan, then the
+old fixed guesses. Both the DLL lookup and the RegAsm step now show an
+error `MsgBox` on failure instead of failing silently. CHANGELOG entry +
+version fallback bumped to 2.8.2.
+
+**NOT yet verified — no Inno Setup compiler on this machine** (`ISCC.exe`
+absent; searched `Program Files (x86)\Inno Setup 6` and broader). The
+`.iss` Pascal changes have not been compile-checked, let alone installed
+live on a real machine (this box has no SolidWorks install either). Needs,
+before merge/tag: (1) `ISCC.exe /DMyAppVersion=2.8.2 installer\SW2GZ.iss`
+compiles clean (CI has ISCC — a CI run would catch syntax errors), (2) a
+real install test, ideally against the reporter's own machine given the
+`SOLIDWORKS (2)` layout is exactly the repro case. Test suite (498) is
+unaffected (no C# touched) — reran to confirm baseline green before commit.
+
+**Not pushed, no PR yet** — waiting on go-ahead since push/PR is public.
+
 Current: `feat/robot-mode-enhancements` fast-forward merged into `main`
 (2026-07-05) — Robot mode v3 (link/joint modeling, SW→ROS/Gz frame
 conversion, real COM in `<inertial><origin>`, read-only axis display) is

@@ -9,7 +9,7 @@
 ; --tags`.) The fallback below is only for ad-hoc local builds without /D —
 ; bump it when it drifts too far behind the latest tag.
 #ifndef MyAppVersion
-  #define MyAppVersion "2.8.0"
+  #define MyAppVersion "2.8.2"
 #endif
 #define MyAppPublisher   "Aryan Arlikar"
 ; SW2GZ COM addin GUID (matches HKLM\SOFTWARE\SolidWorks\Addins\{...}).
@@ -128,12 +128,80 @@ end;
 { ---------- Locate the machine's own solidworkstools.dll (Dassault's). ----------
   We never ship this DLL. RegAsm must load SW2GZ.dll to register it, and SW2GZ.dll
   references the SolidWorksTools assembly, so the DLL has to be resolvable. Every
-  target machine already has SolidWorks installed, so we source it from there. }
+  target machine already has SolidWorks installed, so we source it from there.
+
+  Issue #2: a hardcoded "SOLIDWORKS Corp\SOLIDWORKS\" path misses machines where
+  Windows suffixed the folder ("SOLIDWORKS (2)\") because an older/leftover
+  install already occupied the plain name (seen on a Student Edition upgrade).
+  Resolve via the actual registered SolidWorks.Application COM server first —
+  that's the one source of truth unaffected by folder naming/versioning — then
+  fall back to a wildcard folder scan, then the old fixed guesses. }
+function GetSolidWorksToolsDllViaCom: string;
+var
+  sClsid, sServerPath, sExeDir: string;
+  iExtPos: Integer;
+begin
+  Result := '';
+  if not RegQueryStringValue(HKCR, 'SldWorks.Application\CLSID', '', sClsid) then
+    exit;
+  if not RegQueryStringValue(HKCR, 'CLSID\' + sClsid + '\LocalServer32', '', sServerPath) then
+    exit;
+  { Value is usually just the .exe path, sometimes quoted or with trailing switches
+    (e.g. "C:\...\SLDWORKS.EXE" /Automation). Trim to the .exe path itself. }
+  sServerPath := RemoveQuotes(Trim(sServerPath));
+  iExtPos := Pos('.exe', LowerCase(sServerPath));
+  if iExtPos > 0 then
+    sServerPath := Copy(sServerPath, 1, iExtPos + 3);
+  sExeDir := ExtractFileDir(sServerPath);
+  if FileExists(AddBackslash(sExeDir) + 'solidworkstools.dll') then
+    Result := AddBackslash(sExeDir) + 'solidworkstools.dll';
+end;
+
+function GetSolidWorksToolsDllViaFolderScan(const sProgramFiles: string): string;
+var
+  sBaseDir, sCandidate: string;
+  FindRec: TFindRec;
+begin
+  Result := '';
+  sBaseDir := sProgramFiles + '\SOLIDWORKS Corp\';
+  if not DirExists(sBaseDir) then
+    exit;
+  if FindFirst(sBaseDir + 'SOLIDWORKS*', FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+        begin
+          sCandidate := sBaseDir + FindRec.Name + '\solidworkstools.dll';
+          if FileExists(sCandidate) then
+          begin
+            Result := sCandidate;
+            break;
+          end;
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+end;
+
 function GetSolidWorksToolsDll: string;
 var
   sRegPath: string;
 begin
-  Result := '';
+  Result := GetSolidWorksToolsDllViaCom;
+  if Result <> '' then
+    exit;
+
+  Result := GetSolidWorksToolsDllViaFolderScan(ExpandConstant('{commonpf}'));
+  if Result <> '' then
+    exit;
+  Result := GetSolidWorksToolsDllViaFolderScan(ExpandConstant('{commonpf32}'));
+  if Result <> '' then
+    exit;
+
+  { Last-resort fixed guesses (kept for machines the above two somehow miss). }
   if FileExists(ExpandConstant('{commonpf}\SOLIDWORKS Corp\SOLIDWORKS\solidworkstools.dll')) then
     Result := ExpandConstant('{commonpf}\SOLIDWORKS Corp\SOLIDWORKS\solidworkstools.dll')
   else if FileExists(ExpandConstant('{commonpf32}\SOLIDWORKS Corp\SOLIDWORKS\solidworkstools.dll')) then
@@ -146,6 +214,7 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   sApp, sTools: string;
+  bExecOk: Boolean;
   iResult: Integer;
 begin
   if CurStep = ssPostInstall then
@@ -155,9 +224,26 @@ begin
       can resolve it. This is a local copy of the user's own file, not redistribution. }
     sTools := GetSolidWorksToolsDll;
     if sTools <> '' then
-      CopyFile(sTools, sApp + '\solidworkstools.dll', False);
+      CopyFile(sTools, sApp + '\solidworkstools.dll', False)
+    else
+      { Issue #2: this used to fail silently — files copied fine, RegAsm then couldn't
+        resolve SolidWorksTools.dll and the SW2GZ COM add-in never registered, so
+        SolidWorks never listed it under Tools > Add-Ins, with no error anywhere. }
+      MsgBox('SW2GZ could not locate solidworkstools.dll on this machine, so the ' +
+        'SolidWorks Add-In cannot be registered. SolidWorks itself is fine, but ' +
+        'SW2GZ will NOT appear in Tools > Add-Ins.' + #13#10#13#10 +
+        'Please report this at https://github.com/Aryan01b/SW2GZ/issues, including ' +
+        'the folder your SolidWorks installation lives in.', mbError, MB_OK);
+
     { Register the COM add-in. Must run AFTER the copy above. }
-    Exec(ExpandConstant('{win}\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe'),
+    bExecOk := Exec(ExpandConstant('{win}\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe'),
          '/codebase "' + sApp + '\SW2GZ.dll"', '', SW_HIDE, ewWaitUntilTerminated, iResult);
+
+    if (not bExecOk) or (iResult <> 0) then
+      MsgBox('SW2GZ installed its files, but registering the SolidWorks Add-In failed ' +
+        '(RegAsm exit code ' + IntToStr(iResult) + '). SW2GZ will NOT appear in ' +
+        'Tools > Add-Ins until this is resolved.' + #13#10#13#10 +
+        'Please report this at https://github.com/Aryan01b/SW2GZ/issues.',
+        mbError, MB_OK);
   end;
 end;
