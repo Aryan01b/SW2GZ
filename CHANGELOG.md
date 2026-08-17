@@ -2,6 +2,19 @@
 
 All notable changes documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- **SW2GZ no longer hijacks the ribbon when SolidWorks starts.** The add-in
+  rebuilt its command tab with `RemoveCommandTab` + `AddCommandTab` on every
+  load, and SolidWorks makes a newly-added tab the active one — so opening a
+  document always landed on the SW2GZ tab instead of your normal Assembly /
+  Features / Sketch tab. The tab SolidWorks persists is now reused and only
+  its command boxes are rebuilt, leaving the active tab alone. (First launch
+  after a fresh install still opens on SW2GZ — there is no persisted tab to
+  reuse yet.)
+
 ## [2.8.2] — 2026-07-27
 
 ### Fixed

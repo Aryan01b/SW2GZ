@@ -1,5 +1,25 @@
 # Progress
 
+## Done — SW2GZ tab no longer steals the ribbon on SolidWorks startup (uncommitted, 2026-08-17)
+
+`Sw2gzRibbonRegistrar.BuildTab`/`BuildPartTab` did `RemoveCommandTab` +
+`AddCommandTab` on every add-in load; SW makes a newly-added command tab the
+ACTIVE one, so SW2GZ took over the ribbon at every launch instead of leaving
+the user on Assembly/Features/Sketch. Fix: reuse the tab SW persisted
+(`GetCommandTab(...) ?? AddCommandTab(...)`) and rebuild only its boxes —
+same trick `RefreshTabForMode` already used. New `ClearBoxes(CommandTab)`
+walks `tab.CommandTabBoxes()` to drop SW-restored boxes (the three cached box
+fields are null in a fresh process, so they couldn't clear persisted boxes);
+`RefreshTabForMode` uses it too. `PersistDoc`/`SetMode` still force
+`ActiveCommandTab = "SW2GZ"` — those follow a deliberate SW2GZ click.
+
+498 tests green (unchanged), addin compiles clean, deployed to
+`C:\Program Files\SW2GZ\SW2GZ.dll` 06:15:16. **Not committed.** Caveat: the
+very first launch after a fresh install still lands on SW2GZ (no persisted
+tab yet → `AddCommandTab` runs once); every later launch is fine. Needs a
+live check: launch SW, open an assembly and a part, confirm the default tab
+stays active and the SW2GZ tab has exactly one set of boxes (no stacking).
+
 ## Done — installer silently failed to register add-in on some machines (branch `fix/issue-2-installer-addin-registration`, 2026-07-27)
 
 **Real bug fixed, from [issue #2](https://github.com/Aryan01b/SW2GZ/issues/2):**

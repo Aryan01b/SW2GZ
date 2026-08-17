@@ -187,14 +187,15 @@ namespace SW2GZ.UI.Ribbon
         private void BuildPartTab(string title)
         {
             int partType = (int)swDocumentTypes_e.swDocPART;
-            CommandTab existing = _cmdMgr.GetCommandTab(partType, title);
-            if (existing != null) _cmdMgr.RemoveCommandTab(existing);
-            CommandTab tab = _cmdMgr.AddCommandTab(partType, title);
+            // Reuse, don't Remove+Add — see BuildTab (AddCommandTab activates
+            // the new tab, hijacking the user's Features/Sketch tab).
+            CommandTab tab = _cmdMgr.GetCommandTab(partType, title) ?? _cmdMgr.AddCommandTab(partType, title);
             if (tab == null)
             {
                 logger.Warn("Sw2gzRibbonRegistrar: part-doc AddCommandTab returned null");
                 return;
             }
+            ClearBoxes(tab);
             int textBelow = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow;
             AddBox(tab, textBelow, new[]
             {
@@ -311,9 +312,7 @@ namespace SW2GZ.UI.Ribbon
             // we rebuild all three to keep ordering deterministic (SW appends
             // new boxes after existing ones, so partial rebuild would
             // reshuffle the layout left-to-right).
-            if (_modeStartBox   != null) { try { _tab.RemoveCommandTabBox(_modeStartBox);   } catch { } _modeStartBox = null; }
-            if (_actionsBox     != null) { try { _tab.RemoveCommandTabBox(_actionsBox);     } catch { } _actionsBox = null; }
-            if (_modeClusterBox != null) { try { _tab.RemoveCommandTabBox(_modeClusterBox); } catch { } _modeClusterBox = null; }
+            ClearBoxes(_tab);
 
             BuildAllBoxes(_tab, textBelow);
             logger.Info("Sw2gzRibbonRegistrar: RefreshTabForMode swapped boxes for mode=" + _activeMode +
@@ -324,15 +323,15 @@ namespace SW2GZ.UI.Ribbon
         {
             int asmType = (int)swDocumentTypes_e.swDocASSEMBLY;
 
-            // Drop any existing tab from a previous load BEFORE re-adding,
-            // otherwise AddCommandTabBox stacks duplicate boxes on top of the
-            // persisted one each session. This full-rebuild path is for
-            // initial registration only — RefreshTabForMode takes the
-            // box-swap path to avoid the tab-focus side effect.
-            CommandTab existing = _cmdMgr.GetCommandTab(asmType, title);
-            if (existing != null) _cmdMgr.RemoveCommandTab(existing);
-
-            _tab = _cmdMgr.AddCommandTab(asmType, title);
+            // Reuse the tab SolidWorks persisted from a previous session —
+            // AddCommandTab makes the new tab ACTIVE, so RemoveCommandTab +
+            // AddCommandTab here is what made SW2GZ hijack the ribbon on every
+            // launch instead of leaving the user on Assembly/Features/Sketch.
+            // Keeping the tab handle and only rebuilding its boxes preserves
+            // the user's active tab (same reason RefreshTabForMode swaps boxes
+            // rather than the tab). ClearBoxes drops the persisted boxes so
+            // they don't stack a fresh set on top each session.
+            _tab = _cmdMgr.GetCommandTab(asmType, title) ?? _cmdMgr.AddCommandTab(asmType, title);
             if (_tab == null)
             {
                 logger.Warn("Sw2gzRibbonRegistrar: AddCommandTab returned null — toolbar buttons still available");
@@ -340,8 +339,23 @@ namespace SW2GZ.UI.Ribbon
             }
             logger.Info("Sw2gzRibbonRegistrar: tab '" + title + "' added for swDocASSEMBLY (mode=" + _activeMode + ")");
 
+            ClearBoxes(_tab);
             int textBelow = (int)swCommandTabButtonTextDisplay_e.swCommandTabButton_TextBelow;
             BuildAllBoxes(_tab, textBelow);
+        }
+
+        // Remove every box on the tab, including ones SolidWorks restored from
+        // a previous session (we hold no cached reference to those, so the
+        // three cached fields alone aren't enough).
+        private static void ClearBoxes(CommandTab tab)
+        {
+            if (tab == null) return;
+            var boxes = tab.CommandTabBoxes() as object[];
+            if (boxes == null) return;
+            foreach (var b in boxes)
+            {
+                try { tab.RemoveCommandTabBox((CommandTabBox)b); } catch { }
+            }
         }
 
         private void BuildAllBoxes(CommandTab tab, int textBelow)
