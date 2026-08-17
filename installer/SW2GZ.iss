@@ -9,7 +9,7 @@
 ; --tags`.) The fallback below is only for ad-hoc local builds without /D —
 ; bump it when it drifts too far behind the latest tag.
 #ifndef MyAppVersion
-  #define MyAppVersion "2.8.2"
+  #define MyAppVersion "2.8.3"
 #endif
 #define MyAppPublisher   "Aryan Arlikar"
 ; SW2GZ COM addin GUID (matches HKLM\SOFTWARE\SolidWorks\Addins\{...}).
